@@ -35,15 +35,14 @@ Assuming casual/educational use (~20-50 messages/day, ~600-1500 messages/month):
 | Service | Cost | Notes |
 |---------|------|-------|
 | **LLM (Amazon Bedrock — Claude 3.5 Haiku)** | ~$0.30–1.50/mo | ~$0.001 per message at casual use |
-| **TTS (Amazon Polly)** | ~$0.50–2.00/mo | $4/1M characters; ~100-300 chars/response |
-| **AgentCore Runtime** | ~$0.04–0.15/mo | Consumption-based: CPU $0.0895/vCPU-hr, Memory $0.00945/GB-hr; I/O wait is free |
+| **TTS (Amazon Polly)** | ~$0.50–2.00/mo | $4/1M characters; ~100-300 chars/response. **Note:** Each response requires TWO Polly API calls (one for audio, one for viseme timing) — both are billed on characters, so cost is ~2x the character estimate. |
+| **AgentCore Runtime** | ~$0.04–0.15/mo | Consumption-based: CPU $0.0895/vCPU-hr, Memory $0.00945/GB-hr; I/O wait is free. **Note:** Cold starts for new sessions add 1-10 seconds latency depending on container image size. |
 | **Web hosting (S3 + CloudFront)** | ~$0.50–1.00/mo | S3 static hosting + CloudFront CDN (free tier covers 1TB/mo transfer) |
-| **AgentCore Memory (short-term + long-term)** | ~$0.25–0.68/mo | Short-term events ($0.25/1K), long-term storage ($0.75/1K records/mo), retrieval ($0.50/1K) |
-| **AgentCore Gateway (tools)** | ~$0.01–0.05/mo | MCP tool invocations ($0.005/1K invocations) |
-| **AgentCore Evaluations** | ~$0.01–0.10/mo | Per-token for built-in evaluators; personality consistency testing |
+| **AgentCore Memory (short-term + long-term)** | ~$0.25–0.68/mo | Short-term events ($0.25/1K), long-term storage ($0.75/1K records/mo), retrieval ($0.50/1K). **Note:** TypeScript integration requires custom adapter code (no built-in Strands session manager yet). Semantic search retrieval costs could exceed estimate if context is loaded for every message. |
+| **Weather/News/Search APIs** | ~$0–1.00/mo | Direct API calls from Strands tools (not via AgentCore Gateway — see note below) |
+| **AgentCore Evaluations** | ~$0.01–0.10/mo | Per-token for built-in evaluators; personality consistency testing (async batch, not real-time) |
 | **AgentCore Observability** | ~$0.01–0.10/mo | CloudWatch pricing for spans/logs; agent reasoning traces |
-| **Web Search API** | ~$0–1.00/mo | Depends on provider; some have free tiers |
-| **Total estimated** | **~$1.62–5.58/month** | Well under $10 target |
+| **Total estimated** | **~$1.61–5.53/month** | Well under $10 target |
 
 **Cost optimization levers:**
 - Use Claude 3.5 Haiku (cheapest frontier model) vs Sonnet/Opus
@@ -53,6 +52,7 @@ Assuming casual/educational use (~20-50 messages/day, ~600-1500 messages/month):
 - AWS free tier covers partial S3/CloudFront
 - AgentCore Runtime only charges for active CPU (I/O wait while waiting for LLM responses is free — 30-70% savings vs traditional compute like Lambda)
 - AgentCore Memory's semantic search retrieves only relevant memories, reducing LLM token overhead vs. loading full history
+- **Avoid real-time LLM-as-judge** — running a second LLM call to validate every response would double LLM costs. Use strong system prompts + heuristic checks in real-time; reserve LLM-as-judge for async batch evaluation only
 
 **Web interface?** — Yes, the web app IS the interface. Any device with a modern browser gets the full Max Height experience: 3D avatar, voice, glitch effects. Phones, tablets, desktops — all via the browser.
 
@@ -113,17 +113,17 @@ All key design questions have been evaluated and answered. These decisions guide
 |-------|-----------|-----------|
 | **Web Framework** | React + Vite (TypeScript) | Fast, lightweight, great DX |
 | **3D Rendering** | React Three Fiber (Three.js) | WebGL in browser — mature, well-supported |
-| **AI Agent Backend** | Strands Agents TypeScript SDK | Personality steering, tool use, streaming |
-| **Agent Hosting** | Amazon Bedrock AgentCore Runtime | Serverless microVMs, built-in WebSocket streaming, I/O wait is free, session isolation |
+| **AI Agent Backend** | Strands Agents TypeScript SDK | Personality steering, tool use, streaming. **⚠️ SDK is v0.0.1-development (pre-release) — APIs may change. Pin exact version.** |
+| **Agent Hosting** | Amazon Bedrock AgentCore Runtime | Serverless microVMs, built-in WebSocket streaming, I/O wait is free, session isolation. Uses `bedrock-agentcore` npm package (v0.2.2, also pre-1.0). |
 | **LLM Provider** | Amazon Bedrock (Claude 3.5 Haiku) | Max's brain — generates all personality, wit, and responses |
 | **Voice Synthesis** | Amazon Polly (Neural) | Good quality, very cheap ($4/1M chars) |
 | **Voice Glitch FX** | Web Audio API (client-side DSP) | Stutter loops, pitch shifts, static — all in browser |
 | **Speech-to-Text** | Web Speech API (browser built-in) | Free, no backend needed |
 | **State Management** | Zustand | Client-side UI state only (connection, audio, avatar, ui). Conversation history lives server-side in AgentCore Memory. Selector-based subscriptions avoid 3D scene re-renders. |
 | **Authentication** | Amazon Cognito Identity Pool | Grants temporary AWS credentials to browser for SigV4-signed WebSocket connections to AgentCore Runtime. Free tier covers 50K MAUs. |
-| **Agent Memory** | Amazon Bedrock AgentCore Memory | Managed short-term (session context) + long-term (preferences, summaries, facts) with built-in Strands integration |
-| **Tool Integration** | Amazon Bedrock AgentCore Gateway | Converts APIs to MCP-compatible tools; weather, news, search available to agent. No custom tool code needed for external APIs. |
-| **Agent Identity** | Amazon Bedrock AgentCore Identity | Manages OAuth tokens and API keys for tool authentication. Free when used through AgentCore Runtime or Gateway. |
+| **Agent Memory** | Amazon Bedrock AgentCore Memory | Short-term (session context) + long-term (preferences, summaries, facts). **⚠️ TypeScript SDK integration incomplete — no built-in Strands session manager. Must use raw AWS SDK or custom adapter. Monitor GitHub issues #125, #111.** |
+| **Tool Integration** | Strands `tool()` helper + direct API calls | Weather, news, search implemented as native Strands tools using Zod schemas. **Replaces AgentCore Gateway** — Gateway's TypeScript MCP integration is local-only (stdio transport) and has known OAuth bugs (issue #37). Direct tools are simpler and more reliable for this project. |
+| **Agent Identity** | Amazon Bedrock AgentCore Identity | Manages OAuth tokens and API keys for tool authentication. Free when used through AgentCore Runtime. |
 | **Agent Evaluation** | Amazon Bedrock AgentCore Evaluations | Automated personality consistency testing with custom evaluators |
 | **Agent Observability** | Amazon Bedrock AgentCore Observability | Step-by-step reasoning traces, tool call inspection, steering audit |
 | **API Communication** | WebSocket (streaming) | Built-in bidirectional WebSocket via AgentCore Runtime; browser authenticates via Cognito + SigV4 |
@@ -142,15 +142,16 @@ All key design questions have been evaluated and answered. These decisions guide
 │  │  │  Max 3D Avatar (GLB)         │  │  │
 │  │  │  - Viseme lip-sync           │  │  │
 │  │  │  - Facial expressions        │  │  │
-│  │  │  - Glitch shader FX (GLSL)   │  │  │
+│  │  │  - Glitch shader FX          │  │  │
 │  │  └──────────────────────────────┘  │  │
 │  │  Geometric animated background     │  │
 │  │  CRT overlay (scan lines, curve)   │  │
+│  │  Adaptive quality (desktop/mobile) │  │
 │  └────────────────────────────────────┘  │
 │  ┌──────────┐  ┌──────────────────────┐  │
 │  │ Mic In   │  │ Audio Playback       │  │
 │  │ (Web     │  │ + Web Audio API      │  │
-│  │  Speech  │  │   DSP Glitch FX      │  │
+│  │  Speech  │  │   AudioWorklet DSP   │  │
 │  │  API)    │  │   (stutter, pitch,   │  │
 │  └────┬─────┘  │    static bursts)    │  │
 │       │        └──────────▲───────────┘  │
@@ -161,15 +162,23 @@ All key design questions have been evaluated and answered. These decisions guide
 │  └────────┬───────────────┘           │  │
 │  ┌────────┼───────────────────────────┐  │
 │  │  WebSocket Client (SigV4-signed)   │  │
-│  └────────┬───────────────────────────┘  │
-└───────────┼───────────────────────────┘
-            │ wss:// (bidirectional streaming)
-            ▼
+│  │  + Reconnection Manager (5min URL  │  │
+│  │    expiry, auto-refresh + resume)  │  │
+│  └───┬────┬───────────────────────────┘  │
+│      │    │  ┌─────────────────────────┐ │
+│      │    └──│ Polly Client (direct)   │ │
+│      │       │ Call 1: audio (mp3)     │ │
+│      │       │ Call 2: visemes (json)  │ │
+│      │       │ → VisemeScheduler sync  │ │
+│      │       └─────────────────────────┘ │
+└──────┼───────────────────────────────────┘
+       │ wss:// (text streaming only)
+       ▼
 ┌───────────────────────────┐
 │  Amazon Cognito           │
 │  Identity Pool            │
-│  (temporary AWS creds     │
-│   for browser auth)       │
+│  (temporary AWS creds:    │
+│   bedrock + polly access) │
 └───────────┬───────────────┘
             │ SigV4 credentials
             ▼
@@ -180,46 +189,46 @@ All key design questions have been evaluated and answered. These decisions guide
 │  │  - Built-in WebSocket streaming   │  │
 │  │  - Session isolation              │  │
 │  │  - I/O wait is free               │  │
+│  │  - Cold start: 1-10s (optimize    │  │
+│  │    container image < 200MB)       │  │
 │  │         │                          │  │
 │  │         ▼                          │  │
 │  │  ┌──────────────────────────────┐  │  │
 │  │  │  Strands Agent (TypeScript)  │  │  │
 │  │  │  ┌────────────────────────┐  │  │  │
 │  │  │  │  Max Height Persona    │  │  │  │
-│  │  │  │  System Prompt         │  │  │  │
+│  │  │  │  System Prompt (95%+   │  │  │  │
+│  │  │  │  personality accuracy) │  │  │  │
 │  │  │  └────────────────────────┘  │  │  │
 │  │  │  ┌────────────────────────┐  │  │  │
-│  │  │  │  Steering Plugins      │  │  │  │
-│  │  │  │  - Personality guard   │  │  │  │
+│  │  │  │  Post-Processing       │  │  │  │
 │  │  │  │  - Stutter injection   │  │  │  │
-│  │  │  │  - Tone enforcement    │  │  │  │
 │  │  │  │  - Catchphrase hooks   │  │  │  │
+│  │  │  │  - Heuristic guard     │  │  │  │
 │  │  │  └────────────────────────┘  │  │  │
 │  │  │  ┌────────────────────────┐  │  │  │
-│  │  │  │  Tools                 │  │  │  │
-│  │  │  │  Gateway: Weather,    │  │  │  │
-│  │  │  │   News, Search (MCP)  │  │  │  │
-│  │  │  │  Direct: TTS (Polly), │  │  │  │
-│  │  │  │   Viseme timing       │  │  │  │
+│  │  │  │  Native Strands Tools  │  │  │  │
+│  │  │  │  Weather, News, Search │  │  │  │
+│  │  │  │  (tool() + Zod schema) │  │  │  │
 │  │  │  └────────────────────────┘  │  │  │
 │  │  └──────────────────────────────┘  │  │
 │  └────────────────────────────────────┘  │
 │  ┌───────────┐  ┌─────────────────────┐  │
 │  │ Bedrock   │  │  Amazon Polly       │  │
 │  │ (Claude   │  │  (Neural TTS)       │  │
-│  │  Haiku)   │  │                     │  │
+│  │  Haiku)   │  │  ← Browser calls    │  │
+│  │           │  │    directly          │  │
 │  └───────────┘  └─────────────────────┘  │
 │  ┌──────────────────────────────────────┐ │
 │  │  AgentCore Memory                   │ │
-│  │  (Short-term + Long-term Memory)    │ │
-│  └──────────────────────────────────────┘ │
-│  ┌──────────────────────────────────────┐ │
-│  │  AgentCore Gateway (MCP Tools)      │ │
-│  │  + AgentCore Identity (API keys)    │ │
+│  │  Phase 1-2: Strands SessionManager  │ │
+│  │  Phase 3+:  Custom adapter (raw SDK)│ │
 │  └──────────────────────────────────────┘ │
 │  ┌─────────────────┐ ┌──────────────────┐ │
 │  │  AgentCore      │ │  AgentCore       │ │
 │  │  Observability  │ │  Evaluations     │ │
+│  │                 │ │  (async batch    │ │
+│  │                 │ │   LLM-as-judge)  │ │
 │  └─────────────────┘ └──────────────────┘ │
 └──────────────────────────────────────────┘
 ```
@@ -231,7 +240,7 @@ All key design questions have been evaluated and answered. These decisions guide
 **Yes — via prompt engineering + Strands steering hooks.** Here's how each trait maps:
 
 ### Voice & Speech Patterns
-- **Stuttering**: Frequent, varying intensity (authentic to ABC series). Strands steering handler injects stutter markup (`W-w-well`) into agent output before TTS
+- **Stuttering**: Frequent, varying intensity (authentic to ABC series). **Post-processing text transform** applied to complete agent response before TTS — injects stutter markup (`W-w-well`) using regex/pattern matching. **Note:** Token-by-token steering during streaming is not feasible with the current Strands TypeScript SDK hooks architecture (hooks can observe but not intercept/transform streaming tokens). Stutter injection must operate on the full response text.
 - **Pitch shifting**: Audio DSP post-processing on TTS output — random pitch modulation per phrase
 - **Static/glitch**: Audio buffer manipulation — insert micro-bursts of static, repeat syllables
 - **Audio FX build order**: Stutter loops → Pitch shifts → Signal degradation → Static bursts → Echo/reverb
@@ -244,7 +253,7 @@ All key design questions have been evaluated and answered. These decisions guide
 - **Guardrails**: Satirical but safe — mock media/corporations freely, no hate speech or personal attacks
 - **Factual responses**: Full editorial mode — Max never gives a straight answer
 - **Greeting**: Random rotation — unpredictable, most authentic to character
-- **Steering handler (personality guard)**: Intercepts model responses and validates tone using LLM-as-judge — rejects responses that break character
+- **Steering handler (personality guard)**: Validates tone using **heuristic checks** (keyword patterns, response length, character-breaking phrases like "I'm an AI"). **Note:** Real-time LLM-as-judge (calling a second LLM to validate every response) was considered but rejected — it doubles LLM costs, adds 200-1000ms latency, and breaks streaming (must buffer full response before judging). LLM-as-judge is used only in **async batch evaluation** via AgentCore Evaluations.
 - **Steering handler (catchphrase triggers)**: Injects Max-isms based on conversation context
 
 ### Visual/Facial Expressions
@@ -273,20 +282,34 @@ Get Max Height talking — personality is the foundation.
   - `connection.ts` — WebSocket status, reconnection state
   - `ui.ts` — mode (text/voice), loading states, error states
 - Create Strands Agent backend (Node.js/TypeScript)
-- Create AgentCore Runtime entry point (`runtime.ts`) — wraps agent with AgentCore Runtime and calls `listen()`
-- Create Dockerfile for container-based deployment to AgentCore Runtime (or use direct code deployment)
+- Create AgentCore Runtime entry point (`runtime.ts`) — wraps agent with `BedrockAgentCoreApp` from the `bedrock-agentcore` npm package (v0.2.2). Listens on port 8080 (mandatory), exposes `/ping` health check and `/invocations` endpoint. **Note:** The Strands TypeScript SDK does not have a `listen()` method — use the `bedrock-agentcore` package directly. See [Strands TypeScript AgentCore deployment guide](https://strandsagents.com/docs/user-guide/deploy/deploy_to_bedrock_agentcore/typescript/).
+- Create Dockerfile for container-based deployment to AgentCore Runtime (or use direct code deployment). **Target < 200MB image** — use multi-stage Docker build, Alpine base, pre-compile TypeScript to JavaScript. Larger images = slower cold starts (1-10+ seconds per new session).
 - Deploy agent to AgentCore Runtime (serverless microVM with built-in WebSocket streaming)
 - Write Max Height system prompt (ABC series personality, modern-aware 2026 knowledge, speech patterns, all catchphrases)
 - Set up Amazon Cognito Identity Pool (unauthenticated/guest access):
   - Browser gets temporary AWS credentials via Cognito
-  - Credentials used to SigV4-sign WebSocket connection to AgentCore Runtime
+  - Credentials used to generate SigV4 presigned WebSocket URL for AgentCore Runtime
+  - **Note:** Presigned WebSocket URLs expire in **5 minutes max** (hardcoded in SDK). Must implement reconnection logic:
+    1. Detect connection close or approaching timeout
+    2. Refresh Cognito credentials if expired (credentials last 1-3 hours)
+    3. Generate new presigned URL
+    4. Reconnect with same `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header
+    5. Show "Max is reconnecting..." UI state
   - IAM policy on Cognito role provides rate limiting
+  - IAM policy must also grant `polly:SynthesizeSpeech` for direct browser TTS calls
 - Set up Amazon Bedrock AgentCore Memory resource with strategies:
   - Semantic strategy (extract facts/knowledge from conversations)
   - Summary strategy (running conversation summaries per session)
   - User preferences strategy (learn user preferences over time)
   - Note: Long-term memory extraction is **asynchronous** — memories take time to extract after a conversation. Short-term memory (raw events) covers the current session; long-term kicks in for cross-session recall.
-- Configure Strands Agent with AgentCoreMemorySessionManager for automatic memory management
+- **⚠️ TypeScript Memory Integration — Custom Adapter Required:**
+  - `AgentCoreMemorySessionManager` does **not exist** in the Strands TypeScript SDK (GitHub issues #125, #111 are open).
+  - **Phase 1-2 approach:** Use Strands built-in `SessionManager` with S3 storage for basic conversation persistence.
+  - **Phase 3+ approach:** Build a custom `AgentCoreMemoryAdapter` wrapping the raw `@aws-sdk/client-bedrock-agentcore` SDK:
+    - `CreateEvent` — store conversation turns after each exchange
+    - `ListEvents` — retrieve session history
+    - `RetrieveMemoryRecords` — semantic search for relevant cross-session context
+  - Fallback: If AgentCore Memory TypeScript support ships (monitor issue #111), migrate to official integration.
 - Define namespace structure (e.g., `/max-height/{actorId}/preferences`, `/max-height/{actorId}/facts`)
 - Define actorId strategy for friends/family audience:
   - Option A: Simple name/alias entered on first visit (stored in localStorage)
@@ -300,19 +323,20 @@ Get Max Height talking — personality is the foundation.
 ### Phase 2: Personality Steering & Tools
 Make Max Height reliably stay in character and be useful (in his own way).
 
-- Create personality guard steering handler (LLM-as-judge for tone — charming sarcasm, medium intensity)
-- Create stutter injection steering handler (frequent stuttering, varying intensity per response)
-- Create catchphrase trigger handler (context-aware Max-isms — all catchphrases enabled)
+- Create personality guard steering handler (**heuristic-based** tone validation — pattern matching for character-breaking phrases, response length checks, catchphrase frequency. Not LLM-as-judge at runtime — see cost note above)
+- Create stutter injection steering handler (**post-processing text transform** on complete response — regex-based stutter markup injection with varying intensity per response. Cannot run mid-stream due to Strands TypeScript hooks limitation.)
+- Create catchphrase trigger handler (context-aware Max-isms — post-processing injection on complete response)
 - Create topic deflection handler (Max Height comments through a TV/media lens)
-- Integrate tools via AgentCore Gateway (all with full editorial mode — Max always editorializes):
-  - Weather API tool → MCP-compatible via Gateway (wrap OpenAPI spec, no custom code)
-  - News headlines tool → MCP-compatible via Gateway (wrap OpenAPI spec, no custom code)
-  - Web search tool → MCP-compatible via Gateway (wrap search API spec, no custom code)
-- Configure AgentCore Identity for tool authentication:
-  - Manage API keys for weather/news/search APIs via Identity (not hardcoded env vars)
-  - Free when used through AgentCore Gateway — no additional cost
-- Set up AgentCore Evaluations for personality consistency:
-  - Create custom evaluator for tone/sarcasm level (LLM-as-judge)
+- Integrate tools as **native Strands tools** (all with full editorial mode — Max always editorializes):
+  - Weather API tool → Strands `tool()` with Zod schema, direct HTTP call to weather API
+  - News headlines tool → Strands `tool()` with Zod schema, direct HTTP call to news API
+  - Web search tool → Strands `tool()` with Zod schema, direct HTTP call to search API
+  - **Note:** AgentCore Gateway was originally planned for tool wrapping, but Strands TypeScript MCP integration is local-only (stdio transport) and Gateway has known OAuth bugs (issue #37). Native Strands tools are simpler and more reliable for this project.
+- Configure API key management:
+  - Use AgentCore Identity for API keys if deploying through AgentCore Runtime
+  - Alternative: Environment variables in the container (simpler for 3 API keys in a personal project)
+- Set up AgentCore Evaluations for personality consistency (**async batch evaluation**, not real-time):
+  - Create custom evaluator for tone/sarcasm level (**LLM-as-judge** — runs against conversation logs, not on every message)
   - Create custom evaluator for stutter frequency in responses
   - Create custom evaluator for catchphrase usage
   - Run evaluations against personality test cases
@@ -323,57 +347,97 @@ Make Max Height reliably stay in character and be useful (in his own way).
 Give Max Height his voice — synthesis + the signature glitch effects.
 
 - Add Zustand audio store (`audio.ts` — playback state, DSP effects active, volume)
-- Integrate Amazon Polly Neural TTS (server-side, streamed to client via direct AWS SDK — not via Gateway, to avoid latency on audio streaming)
-- Select/configure voice (broadcaster cadence, slightly nasal, smug tone)
-- Build client-side Web Audio API DSP pipeline (in priority order):
-  1. Stutter loop effect (repeat syllable segments from stutter markup) — most iconic
-  2. Pitch modulation (random per-phrase shifts)
-  3. Signal degradation (lo-fi broadcast feel)
-  4. Static burst insertion (micro-bursts of white noise)
-  5. Slight echo/reverb (broadcast studio feel)
+- Integrate Amazon Polly Neural TTS (**browser calls Polly directly** using Cognito credentials — not routed through AgentCore WebSocket to avoid 10MB message chunk limits and added latency):
+  - **Two parallel API calls required per response** (Polly cannot return audio + visemes in one call):
+    1. `SynthesizeSpeech(OutputFormat: "mp3")` → audio stream
+    2. `SynthesizeSpeech(OutputFormat: "json", SpeechMarkTypes: ["viseme", "word"])` → viseme timing JSON
+  - Fire both calls with `Promise.all` — viseme JSON returns faster than audio
+  - Build `VisemeScheduler` service to synchronize viseme marks with audio playback using `AudioContext.currentTime` and `AudioContext.getOutputTimestamp()` (compensates for ~20-100ms audio output latency)
+  - AWS SDK `@aws-sdk/client-polly` adds ~200-300KB to browser bundle (use tree-shaking)
+  - **Character limit:** 3,000 billable characters per `SynthesizeSpeech` call (SSML tags don't count). Max's responses (~100-300 chars) are well within limit.
+- Select/configure voice: **Matthew** (Neural, US English) — warmest broadcaster tone. Alternative: **Stephen** (sharper articulation). Use SSML `<prosody pitch="+10%" rate="105%">` for slight smugness. No "nasal" parameter available — the Max feel comes from DSP effects, not base voice.
+- Build client-side Web Audio API DSP pipeline using **AudioWorklet** (not deprecated ScriptProcessorNode), in priority order:
+  1. Stutter loop effect (repeat syllable segments mapped from stutter text markup to audio timing) — most iconic. **Note:** Use text-level stutter markers (from post-processing) mapped to audio timestamps, not real-time audio syllable detection (too complex/unreliable).
+  2. Pitch modulation (granular synthesis in AudioWorklet — random per-phrase shifts, ~500 LOC)
+  3. Signal degradation (lo-fi broadcast feel — BitCrusher + downsampler in AudioWorklet)
+  4. Static burst insertion (micro-bursts of white noise via GainNode + noise generator)
+  5. Slight echo/reverb (ConvolverNode + impulse response or DelayNode loop)
+  - **AudioWorklet runs on separate thread** — no impact on 60fps 3D rendering
+  - **iOS Safari gotcha:** AudioContext is suspended until user gesture. Must add "tap to start" / "tap to wake Max" interaction before any audio plays. Handle `audioContext.state === 'suspended'` with `audioContext.resume()` on user click/tap.
+  - **Audio format:** MP3 from Polly is best for browser compatibility. Decode via `AudioContext.decodeAudioData()`.
 - Integrate Web Speech API for microphone input (browser STT)
-- Generate viseme timing data from TTS output
-- Stream audio chunks to browser with synchronized viseme events
+  - **Cross-browser limitations:** Chrome (best, but sends audio to Google for processing), Edge (good), Safari/iOS (recently added, buggy continuous mode), Firefox (partial, may require flag). Always provide text input fallback.
 - Add talk/listen mode toggle (push-to-talk or voice activity detection)
 
 ### Phase 4: 3D Avatar & Scene
 Build the visual Max Height experience in the browser.
 
+- **⚠️ Avatar Model Creation — Largest Time Investment (~40-80 hours for custom model):**
+  - Creating a custom low-poly head with 15-20 viseme blend shapes + expression morph targets requires significant Blender work.
+  - **Options (choose one):**
+    - **A. Commission an artist** ($200-500 on Fiverr/Upwork) — best ROI, professional quality.
+    - **B. Buy a pre-made model** ($20-100 on Sketchfab/TurboSquid) and customize — saves 30-50 hours.
+    - **C. Build from scratch in Blender** — full control, 40-80 hours.
+    - **D. Use Ready Player Me** — customizable avatars, saves 60%+ time, but less retro aesthetic.
+    - **E. Start with 2D placeholder** (CSS/Canvas animated face) for Phases 1-3, build 3D model in parallel.
+  - AWS Polly uses ~13-14 visemes for US English. Model needs corresponding blend shapes.
 - Add Zustand avatar store (`avatar.ts` — current visemes, expression, glitch trigger)
 - Create/source Max Height 3D head model (GLB/GLTF with blend shapes):
   - Retro low-poly style with recognizable features (slicked-back hair, exaggerated jaw, smirk, suit/tie)
-  - Viseme morph targets (mouth shapes for lip-sync)
+  - **Target 5-10k polygons** (mobile-friendly; desktop can handle 20k+)
+  - Viseme morph targets (mouth shapes for lip-sync — map to Polly's viseme set)
   - Expression morph targets (smirk, raised eyebrow, surprise, fake laugh)
   - Head/neck bones for subtle movement
 - Set up React Three Fiber scene
-- Implement viseme-driven lip-sync animation (synced to audio stream)
+- Implement viseme-driven lip-sync animation (synced to audio via `VisemeScheduler`):
+  - Create `visemeToBlendShapeMap` mapping Polly viseme values to model blend shape indices
+  - Update `THREE.morphTargetInfluences[]` directly in `useFrame()` — **not via React state** (avoids re-renders, maintains 60fps)
+  - Interpolate between visemes with lerp over 50-100ms for smooth transitions
+  - Offset viseme timing by -33ms (one frame ahead) to compensate for render pipeline delay
 - Add idle animations (subtle head movement, blinks, random eyebrow raises)
 - Build emotion-to-expression mapping from agent output tags
 
 ### Phase 5: Visual Effects & Background
 The signature Max Height look.
 
-- Create CRT/glitch shader (GLSL via Three.js ShaderMaterial):
-  - Constant subtle scan lines overlay
-  - Chromatic aberration
-  - Random horizontal displacement (signal interference)
-  - Occasional full-frame glitch (synced to audio stutter events)
+- Create CRT/glitch shader (via `@react-three/postprocessing` — many effects are pre-built):
+  - Constant subtle scan lines overlay (`<Scanline density={...} />` — built-in)
+  - Chromatic aberration (`<ChromaticAberration />` — built-in)
+  - Random horizontal displacement (signal interference — custom `Effect` class extending postprocessing's Effect)
+  - Occasional full-frame glitch synced to audio stutter events (`<Glitch />` — built-in, trigger programmatically)
+  - Noise grain (`<Noise opacity={0.02} />` — built-in)
+  - **Note:** Avoid raw Three.js `ShaderPass` integration — has type mismatches with `@react-three/postprocessing` (issue #52). Use the custom `Effect` class pattern instead.
 - Build geometric animated background:
   - Rotating wireframe cubes, pyramids, abstract polyhedra
   - Grid lines
   - Color palette: blues, purples, cyans — 80s digital aesthetic
-- Add screen edge vignette and CRT curvature distortion
+- Add screen edge vignette (`<Vignette />` — built-in) and CRT curvature distortion
 - Synchronize visual glitches with audio stutter events
+- **⚠️ Implement adaptive quality tiers for mobile:**
+  - **Desktop tier:** Full post-processing effects (CRT, glitch, chromatic aberration, noise, vignette)
+  - **Mobile tier:** Disable post-processing or use single lightweight effect. Post-processing drops mobile from 60fps to 20-30fps on mid-range phones.
+  - **Detection:** Use `navigator.deviceMemory`, `navigator.hardwareConcurrency`, and GPU renderer string to auto-select tier
+  - **iOS Safari:** WebGL 2.0 support is partial (no compute shaders, 4096 max texture size, 256-512MB GPU memory limit)
+  - **Handle WebGL context loss:** Listen for `webglcontextlost` / `webglcontextrestored` events for graceful recovery when tab is backgrounded on mobile
 
 ### Phase 6: Integration & Polish
 Bring all layers together.
 
-- Synchronize avatar lip-sync with audio playback (tight timing)
+- Synchronize avatar lip-sync with audio playback (tight timing via `VisemeScheduler` — use `AudioContext.getOutputTimestamp()` for latency compensation)
 - Synchronize visual glitches with audio stutter effects
-- Tune AgentCore Memory strategies for Max Height's personality:
+- Integrate AgentCore Memory for cross-session recall:
+  - Build custom `AgentCoreMemoryAdapter` wrapping raw `@aws-sdk/client-bedrock-agentcore`:
+    - `CreateEvent` — store conversation events after each exchange
+    - `RetrieveMemoryRecords` — load relevant context before each conversation
   - Customize extraction prompts so Max remembers things "his way"
   - Verify cross-session recall works naturally in conversation
-  - Adjust namespace structure if needed for multi-user support
+  - Define namespace structure for multi-user support (`/max-height/{actorId}/*`)
+  - **Note:** Memory extraction is asynchronous — don't expect instant cross-session recall. Short-term covers the current session.
+- Implement WebSocket reconnection manager:
+  - Presigned URLs expire every 5 minutes — auto-reconnect before timeout
+  - Credential refresh when Cognito tokens expire (1-3 hours)
+  - Seamless session resumption using session ID header
+  - "Max is reconnecting..." UI state
 - Use AgentCore Observability to trace and debug integration issues:
   - Inspect agent reasoning steps during full audio+visual flow
   - Audit tool call timing and personality steering decisions
@@ -384,14 +448,18 @@ Bring all layers together.
   - WebGL not supported? Fallback to 2D or text-only
   - Cloud down? Friendly error with Max Height personality
   - AgentCore-specific error handling:
-    - MicroVM cold start → "Max is waking up" loading animation (first request may have higher latency)
+    - MicroVM cold start → "Max is waking up" loading animation (1-10 seconds depending on container image size — design this to feel intentional, not broken)
     - Session timeout → Graceful reconnection (sessions can last up to 8 hours but will eventually terminate)
+    - WebSocket presigned URL expiry → Auto-reconnect (every 5 minutes)
     - Memory extraction delay → Don't expect instant cross-session recall; short-term covers current session
-    - Gateway tool failures → Max riffs on the failure in-character ("The weather service is as unreliable as network executives!")
+    - Tool API failures → Max riffs on the failure in-character ("The weather service is as unreliable as network executives!")
 - Responsive design (desktop + mobile browsers)
 - Loading states (Max Height "warming up" animation)
 - PWA manifest (installable on mobile home screens)
-- Performance optimization (target 60fps for 3D scene on modern hardware)
+- Performance optimization:
+  - Target 60fps for 3D scene on desktop
+  - Accept 30fps on mobile with reduced effects
+  - Test on real mobile devices early — don't wait until this phase
 
 ### Phase 7: Stretch Goals
 - WebRTC voice streaming (lower latency than WebSocket for audio — AgentCore Runtime supports WebRTC natively, but requires VPC network mode + KVS managed TURN relay, adding complexity)
@@ -420,6 +488,13 @@ Bring all layers together.
 - **Cognito Identity Pool (unauthenticated/guest access)** — Grants temporary, scoped AWS credentials to the browser without requiring user login. Perfect for a friends/family audience.
 - **Rate limiting via IAM** — The IAM role attached to the Cognito identity pool can throttle requests. No custom rate-limiting code needed.
 - **Free tier** — Cognito Identity covers 50K MAUs at no cost. Far more than a friends/family audience needs.
+- **⚠️ Presigned URL 5-minute expiry**: AgentCore WebSocket presigned URLs have a **maximum lifetime of 300 seconds** (hardcoded `MAX_PRESIGNED_URL_TIMEOUT`). This is much shorter than Cognito credential lifetime (1-3 hours). The browser must implement a **reconnection manager** that:
+  1. Detects connection close or approaching 5-minute timeout (set a 4-minute timer on each connection)
+  2. Refreshes Cognito credentials if expired
+  3. Generates a new presigned URL
+  4. Reconnects seamlessly, resuming the session via `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` header
+  5. Shows "Max is reconnecting..." UI state briefly
+- **Cognito IAM role must include**: `bedrock:InvokeAgent` (for AgentCore WebSocket), `polly:SynthesizeSpeech` (for direct browser-to-Polly TTS calls)
 - **Alternative considered**: Cognito User Pool + OAuth 2.0 login. Rejected as overkill — requiring friends/family to create accounts adds friction with no real benefit.
 
 ### Why Zustand (and what NOT to put in it)?
@@ -436,14 +511,13 @@ Bring all layers together.
 
 ### Why Amazon Bedrock AgentCore Memory over DynamoDB?
 - **Built-in intelligence**: AgentCore Memory automatically extracts user preferences, conversation summaries, and semantic facts from conversations. With DynamoDB, we'd need to build all of this manually or pay extra LLM tokens to send full history as context.
-- **Native Strands integration**: AgentCore Memory plugs into Strands Agents via `AgentCoreMemorySessionManager` — the agent handles memory automatically. No custom session manager or context loader code needed.
 - **Semantic search retrieval**: When Max needs to recall something, AgentCore Memory finds relevant memories by meaning (not just recency). This is smarter and uses fewer LLM tokens than loading full conversation history.
 - **Three built-in strategies**: Semantic (facts), Summary (conversation recaps), User Preferences (learned preferences) — all running automatically after each conversation turn.
 - **Comparable cost**: ~$0.25–0.68/mo vs $0 (DynamoDB free tier) + $0.50–1.50/mo (extra LLM tokens for context). AgentCore Memory actually saves money by reducing token overhead.
 - **Less code to maintain**: Eliminates the need for `dynamodb.ts` memory module, context truncation logic, history loading, and manual summarization.
 - **Hierarchical namespaces**: Clean data organization per user (`/max-height/{actorId}/preferences`) with built-in access control. DynamoDB would need manual partition key design.
-- **TypeScript SDK**: Available via `@aws-sdk/client-bedrock-agentcore` and `bedrock-agentcore` npm packages. TypeScript Strands session manager available at `aws/bedrock-agentcore-sdk-typescript` on GitHub.
-- **Risk note**: The Strands TypeScript session manager may be less mature than the Python equivalent. Fallback is using the raw AWS SDK client directly — the APIs are straightforward (CreateEvent, ListEvents, RetrieveMemoryRecords).
+- **⚠️ TypeScript Integration Gap**: The Strands TypeScript SDK does **not** have an `AgentCoreMemorySessionManager` (GitHub issues #125, #111 are open). Integration requires a **custom adapter** wrapping the raw AWS SDK (`@aws-sdk/client-bedrock-agentcore`). The APIs are straightforward (`CreateEvent`, `ListEvents`, `RetrieveMemoryRecords`) but must be manually wired. The Python SDK has better integration.
+- **Risk note**: TypeScript integration is less mature than Python. Fallback is using the raw AWS SDK client directly. **Phase 1-2 will use Strands' built-in `SessionManager` with S3 storage** for basic persistence; AgentCore Memory integration comes in Phase 3+.
 
 ### Why Bedrock Claude Haiku?
 - Cheapest frontier-quality model: ~$0.25/1M input, $1.25/1M output tokens
@@ -475,29 +549,44 @@ Bring all layers together.
 - GLSL shaders run consistently in browsers (unlike mobile GPU fragmentation)
 
 ### Strands Steering vs Prompt Engineering
-- System prompt defines the baseline personality
-- Steering hooks enforce it deterministically — no prompt drift
-- Stutter injection is particularly well-suited to steering (text manipulation, not model reasoning)
-- Personality guard prevents the model from "breaking character" even under adversarial prompts
+- System prompt defines the baseline personality — with a well-crafted prompt, Claude 3.5 Haiku stays in character 95%+ of the time
+- **Strands hooks (TypeScript)** can observe agent events (`BeforeModelCallEvent`, `AfterModelCallEvent`, etc.) but **cannot intercept or transform streaming tokens mid-stream**. This means:
+  - Hooks are useful for logging, metrics, and triggering side effects — not for modifying output
+  - All output modification must be **post-processing** on the complete response text
+- **Post-processing text transforms** enforce deterministic modifications:
+  - Stutter injection: Regex/pattern-based insertion of stutter markup (`W-w-well`) on complete response
+  - Catchphrase injection: Probability-based insertion of signature phrases
+  - Personality guard: Heuristic pattern matching for character-breaking phrases (e.g., "I'm an AI", "I cannot")
+- **LLM-as-judge is reserved for async evaluation only** (not real-time) — run against conversation logs via AgentCore Evaluations to score personality accuracy, then feed results back into system prompt tuning
+- **Steering in the Strands TypeScript SDK is marked "experimental"** — expect API changes. Pin SDK version.
 
 ### Avatar Creation Approach
-- ~~**Option A**: Commission/create a custom GLB model in Blender with proper blend shapes~~
-- ~~**Option B**: Use Ready Player Me as starting point and customize~~
-- **Option C (chosen)**: Retro low-poly model with recognizable Max-inspired features
-- Rationale: Matches the retro 80s CG aesthetic, performs better in browsers, and the style actually *reinforces* the character association. Key features: slicked-back hair, exaggerated jaw, signature smirk, suit/tie collar.
+- **⚠️ This is the single largest time investment in the project (~40-80 hours for custom model)**
+- **Recommended approach:** Start with a 2D placeholder or pre-made model for Phases 1-3, then build/commission the real model for Phase 4
+- **Option A**: Commission a custom model from a 3D artist ($200-500) — best ROI
+- **Option B**: Buy and customize a pre-made low-poly head from Sketchfab ($20-100) — saves 30-50 hours
+- **Option C**: Build from scratch in Blender — full control, 40-80 hours of work
+- **Option D**: Use Ready Player Me — customizable, saves 60%+ time, but less retro aesthetic
+- **Chosen aesthetic**: Retro low-poly model with recognizable Max-inspired features. Key features: slicked-back hair, exaggerated jaw, signature smirk, suit/tie collar. Target 5-10k polygons (mobile-friendly).
+- Rationale: Matches the retro 80s CG aesthetic, performs better in browsers, and the style actually *reinforces* the character association.
 
 ### Voice Strategy
-- Use Amazon Polly Neural for a base synthetic voice — **broadcaster cadence, slightly nasal, smug tone**
-- Apply real-time DSP effects in the browser via Web Audio API for the Max glitch layer
+- Use Amazon Polly Neural for a base synthetic voice — **best options: Matthew (warm, authoritative) or Stephen (sharper)**. Use SSML `<prosody pitch="+10%" rate="105%">` for slight urgency/smugness. No "nasal" parameter available.
+- **Two API calls required per response:** One for audio (mp3), one for viseme timing (json). Must be fired in parallel and manually synchronized.
+- Apply real-time DSP effects in the browser via **Web Audio API AudioWorklet** (not deprecated ScriptProcessorNode) for the Max glitch layer
 - Audio FX build priority: 1) Stutter loops 2) Pitch shifts 3) Signal degradation 4) Static bursts 5) Echo/reverb
+- **AudioWorklet runs on separate thread** — zero impact on 60fps 3D rendering
 - This separates "what Max says" (agent) from "how Max sounds" (TTS + effects)
+- **iOS Safari:** AudioContext suspended until user gesture — require "tap to wake Max" before audio
 
 ### WebSocket Streaming
 - AgentCore Runtime provides built-in bidirectional WebSocket — no API Gateway WebSocket API needed
 - Browser connects to AgentCore Runtime's WebSocket endpoint using SigV4 pre-signed URL (credentials from Cognito)
-- Session ID passed in headers to route requests to the same microVM
+- **⚠️ Presigned URL expires every 5 minutes** (hardcoded max 300s). Must build reconnection manager.
+- Session ID passed in headers (`X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`) to route requests to the same microVM and resume sessions after reconnection
 - Token-by-token streaming from Strands agent
-- Each token triggers incremental viseme calculation
+- **Audio is NOT streamed through WebSocket** — browser calls Polly directly using Cognito credentials (avoids 10MB chunk limit and mixed binary/text protocol complexity)
+- Viseme scheduling happens client-side: receive text → call Polly for audio + visemes → VisemeScheduler syncs playback
 - Keeps avatar "alive" while Max is "thinking" (idle animations)
 - Audio chunks streamed as generated, not waiting for full response
 - WebRTC available as a future upgrade for lower-latency audio (stretch goal — requires VPC + TURN relay)
@@ -556,34 +645,34 @@ Agent004/
 ├── packages/
 │   └── agent/                       # Strands Agent backend
 │       ├── src/
-│       │   ├── agent.ts             # Max Height agent definition
-│       │   ├── runtime.ts           # AgentCore Runtime entry point (wraps agent, calls listen())
+│       │   ├── agent.ts             # Max Height agent definition (Strands Agent with system prompt)
+│       │   ├── runtime.ts           # AgentCore Runtime entry point (BedrockAgentCoreApp wrapping agent — port 8080)
 │       │   ├── prompts/
-│       │   │   └── max-persona.ts   # System prompt
-│       │   ├── steering/
-│       │   │   ├── personality-guard.ts
-│       │   │   ├── stutter-injection.ts
-│       │   │   ├── catchphrase-trigger.ts
-│       │   │   └── topic-deflection.ts
+│       │   │   └── max-persona.ts   # System prompt (primary personality enforcement)
+│       │   ├── post-processing/     # Text transforms applied to complete LLM response before sending
+│       │   │   ├── stutter-injection.ts  # Regex/pattern stutter markup (`W-w-well`)
+│       │   │   ├── catchphrase-trigger.ts # Probability-based catchphrase insertion
+│       │   │   └── personality-guard.ts   # Heuristic pattern matching (not LLM-as-judge)
 │       │   ├── tools/
-│       │   │   ├── tts.ts           # Amazon Polly integration (direct SDK — streaming perf)
-│       │   │   └── viseme.ts        # Viseme timing generation
-│       │   │   # weather, news, search → AgentCore Gateway (MCP tools, no custom code)
+│       │   │   ├── weather.ts       # Native Strands tool (tool() + Zod schema)
+│       │   │   ├── news.ts          # Native Strands tool
+│       │   │   └── search.ts        # Native Strands tool
+│       │   │   # Note: Polly TTS is called by browser directly, not via agent
 │       │   └── memory/
-│       │       └── agentcore-memory.ts # AgentCore Memory config, session manager, namespaces
-│       ├── Dockerfile               # Container for AgentCore Runtime deployment
+│       │       └── agentcore-memory-adapter.ts # Custom adapter wrapping raw @aws-sdk/client-bedrock-agentcore (Phase 3+)
+│       ├── Dockerfile               # Container for AgentCore Runtime (target < 200MB, pre-compiled JS)
 │       ├── .dockerignore
-│       ├── evals/                   # Personality eval test cases
-│       ├── tsconfig.json
-│       └── package.json
+│       ├── evals/                   # Personality eval test cases (async batch LLM-as-judge)
+│       ├── tsconfig.json            # Must use "module": "ESNext" (bedrock-agentcore is ESM-only)
+│       └── package.json             # Must use "type": "module" (ESM-only)
 ├── infrastructure/
 │   ├── cdk/                         # AWS CDK for static hosting + auth
 │   │   ├── lib/
-│   │   │   └── static-hosting-stack.ts  # S3, CloudFront, Cognito, IAM
+│   │   │   └── static-hosting-stack.ts  # S3, CloudFront, Cognito (IAM role: bedrock + polly access)
 │   │   └── bin/
 │   │       └── app.ts
 │   └── agentcore/                   # AgentCore CLI configuration
-│       └── agent-config.yaml        # Runtime, Memory, Gateway resource config
+│       └── agent-config.yaml        # Runtime + Memory resource config (no Gateway)
 ├── docs/
 │   └── initial-plan.md              # This file
 ├── package.json                     # Monorepo root (npm workspaces)
@@ -603,27 +692,77 @@ Agent004/
 
 ---
 
+---
+
+## Known Risks & Gotchas
+
+### SDK Instability Risk (HIGH)
+Both `@strands-agents/sdk-typescript` (v0.0.1-dev) and `bedrock-agentcore` (v0.2.2) are pre-1.0 packages. APIs will change. **Pin exact versions in package.json** (no `^` or `~`). Budget time for migration when updates are released. Monitor GitHub repos weekly for breaking changes.
+
+### Key Version Pins (as of research date)
+| Package | Version | Status |
+|---------|---------|--------|
+| `@strands-agents/sdk-typescript` | 0.0.1-development | Pre-release, 92 open issues |
+| `bedrock-agentcore` | 0.2.2 | Pre-release, ESM-only |
+| `@aws-sdk/client-bedrock-agentcore` | Latest v3 | Stable (part of AWS SDK v3) |
+| `@aws-sdk/client-polly` | Latest v3 | Stable |
+| `@aws-sdk/client-cognito-identity` | Latest v3 | Stable |
+
+### ESM-Only Build Requirement
+`bedrock-agentcore` is ESM-only. Both `tsconfig.json` (`"module": "ESNext"`) and `package.json` (`"type": "module"`) must be ESM. This can cause compatibility issues with some CommonJS-only npm packages. Test every dependency import during initial setup.
+
+### AgentCore Runtime Constraints
+- **Port 8080** is hardcoded — cannot change.
+- Must expose `/ping` (health check) and `/invocations` (WebSocket endpoint).
+- **No VPC support** — agent runs in AWS-managed environment, cannot access VPC-private resources.
+- **No warm pool/provisioned capacity** — every new session cold-starts.
+- **WebSocket limits:** 100MB total session payload, 10MB max chunk size.
+- **Presigned URLs expire every 5 minutes** — must build reconnection manager.
+- **Sessions last up to 8 hours** — will eventually terminate.
+
+### Polly Dual-Call Billing
+Every agent response costs **2 Polly API calls** (audio + visemes). The cost table already accounts for this, but it's easy to forget during development and testing. Budget ~$4.00/million characters (not $2.00).
+
+### iOS Safari Audio
+AudioContext is suspended until user gesture. **Must** have a "tap to start" UX before any audio plays. This is a hard platform requirement, not a bug. Design the UX to make this feel natural ("Tap to wake up Max").
+
+### Web Speech API Privacy
+Chrome's SpeechRecognition sends audio to Google for processing. Safari sends to Apple. This is not truly "free, no backend" — it's "free, someone else's backend." Add a privacy notice for the friends/family audience.
+
+### Mobile 3D Performance
+Post-processing shaders will drop mobile below 30fps on mid-range phones. Build adaptive quality detection from the start — don't retrofit it. Test on real mobile devices early and often.
+
+### AgentCore Regional Availability
+Verify all AgentCore sub-services (Runtime, Memory, Evaluations, Identity, Observability) are available in `us-west-2`. Some may be `us-east-1` only at launch. If Memory or Evaluations are region-limited, consider cross-region calls or region change.
+
+### Memory Extraction Latency
+AgentCore Memory extraction runs asynchronously after conversations. Cross-session recall is not instant — a user who ends a session and immediately starts a new one may not see memories from the previous session extracted yet. Design the UX to account for slight delay.
+
 ## References
-- [Strands Agents TypeScript SDK](https://github.com/strands-agents/sdk-typescript)
-- [Strands Steering Docs](https://strandsagents.com/docs/user-guide/concepts/plugins/steering/)
-- [Strands Steering Blog (100% accuracy)](https://strandsagents.com/blog/steering-accuracy-beats-prompts-workflows)
+- [Strands Agents TypeScript SDK](https://github.com/strands-agents/sdk-typescript) — ⚠️ v0.0.1-dev, pre-release
+- [Strands TypeScript AgentCore Deployment Guide](https://strandsagents.com/docs/user-guide/deploy/deploy_to_bedrock_agentcore/typescript/)
+- [Strands Steering Docs](https://strandsagents.com/docs/user-guide/concepts/plugins/steering/) — ⚠️ experimental in TypeScript
+- [Strands Steering Blog (100% accuracy)](https://strandsagents.com/blog/steering-accuracy-beats-prompts-workflows) — Note: benchmarks are Python SDK
+- [`bedrock-agentcore` npm package](https://www.npmjs.com/package/bedrock-agentcore) — v0.2.2, ESM-only
 - [React Three Fiber](https://docs.pmnd.rs/react-three-fiber)
+- [@react-three/postprocessing](https://github.com/pmndrs/react-postprocessing)
 - [react-native-lipsync-avatar](https://github.com/casey2346/react-native-lipsync-avatar) (reference implementation)
 - [TalkingHead.js](https://github.com/met4citizen/talkinghead) (lip-sync library)
 - [Max Headroom (Wikipedia)](https://en.wikipedia.org/wiki/Max_Headroom)
 - [Web Audio API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
-- [Web Speech API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API)
+- [AudioWorklet (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet)
+- [Web Speech API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) — ⚠️ Chrome sends audio to Google
+- [Amazon Polly SpeechMark types](https://docs.aws.amazon.com/polly/latest/dg/speechmarks.html) — viseme/word timing
 - [Amazon Polly Pricing](https://aws.amazon.com/polly/pricing/)
 - [Amazon Bedrock Pricing](https://aws.amazon.com/bedrock/pricing/)
 - [Vite](https://vitejs.dev/)
 - [Amazon Bedrock AgentCore Memory — User Guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html)
 - [Amazon Bedrock AgentCore Memory — Building Context-Aware Agents (Blog)](https://aws.amazon.com/blogs/machine-learning/amazon-bedrock-agentcore-memory-building-context-aware-agents/)
-- [AgentCore Memory — Strands SDK Integration](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/strands-sdk-memory.html)
+- [AgentCore Memory — Strands SDK Integration](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/strands-sdk-memory.html) — ⚠️ TypeScript support incomplete (GitHub issues #125, #111)
 - [AgentCore TypeScript SDK (GitHub)](https://github.com/aws/bedrock-agentcore-sdk-typescript)
 - [AgentCore Pricing](https://aws.amazon.com/bedrock/agentcore/pricing/)
 - [AgentCore Runtime — Overview](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html)
 - [AgentCore Runtime — Bidirectional Streaming (WebSocket/WebRTC)](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-bidirectional-streaming.html)
 - [AgentCore Runtime — Session Isolation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html)
-- [AgentCore Gateway — Tool Integration](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html)
 - [AgentCore Observability](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability.html)
 - [Amazon Cognito Identity Pools](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-identity.html)
