@@ -36,21 +36,23 @@ Assuming casual/educational use (~20-50 messages/day, ~600-1500 messages/month):
 |---------|------|-------|
 | **LLM (Amazon Bedrock — Claude 3.5 Haiku)** | ~$0.30–1.50/mo | ~$0.001 per message at casual use |
 | **TTS (Amazon Polly)** | ~$0.50–2.00/mo | $4/1M characters; ~100-300 chars/response |
-| **AWS Lambda** | $0/mo | Free tier: 1M requests/month |
-| **API Gateway WebSocket** | ~$0.10/mo | $1/1M messages |
+| **AgentCore Runtime** | ~$0.04–0.15/mo | Consumption-based: CPU $0.0895/vCPU-hr, Memory $0.00945/GB-hr; I/O wait is free |
 | **Web hosting (S3 + CloudFront)** | ~$0.50–1.00/mo | S3 static hosting + CloudFront CDN (free tier covers 1TB/mo transfer) |
-| **DynamoDB (conversation history)** | $0/mo | Free tier: 25 GB storage, 25 RCU/WCU |
-| **Additional LLM tokens (cross-session memory)** | ~$0.50–1.50/mo | Sending conversation history as context |
+| **AgentCore Memory (short-term + long-term)** | ~$0.25–0.68/mo | Short-term events ($0.25/1K), long-term storage ($0.75/1K records/mo), retrieval ($0.50/1K) |
+| **AgentCore Gateway (tools)** | ~$0.01–0.05/mo | MCP tool invocations ($0.005/1K invocations) |
+| **AgentCore Evaluations** | ~$0.01–0.10/mo | Per-token for built-in evaluators; personality consistency testing |
+| **AgentCore Observability** | ~$0.01–0.10/mo | CloudWatch pricing for spans/logs; agent reasoning traces |
 | **Web Search API** | ~$0–1.00/mo | Depends on provider; some have free tiers |
-| **Total estimated** | **~$2–6/month** | Well under $10 target |
+| **Total estimated** | **~$1.62–5.58/month** | Well under $10 target |
 
 **Cost optimization levers:**
 - Use Claude 3.5 Haiku (cheapest frontier model) vs Sonnet/Opus
 - Amazon Polly Neural is high quality at a fraction of ElevenLabs pricing
 - Browser's built-in SpeechSynthesis API is free but lower quality (fallback option)
 - Cache common responses (weather greetings, etc.)
-- AWS free tier covers Lambda, DynamoDB, and partial API Gateway
-- Limit conversation history context window to control LLM token costs
+- AWS free tier covers partial S3/CloudFront
+- AgentCore Runtime only charges for active CPU (I/O wait while waiting for LLM responses is free — 30-70% savings vs traditional compute like Lambda)
+- AgentCore Memory's semantic search retrieves only relevant memories, reducing LLM token overhead vs. loading full history
 
 **Web interface?** — Yes, the web app IS the interface. Any device with a modern browser gets the full Max Height experience: 3D avatar, voice, glitch effects. Phones, tablets, desktops — all via the browser.
 
@@ -91,7 +93,7 @@ All key design questions have been evaluated and answered. These decisions guide
 | # | Question | Decision |
 |---|----------|----------|
 | 12 | **Greeting style?** | **Random rotation** — Max was never predictable. Rotate through: TV presenter intro, mocking the user for showing up, launching into a monologue, riffing on the time of day. Most authentic to character. |
-| 13 | **Conversation memory?** | **Cross-session memory via DynamoDB** (free tier). Max remembers previous conversations. Adds ~$0.50–1.50/mo in extra LLM token costs for sending history as context. Worth it for character depth. |
+| 13 | **Conversation memory?** | **Cross-session memory via Amazon Bedrock AgentCore Memory**. Max remembers previous conversations using built-in short-term (session context) and long-term memory (preferences, summaries, semantic facts). AgentCore Memory automatically extracts insights — no manual history loading needed. ~$0.25–0.68/mo. Worth it for character depth and reduced development effort. |
 | 14 | **Factual answers?** | **Full editorial mode** — Max always editorializes, even on factual answers. He never gives a straight answer. "The WEATHER? You want ME to tell you about the WEATHER?" This is the most authentic Max behavior. |
 | 15 | **Tools?** | **Weather + News + Web Search.** Three tools that give Max plenty to riff on. Web search lets him look up anything and editorialize about it. |
 
@@ -112,14 +114,19 @@ All key design questions have been evaluated and answered. These decisions guide
 | **Web Framework** | React + Vite (TypeScript) | Fast, lightweight, great DX |
 | **3D Rendering** | React Three Fiber (Three.js) | WebGL in browser — mature, well-supported |
 | **AI Agent Backend** | Strands Agents TypeScript SDK | Personality steering, tool use, streaming |
-| **Agent Hosting** | AWS Lambda + API Gateway WebSocket | Serverless, cheap at low volume |
-| **LLM Provider** | Amazon Bedrock (Claude 3.5 Haiku) | Cheapest quality option for personality |
+| **Agent Hosting** | Amazon Bedrock AgentCore Runtime | Serverless microVMs, built-in WebSocket streaming, I/O wait is free, session isolation |
+| **LLM Provider** | Amazon Bedrock (Claude 3.5 Haiku) | Max's brain — generates all personality, wit, and responses |
 | **Voice Synthesis** | Amazon Polly (Neural) | Good quality, very cheap ($4/1M chars) |
 | **Voice Glitch FX** | Web Audio API (client-side DSP) | Stutter loops, pitch shifts, static — all in browser |
 | **Speech-to-Text** | Web Speech API (browser built-in) | Free, no backend needed |
-| **State Management** | Zustand | Lightweight, TypeScript-friendly |
-| **Conversation History** | Amazon DynamoDB | Cross-session memory, free tier covers usage |
-| **API Communication** | WebSocket (streaming) | Real-time token streaming for responsive avatar |
+| **State Management** | Zustand | Client-side UI state only (connection, audio, avatar, ui). Conversation history lives server-side in AgentCore Memory. Selector-based subscriptions avoid 3D scene re-renders. |
+| **Authentication** | Amazon Cognito Identity Pool | Grants temporary AWS credentials to browser for SigV4-signed WebSocket connections to AgentCore Runtime. Free tier covers 50K MAUs. |
+| **Agent Memory** | Amazon Bedrock AgentCore Memory | Managed short-term (session context) + long-term (preferences, summaries, facts) with built-in Strands integration |
+| **Tool Integration** | Amazon Bedrock AgentCore Gateway | Converts APIs to MCP-compatible tools; weather, news, search available to agent. No custom tool code needed for external APIs. |
+| **Agent Identity** | Amazon Bedrock AgentCore Identity | Manages OAuth tokens and API keys for tool authentication. Free when used through AgentCore Runtime or Gateway. |
+| **Agent Evaluation** | Amazon Bedrock AgentCore Evaluations | Automated personality consistency testing with custom evaluators |
+| **Agent Observability** | Amazon Bedrock AgentCore Observability | Step-by-step reasoning traces, tool call inspection, steering audit |
+| **API Communication** | WebSocket (streaming) | Built-in bidirectional WebSocket via AgentCore Runtime; browser authenticates via Cognito + SigV4 |
 | **Hosting** | S3 + CloudFront | HTTPS required (Web Speech API, wss://); global CDN edge caching for 3D assets |
 
 ---
@@ -149,18 +156,32 @@ All key design questions have been evaluated and answered. These decisions guide
 │       │        └──────────▲───────────┘  │
 │       ▼                   │              │
 │  ┌────────────────────────┼───────────┐  │
-│  │  WebSocket Client      │           │  │
+│  │  Zustand Stores (client UI state)  │  │
+│  │  connection │ audio │ avatar │ ui  │  │
 │  └────────┬───────────────┘           │  │
+│  ┌────────┼───────────────────────────┐  │
+│  │  WebSocket Client (SigV4-signed)   │  │
+│  └────────┬───────────────────────────┘  │
 └───────────┼───────────────────────────┘
-            │ wss://
+            │ wss:// (bidirectional streaming)
+            ▼
+┌───────────────────────────┐
+│  Amazon Cognito           │
+│  Identity Pool            │
+│  (temporary AWS creds     │
+│   for browser auth)       │
+└───────────┬───────────────┘
+            │ SigV4 credentials
             ▼
 ┌──────────────────────────────────────────┐
-│        Cloud Backend (AWS)               │
+│     Amazon Bedrock AgentCore (AWS)       │
 │  ┌────────────────────────────────────┐  │
-│  │  API Gateway (WebSocket)           │  │
+│  │  AgentCore Runtime (microVM)      │  │
+│  │  - Built-in WebSocket streaming   │  │
+│  │  - Session isolation              │  │
+│  │  - I/O wait is free               │  │
 │  │         │                          │  │
 │  │         ▼                          │  │
-│  │  AWS Lambda                        │  │
 │  │  ┌──────────────────────────────┐  │  │
 │  │  │  Strands Agent (TypeScript)  │  │  │
 │  │  │  ┌────────────────────────┐  │  │  │
@@ -176,11 +197,10 @@ All key design questions have been evaluated and answered. These decisions guide
 │  │  │  └────────────────────────┘  │  │  │
 │  │  │  ┌────────────────────────┐  │  │  │
 │  │  │  │  Tools                 │  │  │  │
-│  │  │  │  - Weather API         │  │  │  │
-│  │  │  │  - News API            │  │  │  │
-│  │  │  │  - Web Search          │  │  │  │
-│  │  │  │  - TTS generation      │  │  │  │
-│  │  │  │  - Viseme timing       │  │  │  │
+│  │  │  │  Gateway: Weather,    │  │  │  │
+│  │  │  │   News, Search (MCP)  │  │  │  │
+│  │  │  │  Direct: TTS (Polly), │  │  │  │
+│  │  │  │   Viseme timing       │  │  │  │
 │  │  │  └────────────────────────┘  │  │  │
 │  │  └──────────────────────────────┘  │  │
 │  └────────────────────────────────────┘  │
@@ -189,9 +209,18 @@ All key design questions have been evaluated and answered. These decisions guide
 │  │ (Claude   │  │  (Neural TTS)       │  │
 │  │  Haiku)   │  │                     │  │
 │  └───────────┘  └─────────────────────┘  │
-│  ┌──────────────────────────────────┐    │
-│  │  DynamoDB (Conversation History) │    │
-│  └──────────────────────────────────┘    │
+│  ┌──────────────────────────────────────┐ │
+│  │  AgentCore Memory                   │ │
+│  │  (Short-term + Long-term Memory)    │ │
+│  └──────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────┐ │
+│  │  AgentCore Gateway (MCP Tools)      │ │
+│  │  + AgentCore Identity (API keys)    │ │
+│  └──────────────────────────────────────┘ │
+│  ┌─────────────────┐ ┌──────────────────┐ │
+│  │  AgentCore      │ │  AgentCore       │ │
+│  │  Observability  │ │  Evaluations     │ │
+│  └─────────────────┘ └──────────────────┘ │
 └──────────────────────────────────────────┘
 ```
 
@@ -238,12 +267,33 @@ All key design questions have been evaluated and answered. These decisions guide
 Get Max Height talking — personality is the foundation.
 
 - Initialize React + Vite project with TypeScript
-- Set up project structure (components, services, hooks, types)
+- Set up project structure (components, services, hooks, types, stores)
 - Configure ESLint, Prettier, path aliases
-- Create Strands Agent backend (Node.js/TypeScript on AWS Lambda)
+- Set up Zustand stores for client UI state:
+  - `connection.ts` — WebSocket status, reconnection state
+  - `ui.ts` — mode (text/voice), loading states, error states
+- Create Strands Agent backend (Node.js/TypeScript)
+- Create AgentCore Runtime entry point (`runtime.ts`) — wraps agent with AgentCore Runtime and calls `listen()`
+- Create Dockerfile for container-based deployment to AgentCore Runtime (or use direct code deployment)
+- Deploy agent to AgentCore Runtime (serverless microVM with built-in WebSocket streaming)
 - Write Max Height system prompt (ABC series personality, modern-aware 2026 knowledge, speech patterns, all catchphrases)
-- Implement WebSocket API endpoint (API Gateway + Lambda)
-- Build simple text chat UI in browser
+- Set up Amazon Cognito Identity Pool (unauthenticated/guest access):
+  - Browser gets temporary AWS credentials via Cognito
+  - Credentials used to SigV4-sign WebSocket connection to AgentCore Runtime
+  - IAM policy on Cognito role provides rate limiting
+- Set up Amazon Bedrock AgentCore Memory resource with strategies:
+  - Semantic strategy (extract facts/knowledge from conversations)
+  - Summary strategy (running conversation summaries per session)
+  - User preferences strategy (learn user preferences over time)
+  - Note: Long-term memory extraction is **asynchronous** — memories take time to extract after a conversation. Short-term memory (raw events) covers the current session; long-term kicks in for cross-session recall.
+- Configure Strands Agent with AgentCoreMemorySessionManager for automatic memory management
+- Define namespace structure (e.g., `/max-height/{actorId}/preferences`, `/max-height/{actorId}/facts`)
+- Define actorId strategy for friends/family audience:
+  - Option A: Simple name/alias entered on first visit (stored in localStorage)
+  - Option B: Auto-generated UUID per browser (stored in localStorage)
+  - actorId maps to Memory namespace partitioning for per-user recall
+- Configure AgentCore Observability for agent reasoning traces
+- Build simple text chat UI in browser (connects via WebSocket to AgentCore Runtime using Cognito credentials)
 - Implement random greeting rotation (monologue, mocking, TV presenter intro, time-of-day riff)
 - End-to-end text conversation working: you type → Max Height responds in character
 
@@ -254,18 +304,26 @@ Make Max Height reliably stay in character and be useful (in his own way).
 - Create stutter injection steering handler (frequent stuttering, varying intensity per response)
 - Create catchphrase trigger handler (context-aware Max-isms — all catchphrases enabled)
 - Create topic deflection handler (Max Height comments through a TV/media lens)
-- Integrate tools (all with full editorial mode — Max always editorializes):
-  - Weather API tool (OpenWeatherMap or similar)
-  - News headlines tool (NewsAPI or similar)
-  - Web search tool (general knowledge lookup)
-- Write evaluation test cases for personality consistency
+- Integrate tools via AgentCore Gateway (all with full editorial mode — Max always editorializes):
+  - Weather API tool → MCP-compatible via Gateway (wrap OpenAPI spec, no custom code)
+  - News headlines tool → MCP-compatible via Gateway (wrap OpenAPI spec, no custom code)
+  - Web search tool → MCP-compatible via Gateway (wrap search API spec, no custom code)
+- Configure AgentCore Identity for tool authentication:
+  - Manage API keys for weather/news/search APIs via Identity (not hardcoded env vars)
+  - Free when used through AgentCore Gateway — no additional cost
+- Set up AgentCore Evaluations for personality consistency:
+  - Create custom evaluator for tone/sarcasm level (LLM-as-judge)
+  - Create custom evaluator for stutter frequency in responses
+  - Create custom evaluator for catchphrase usage
+  - Run evaluations against personality test cases
 - Validate Max Height stays in character even with factual tool responses
 - Validate editorial mode: Max never gives a straight factual answer
 
 ### Phase 3: Voice Pipeline
 Give Max Height his voice — synthesis + the signature glitch effects.
 
-- Integrate Amazon Polly Neural TTS (server-side, streamed to client)
+- Add Zustand audio store (`audio.ts` — playback state, DSP effects active, volume)
+- Integrate Amazon Polly Neural TTS (server-side, streamed to client via direct AWS SDK — not via Gateway, to avoid latency on audio streaming)
 - Select/configure voice (broadcaster cadence, slightly nasal, smug tone)
 - Build client-side Web Audio API DSP pipeline (in priority order):
   1. Stutter loop effect (repeat syllable segments from stutter markup) — most iconic
@@ -281,6 +339,7 @@ Give Max Height his voice — synthesis + the signature glitch effects.
 ### Phase 4: 3D Avatar & Scene
 Build the visual Max Height experience in the browser.
 
+- Add Zustand avatar store (`avatar.ts` — current visemes, expression, glitch trigger)
 - Create/source Max Height 3D head model (GLB/GLTF with blend shapes):
   - Retro low-poly style with recognizable features (slicked-back hair, exaggerated jaw, smirk, suit/tie)
   - Viseme morph targets (mouth shapes for lip-sync)
@@ -311,22 +370,31 @@ Bring all layers together.
 
 - Synchronize avatar lip-sync with audio playback (tight timing)
 - Synchronize visual glitches with audio stutter effects
-- Implement cross-session conversation memory (DynamoDB)
-  - Store conversation history per user
-  - Load recent history as LLM context on session start
-  - Max Height remembers previous conversations
-- Implement app state management (Zustand)
-- Light rate limiting for friends/family audience
+- Tune AgentCore Memory strategies for Max Height's personality:
+  - Customize extraction prompts so Max remembers things "his way"
+  - Verify cross-session recall works naturally in conversation
+  - Adjust namespace structure if needed for multi-user support
+- Use AgentCore Observability to trace and debug integration issues:
+  - Inspect agent reasoning steps during full audio+visual flow
+  - Audit tool call timing and personality steering decisions
+  - Monitor response latency across the full pipeline
+- Light rate limiting for friends/family audience (enforced via Cognito IAM policy)
 - Error handling and graceful degradation:
   - No mic? Text-only input still works
   - WebGL not supported? Fallback to 2D or text-only
   - Cloud down? Friendly error with Max Height personality
+  - AgentCore-specific error handling:
+    - MicroVM cold start → "Max is waking up" loading animation (first request may have higher latency)
+    - Session timeout → Graceful reconnection (sessions can last up to 8 hours but will eventually terminate)
+    - Memory extraction delay → Don't expect instant cross-session recall; short-term covers current session
+    - Gateway tool failures → Max riffs on the failure in-character ("The weather service is as unreliable as network executives!")
 - Responsive design (desktop + mobile browsers)
 - Loading states (Max Height "warming up" animation)
 - PWA manifest (installable on mobile home screens)
 - Performance optimization (target 60fps for 3D scene on modern hardware)
 
 ### Phase 7: Stretch Goals
+- WebRTC voice streaming (lower latency than WebSocket for audio — AgentCore Runtime supports WebRTC natively, but requires VPC network mode + KVS managed TURN relay, adding complexity)
 - Multiple "channels" Max Height can appear on (different backgrounds/moods)
 - Voice wake word ("Hey Max") via Web Speech API continuous listening
 - Share clips of Max Height's responses as video (canvas capture)
@@ -337,11 +405,45 @@ Bring all layers together.
 
 ## Key Technical Decisions
 
+### Why AgentCore Runtime (not Lambda + API Gateway)?
+- **Built-in WebSocket streaming** — AgentCore Runtime provides native bidirectional WebSocket connections. No need to build and manage a separate API Gateway WebSocket API with connect/disconnect/message routes and Lambda integrations.
+- **Session isolation** — Each user session runs in a dedicated microVM with isolated CPU, memory, and filesystem. Lambda functions are stateless and share execution environments.
+- **I/O wait is free** — AgentCore only charges for active CPU consumption. When the agent is waiting for LLM responses, tool calls, or TTS generation (30-70% of the time), there are no CPU charges. Lambda charges for the full wall-clock time including I/O wait.
+- **Extended execution** — Sessions can last up to 8 hours for long conversations. Lambda has a 15-minute timeout.
+- **4 lines of code to deploy** — AgentCore Runtime wraps the Strands agent with minimal boilerplate. No Lambda handler, no API Gateway route configuration, no WebSocket connection management code.
+- **Built-in authentication** — SigV4 or OAuth 2.0 at the runtime level. No custom authorizer Lambda needed.
+- **Framework agnostic** — Supports Strands, LangGraph, CrewAI, and custom agents. If we ever switch frameworks, the hosting layer stays the same.
+- **Container or direct code deployment** — Choose between Docker container (via ECR) for reproducible builds or direct code upload for rapid iteration.
+
+### Why Cognito Identity Pool for Browser Auth?
+- **AgentCore Runtime requires authentication** — WebSocket connections must be signed with SigV4 or use OAuth 2.0. The browser cannot use raw AWS credentials.
+- **Cognito Identity Pool (unauthenticated/guest access)** — Grants temporary, scoped AWS credentials to the browser without requiring user login. Perfect for a friends/family audience.
+- **Rate limiting via IAM** — The IAM role attached to the Cognito identity pool can throttle requests. No custom rate-limiting code needed.
+- **Free tier** — Cognito Identity covers 50K MAUs at no cost. Far more than a friends/family audience needs.
+- **Alternative considered**: Cognito User Pool + OAuth 2.0 login. Rejected as overkill — requiring friends/family to create accounts adds friction with no real benefit.
+
+### Why Zustand (and what NOT to put in it)?
+- **Still justified** for client-side UI state: WebSocket connection status, audio playback state, 3D avatar visemes/expressions, mic recording state, UI mode, loading/error states.
+- **Performance matters** — The 3D scene renders at 60fps. React Context would cause re-renders of the entire subtree on every state change. Zustand's selector-based subscriptions let the avatar subscribe to only viseme data without re-rendering when a chat message arrives.
+- **Zustand is 1.1KB gzipped** — essentially zero bundle cost.
+- **What NOT to put in Zustand**: Conversation history, session context, user preferences. These now live server-side in AgentCore Memory. The client-side stores should contain only ephemeral UI state that doesn't need persistence.
+
 ### Why Amazon Polly over ElevenLabs?
 - ElevenLabs Starter plan: $5/mo for 30 min — could exceed budget alone
 - Amazon Polly Neural: $4/1M characters, pay-per-use — a month of casual use < $2
 - Polly Neural voices are quite good for a "broadcaster" character
 - The Max *feel* comes from DSP post-processing (stutter, pitch, static) more than the base voice
+
+### Why Amazon Bedrock AgentCore Memory over DynamoDB?
+- **Built-in intelligence**: AgentCore Memory automatically extracts user preferences, conversation summaries, and semantic facts from conversations. With DynamoDB, we'd need to build all of this manually or pay extra LLM tokens to send full history as context.
+- **Native Strands integration**: AgentCore Memory plugs into Strands Agents via `AgentCoreMemorySessionManager` — the agent handles memory automatically. No custom session manager or context loader code needed.
+- **Semantic search retrieval**: When Max needs to recall something, AgentCore Memory finds relevant memories by meaning (not just recency). This is smarter and uses fewer LLM tokens than loading full conversation history.
+- **Three built-in strategies**: Semantic (facts), Summary (conversation recaps), User Preferences (learned preferences) — all running automatically after each conversation turn.
+- **Comparable cost**: ~$0.25–0.68/mo vs $0 (DynamoDB free tier) + $0.50–1.50/mo (extra LLM tokens for context). AgentCore Memory actually saves money by reducing token overhead.
+- **Less code to maintain**: Eliminates the need for `dynamodb.ts` memory module, context truncation logic, history loading, and manual summarization.
+- **Hierarchical namespaces**: Clean data organization per user (`/max-height/{actorId}/preferences`) with built-in access control. DynamoDB would need manual partition key design.
+- **TypeScript SDK**: Available via `@aws-sdk/client-bedrock-agentcore` and `bedrock-agentcore` npm packages. TypeScript Strands session manager available at `aws/bedrock-agentcore-sdk-typescript` on GitHub.
+- **Risk note**: The Strands TypeScript session manager may be less mature than the Python equivalent. Fallback is using the raw AWS SDK client directly — the APIs are straightforward (CreateEvent, ListEvents, RetrieveMemoryRecords).
 
 ### Why Bedrock Claude Haiku?
 - Cheapest frontier-quality model: ~$0.25/1M input, $1.25/1M output tokens
@@ -363,7 +465,7 @@ Bring all layers together.
 ### Why Vite over Next.js?
 - Pure client-side SPA — no SSR needed (3D scene is entirely client-rendered)
 - Lighter weight, faster builds, simpler deployment
-- Backend is separate (Lambda + API Gateway) — no need for Next.js API routes
+- Backend is separate (AgentCore Runtime) — no need for Next.js API routes
 - If SEO or static pages become needed later, can migrate
 
 ### Browser Compatibility for 3D
@@ -391,10 +493,14 @@ Bring all layers together.
 - This separates "what Max says" (agent) from "how Max sounds" (TTS + effects)
 
 ### WebSocket Streaming
+- AgentCore Runtime provides built-in bidirectional WebSocket — no API Gateway WebSocket API needed
+- Browser connects to AgentCore Runtime's WebSocket endpoint using SigV4 pre-signed URL (credentials from Cognito)
+- Session ID passed in headers to route requests to the same microVM
 - Token-by-token streaming from Strands agent
 - Each token triggers incremental viseme calculation
 - Keeps avatar "alive" while Max is "thinking" (idle animations)
 - Audio chunks streamed as generated, not waiting for full response
+- WebRTC available as a future upgrade for lower-latency audio (stretch goal — requires VPC + TURN relay)
 
 ---
 
@@ -418,7 +524,7 @@ Agent004/
 │       │   │       ├── MicButton.tsx
 │       │   │       └── SettingsPanel.tsx
 │       │   ├── hooks/
-│       │   │   ├── useWebSocket.ts
+│       │   │   ├── useWebSocket.ts   # Connects to AgentCore Runtime WSS endpoint
 │       │   │   ├── useAudioPlayback.ts
 │       │   │   ├── useSpeechRecognition.ts
 │       │   │   └── useVisemeSync.ts
@@ -427,10 +533,15 @@ Agent004/
 │       │   │   │   ├── glitch-processor.ts
 │       │   │   │   ├── stutter-effect.ts
 │       │   │   │   └── pitch-shift.ts
-│       │   │   └── websocket/       # WebSocket client
+│       │   │   ├── auth/            # Cognito Identity + SigV4 signing
+│       │   │   │   └── cognito.ts
+│       │   │   └── websocket/       # WebSocket client (AgentCore Runtime endpoint)
 │       │   │       └── client.ts
-│       │   ├── stores/              # Zustand state
-│       │   │   └── conversation.ts
+│       │   ├── stores/              # Zustand — client UI state only
+│       │   │   ├── connection.ts    # WebSocket status, reconnection state
+│       │   │   ├── audio.ts         # Playback state, DSP effects active, volume
+│       │   │   ├── avatar.ts        # Current visemes, expression, glitch trigger
+│       │   │   └── ui.ts            # Mode (text/voice), settings, loading, errors
 │       │   ├── types/
 │       │   │   └── max.ts
 │       │   ├── App.tsx
@@ -446,6 +557,7 @@ Agent004/
 │   └── agent/                       # Strands Agent backend
 │       ├── src/
 │       │   ├── agent.ts             # Max Height agent definition
+│       │   ├── runtime.ts           # AgentCore Runtime entry point (wraps agent, calls listen())
 │       │   ├── prompts/
 │       │   │   └── max-persona.ts   # System prompt
 │       │   ├── steering/
@@ -454,19 +566,24 @@ Agent004/
 │       │   │   ├── catchphrase-trigger.ts
 │       │   │   └── topic-deflection.ts
 │       │   ├── tools/
-│       │   │   ├── tts.ts           # Amazon Polly integration
-│       │   │   ├── viseme.ts        # Viseme timing generation
-│       │   │   ├── weather.ts       # Weather API tool
-│       │   │   ├── news.ts          # News API tool
-│       │   │   └── web-search.ts    # Web search tool
-│       │   ├── memory/
-│       │   │   └── dynamodb.ts      # Cross-session conversation history
-│       │   └── handler.ts           # Lambda handler + WebSocket
+│       │   │   ├── tts.ts           # Amazon Polly integration (direct SDK — streaming perf)
+│       │   │   └── viseme.ts        # Viseme timing generation
+│       │   │   # weather, news, search → AgentCore Gateway (MCP tools, no custom code)
+│       │   └── memory/
+│       │       └── agentcore-memory.ts # AgentCore Memory config, session manager, namespaces
+│       ├── Dockerfile               # Container for AgentCore Runtime deployment
+│       ├── .dockerignore
 │       ├── evals/                   # Personality eval test cases
 │       ├── tsconfig.json
 │       └── package.json
-├── infrastructure/                  # AWS CDK or SAM template
-│   └── template.yaml               # Lambda, API Gateway, S3 bucket, CloudFront distribution
+├── infrastructure/
+│   ├── cdk/                         # AWS CDK for static hosting + auth
+│   │   ├── lib/
+│   │   │   └── static-hosting-stack.ts  # S3, CloudFront, Cognito, IAM
+│   │   └── bin/
+│   │       └── app.ts
+│   └── agentcore/                   # AgentCore CLI configuration
+│       └── agent-config.yaml        # Runtime, Memory, Gateway resource config
 ├── docs/
 │   └── initial-plan.md              # This file
 ├── package.json                     # Monorepo root (npm workspaces)
@@ -499,3 +616,14 @@ Agent004/
 - [Amazon Polly Pricing](https://aws.amazon.com/polly/pricing/)
 - [Amazon Bedrock Pricing](https://aws.amazon.com/bedrock/pricing/)
 - [Vite](https://vitejs.dev/)
+- [Amazon Bedrock AgentCore Memory — User Guide](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html)
+- [Amazon Bedrock AgentCore Memory — Building Context-Aware Agents (Blog)](https://aws.amazon.com/blogs/machine-learning/amazon-bedrock-agentcore-memory-building-context-aware-agents/)
+- [AgentCore Memory — Strands SDK Integration](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/strands-sdk-memory.html)
+- [AgentCore TypeScript SDK (GitHub)](https://github.com/aws/bedrock-agentcore-sdk-typescript)
+- [AgentCore Pricing](https://aws.amazon.com/bedrock/agentcore/pricing/)
+- [AgentCore Runtime — Overview](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html)
+- [AgentCore Runtime — Bidirectional Streaming (WebSocket/WebRTC)](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-bidirectional-streaming.html)
+- [AgentCore Runtime — Session Isolation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html)
+- [AgentCore Gateway — Tool Integration](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html)
+- [AgentCore Observability](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability.html)
+- [Amazon Cognito Identity Pools](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-identity.html)

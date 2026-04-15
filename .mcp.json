@@ -50,6 +50,19 @@
 				"AWS_REGION": "us-west-2"
 			}
 		},
+		"awslabs.amazon-bedrock-agentcore-mcp-server": {
+			"type": "stdio",
+			"timeout": 120,
+			"command": "uvx",
+			"args": [
+				"--from",
+				"awslabs.amazon-bedrock-agentcore-mcp-server@latest",
+				"awslabs.amazon-bedrock-agentcore-mcp-server.exe"
+			],
+			"env": {
+				"FASTMCP_LOG_LEVEL": "ERROR"
+			}
+		},
 		"awslabs.billing-cost-management-mcp-server": {
 			"type": "stdio",
 			"timeout": 120,
