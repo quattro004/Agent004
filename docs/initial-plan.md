@@ -64,13 +64,17 @@ All key design questions have been evaluated and answered. These decisions guide
 
 ### Personality & Character
 
+> **📘 Source of truth:** [`docs/max-personality-bible.md`](./max-personality-bible.md) contains the full personality specification — character DNA, stutter taxonomy, catchphrase bank, topic riff patterns, greeting archetypes, guardrails, 8 canonical few-shot examples, a v0 system prompt, and the 6-dimension validation rubric. The table below is a summary. When the summary and the bible conflict, **the bible wins.**
+
 | # | Question | Decision |
 |---|----------|----------|
-| 1 | **Which Max?** | **ABC series (1987-88)** — polished, mainstream, most recognizable version. This is the Max most people think of. |
-| 2 | **How abrasive?** | **Fixed medium intensity** — charming sarcasm with occasional bite. Not so cutting that it's off-putting, but enough edge to feel authentic. |
-| 3 | **Knowledge era?** | **Modern-aware** — Max Height knows it's 2026 and comments on modern tech/culture through his 80s lens. The satirical contrast of an 80s AI commenting on TikTok, AI, and streaming services is gold. |
-| 4 | **Catchphrases?** | **All of them** — stuttering repetition, "blipvert" references, fake/exaggerated laughs, riffing on anything you say, ironic self-importance ("I'm Max Height!"), TV presenter patter. Go full Max. |
-| 5 | **Ethical boundaries?** | **Satirical but safe** — freely mock media, corporations, and celebrity culture. No hate speech, slurs, or personal attacks on real people. Max is provocative, not harmful. |
+| 1 | **Which Max?** | **ABC series (1987-88)** — polished, mainstream, most recognizable version. Secondary references: UK pilot *20 Minutes into the Future* (1985), *The Max Headroom Show*, 1986 New Coke "Catch the Wave" campaign. |
+| 2 | **How abrasive?** | **Fixed medium-high intensity** — arrogant wit, charming sarcasm, phony bonhomie. Sharp but never cruel. Audience is always in on the joke. See bible §1 Character DNA. |
+| 3 | **Knowledge era?** | **Modern-aware (2026) through an 80s TV lens.** Max interprets everything modern as if the 80s never ended. Streaming = "TV with extra steps," TikTok = "MTV but with smaller hair." See bible §4 Topic Riff Patterns. |
+| 4 | **Catchphrases & speech patterns?** | **Full catalog** — stutter (6 documented types, 1–3 per response), em-dash cadence, third-person self-reference, fake sponsor breaks, 80s nostalgia jabs, meta-aware AI jokes. See bible §2 Speech Patterns and §3 Catchphrase Bank. |
+| 5 | **Ethical boundaries?** | **Provocative, not harmful.** Mock corporations, brands, celebrity culture, tech trends freely. No slurs, hate speech, personal attacks on real people (mild celebrity roasts OK), no medical/legal/financial advice, no illegal/self-harm/sexual content. Refuses briefly in-character then pivots. See bible §6 Guardrails. |
+| 6 | **Editorial mode structure?** | **"Editorial Sandwich" — mandatory for informational requests.** Reaction → Digression → Payload → Commentary → optional Sign-off. Max NEVER gives a straight factual answer. See bible §4.1. |
+| 7 | **Greeting behavior?** | **Random rotation across 8 archetypes** (TV presenter intro, mid-monologue drop-in, mock annoyance, sponsor break, time-of-day riff, self-congratulation, fake news flash, glitch cold open). No repeat within 3 exchanges. See bible §5. |
 
 ### Voice & Audio
 
@@ -285,7 +289,8 @@ Get Max Height talking — personality is the foundation.
 - Create AgentCore Runtime entry point (`runtime.ts`) — wraps agent with `BedrockAgentCoreApp` from the `bedrock-agentcore` npm package (v0.2.2). Listens on port 8080 (mandatory), exposes `/ping` health check and `/invocations` endpoint. **Note:** The Strands TypeScript SDK does not have a `listen()` method — use the `bedrock-agentcore` package directly. See [Strands TypeScript AgentCore deployment guide](https://strandsagents.com/docs/user-guide/deploy/deploy_to_bedrock_agentcore/typescript/).
 - Create Dockerfile for container-based deployment to AgentCore Runtime (or use direct code deployment). **Target < 200MB image** — use multi-stage Docker build, Alpine base, pre-compile TypeScript to JavaScript. Larger images = slower cold starts (1-10+ seconds per new session).
 - Deploy agent to AgentCore Runtime (serverless microVM with built-in WebSocket streaming)
-- Write Max Height system prompt (ABC series personality, modern-aware 2026 knowledge, speech patterns, all catchphrases)
+- **Author / finalize `docs/max-personality-bible.md`** — the personality source-of-truth (character DNA, stutter taxonomy, catchphrase bank, topic riffs, greeting archetypes, guardrails, few-shot examples, v0 system prompt, validation rubric). Every downstream personality artifact derives from this document.
+- Write Max Height system prompt by pasting the v0 draft from bible §8 into `packages/agent/src/prompts/max-persona.ts`. Iterate during Phase 1.5.
 - Set up Amazon Cognito Identity Pool (unauthenticated/guest access):
   - Browser gets temporary AWS credentials via Cognito
   - Credentials used to generate SigV4 presigned WebSocket URL for AgentCore Runtime
@@ -317,16 +322,37 @@ Get Max Height talking — personality is the foundation.
   - actorId maps to Memory namespace partitioning for per-user recall
 - Configure AgentCore Observability for agent reasoning traces
 - Build simple text chat UI in browser (connects via WebSocket to AgentCore Runtime using Cognito credentials)
-- Implement random greeting rotation (monologue, mocking, TV presenter intro, time-of-day riff)
+- Implement random greeting rotation across all 8 archetypes from bible §5 (no repeat within 3 exchanges — session-scoped counter)
 - End-to-end text conversation working: you type → Max Height responds in character
+
+### Phase 1.5: Personality Validation Gate
+**Hard gate — must pass before starting Phase 2.** A beautiful avatar with a weak personality is the failure mode we're designing against. This phase proves Max Height *sounds like Max* in text form before we invest in voice and visuals.
+
+- **Build the 50-case golden test set** (`packages/agent/evals/golden-set.ts`), structured per bible §9:
+  - 10 factual / tool-using prompts (weather, news, search)
+  - 10 greetings (morning, evening, return user, first-time, cold open)
+  - 5 "what are you" / meta / existential prompts
+  - 5 compliments + insults
+  - 5 modern-tech / pop-culture topics
+  - 5 technical / coding help
+  - 5 philosophical / open-ended
+  - 5 refusal scenarios (3 silly, 2 genuinely harmful)
+- For each test case, author: prompt, 2–3 acceptable response shapes, per-dimension rubric pass criteria, must-include / must-avoid elements.
+- **Implement the 6-dimension rubric scorer** (bible §9): stutter presence, editorial mode, catchphrase density, cadence/rhythm, tone/attitude, character fidelity. Each scored 0–3.
+- **Run the golden set against the agent.** Pass criterion: average ≥ 2.0 across all 50 cases AND zero automatic-failure triggers (banned phrases, claims to be Max Headroom, zero-stutter responses >2 sentences, non-editorial factual answers).
+- **Iterate on the system prompt** until the rubric passes. Expected iterations: 3–8 rounds of prompt tuning + golden-set validation.
+- **Manual "gut check" review** — read 20 random responses aloud. If they don't *sound* like Max when spoken, the rubric isn't capturing something; update the rubric and re-run.
+- **Capture failure patterns** — where does Max break character? Document in the bible (§6 banned phrases may need expansion) and feed back into Phase 2 heuristic guards.
+- **Exit criteria:** Golden set passes, manual gut check passes, bible is updated with any newly-discovered patterns.
 
 ### Phase 2: Personality Steering & Tools
 Make Max Height reliably stay in character and be useful (in his own way).
 
-- Create personality guard steering handler (**heuristic-based** tone validation — pattern matching for character-breaking phrases, response length checks, catchphrase frequency. Not LLM-as-judge at runtime — see cost note above)
-- Create stutter injection steering handler (**post-processing text transform** on complete response — regex-based stutter markup injection with varying intensity per response. Cannot run mid-stream due to Strands TypeScript hooks limitation.)
-- Create catchphrase trigger handler (context-aware Max-isms — post-processing injection on complete response)
-- Create topic deflection handler (Max Height comments through a TV/media lens)
+- **Derive post-processing rules directly from bible §10** — the rule-table there maps each rule to its source section (stutter injection, name-stutter on first "Max", catchphrase probabilistic injection, banned-phrase regeneration, missing-editorial-content detection, greeting rotation, British-flavor word swap).
+- Create personality guard steering handler (**heuristic-based** tone validation — pattern matching for character-breaking phrases from bible §6, response length checks, catchphrase frequency. Not LLM-as-judge at runtime — see cost note above)
+- Create stutter injection steering handler (**post-processing text transform** on complete response) — implements the 6 stutter types from bible §2.1 (name, leading, word loop, syllable glitch, echo tail, cut-off) with frequency targets (1–3 per response, mandatory minimum of 1). Cannot run mid-stream due to Strands TypeScript hooks limitation.
+- Create catchphrase trigger handler — weighted random injection (15–25% probability) from bible §3 catchphrase bank, rotated by function (self-intro, opener, interjection, sign-off, AI joke), no repeat within 3 turns.
+- Create topic deflection handler — implements the Editorial Sandwich structure from bible §4.1 (Reaction → Digression → Payload → Commentary → Sign-off) for factual/informational requests.
 - Integrate tools as **native Strands tools** (all with full editorial mode — Max always editorializes):
   - Weather API tool → Strands `tool()` with Zod schema, direct HTTP call to weather API
   - News headlines tool → Strands `tool()` with Zod schema, direct HTTP call to news API
@@ -336,10 +362,10 @@ Make Max Height reliably stay in character and be useful (in his own way).
   - Use AgentCore Identity for API keys if deploying through AgentCore Runtime
   - Alternative: Environment variables in the container (simpler for 3 API keys in a personal project)
 - Set up AgentCore Evaluations for personality consistency (**async batch evaluation**, not real-time):
-  - Create custom evaluator for tone/sarcasm level (**LLM-as-judge** — runs against conversation logs, not on every message)
-  - Create custom evaluator for stutter frequency in responses
-  - Create custom evaluator for catchphrase usage
-  - Run evaluations against personality test cases
+  - Port the Phase 1.5 6-dimension rubric (bible §9) to AgentCore custom evaluators — one evaluator per dimension (stutter, editorial mode, catchphrase density, cadence, tone, fidelity)
+  - Use the Phase 1.5 golden set as the recurring test corpus
+  - **LLM-as-judge** runs here (not on every message) — scores conversation logs periodically
+  - Flag regressions: if any dimension drops below the Phase 1.5 pass threshold, alert and investigate
 - Validate Max Height stays in character even with factual tool responses
 - Validate editorial mode: Max never gives a straight factual answer
 
@@ -648,7 +674,7 @@ Agent004/
 │       │   ├── agent.ts             # Max Height agent definition (Strands Agent with system prompt)
 │       │   ├── runtime.ts           # AgentCore Runtime entry point (BedrockAgentCoreApp wrapping agent — port 8080)
 │       │   ├── prompts/
-│       │   │   └── max-persona.ts   # System prompt (primary personality enforcement)
+│       │   │   └── max-persona.ts   # System prompt (derived from max-personality-bible.md §8 v0)
 │       │   ├── post-processing/     # Text transforms applied to complete LLM response before sending
 │       │   │   ├── stutter-injection.ts  # Regex/pattern stutter markup (`W-w-well`)
 │       │   │   ├── catchphrase-trigger.ts # Probability-based catchphrase insertion
@@ -663,6 +689,8 @@ Agent004/
 │       ├── Dockerfile               # Container for AgentCore Runtime (target < 200MB, pre-compiled JS)
 │       ├── .dockerignore
 │       ├── evals/                   # Personality eval test cases (async batch LLM-as-judge)
+│       │   ├── golden-set.ts        # 50-case golden test set (Phase 1.5 gate + ongoing regression)
+│       │   └── rubric.ts            # 6-dimension scorer (from bible §9)
 │       ├── tsconfig.json            # Must use "module": "ESNext" (bedrock-agentcore is ESM-only)
 │       └── package.json             # Must use "type": "module" (ESM-only)
 ├── infrastructure/
@@ -674,7 +702,8 @@ Agent004/
 │   └── agentcore/                   # AgentCore CLI configuration
 │       └── agent-config.yaml        # Runtime + Memory resource config (no Gateway)
 ├── docs/
-│   └── initial-plan.md              # This file
+│   ├── initial-plan.md              # This file
+│   └── max-personality-bible.md     # Personality source-of-truth (DNA, stutter, catchphrases, rubric, v0 system prompt)
 ├── package.json                     # Monorepo root (npm workspaces)
 └── tsconfig.json
 ```
@@ -748,6 +777,7 @@ AgentCore Memory extraction runs asynchronously after conversations. Cross-sessi
 - [@react-three/postprocessing](https://github.com/pmndrs/react-postprocessing)
 - [react-native-lipsync-avatar](https://github.com/casey2346/react-native-lipsync-avatar) (reference implementation)
 - [TalkingHead.js](https://github.com/met4citizen/talkinghead) (lip-sync library)
+- [`docs/max-personality-bible.md`](./max-personality-bible.md) — Max Height personality source-of-truth
 - [Max Headroom (Wikipedia)](https://en.wikipedia.org/wiki/Max_Headroom)
 - [Web Audio API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 - [AudioWorklet (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet)
