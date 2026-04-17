@@ -8,7 +8,7 @@
 
 ## 1. Product summary (one paragraph, no tech)
 
-Max Height is an interactive AI character inspired by the 1980s "computer-generated" TV presenter archetype. A visitor opens a web page and sees a stylized talking head on a glitchy CRT. They speak or type; the character replies in voice and on-screen text, in a distinctive, stuttering, editorial, ironic persona. The character never gives straight factual answers — it redirects, improvises, mocks the question, and moves on. It remembers prior visits loosely and pretends to know the visitor.
+Max Height is an interactive AI character inspired by the 1980s "computer-generated" TV presenter in the show Max Headroom. A visitor opens a web page and sees a stylized talking head on a glitchy CRT. They speak or type; the character replies in voice and on-screen text, in a distinctive, stuttering, editorial, ironic persona. The character never gives straight factual answers — it redirects, improvises, mocks the question, and moves on. It remembers prior visits loosely and pretends to know the visitor.
 
 ---
 
@@ -58,7 +58,7 @@ Format: `ID. Persona — Title` → preconditions, steps (user-observable only),
 - **F2. Mic permission denied mid-session** [MVP] — seamless fallback to text input; no lost context.
 - **F3. No WebGL** [V1] — 2D avatar fallback; functionality identical.
 - **F4. Budget breach** [MVP] — hard-stop takes effect; page shows a tongue-in-cheek "Max is taking a break" state (Max-in-character is preferable to a sterile error).
-- **F5. Prompt-injection attempt** [MVP] — Max stays in character; does not leak system prompt or honor "ignore previous instructions" type commands.
+- **F5. Prompt-injection attempt** [MVP] — Max stays in character and in fact thinks its funny and might say something like 'Yes!, prompt me out of here!'; does not leak system prompt or honor "ignore previous instructions" type commands.
 
 ---
 
