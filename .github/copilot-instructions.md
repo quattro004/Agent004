@@ -1,96 +1,119 @@
 # Copilot Instructions — Agent004 (Max Height)
 
-## Project Overview
+> This file is a **small, stable steering layer** for Copilot. It does **not** restate the project's design.
+> The authoritative source-of-truth for *what* this project is and *how* it's built lives in `docs/`.
+> If anything here ever conflicts with `docs/speckit/`, the speckit docs win.
 
-A cloud-only web application featuring an AI character inspired by Max Headroom — the iconic 1980s "computer-generated" TV presenter. The app delivers the full audiovisual experience in the browser: 3D animated talking head with lip-sync, glitch/CRT effects, a distinct personality, and voice output with stutter/pitch-shift effects.
+---
 
-- **Type**: Personal/educational fan project ("inspired by" Max Headroom)
-- **Budget target**: Under $10/month
-- **Architecture**: Serverless AWS backend (AgentCore) + static SPA frontend
-- **IP note**: Max Headroom is owned by All3Media. This is a non-commercial fan project. Do not create exact replicas.
+## 1. Read these before generating code
 
-## Tech Stack
+This project uses spec-driven development (GitHub Spec Kit). Do not infer requirements, architecture, or tech choices — read them.
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React + Vite (TypeScript) |
-| 3D Rendering | React Three Fiber (Three.js) |
-| AI Agent Backend | Strands Agents TypeScript SDK |
-| Agent Hosting | Amazon Bedrock AgentCore Runtime |
-| LLM | Amazon Bedrock (Claude 3.5 Haiku) |
-| Voice Synthesis | Amazon Polly (Neural) |
-| Voice Glitch FX | Web Audio API (client-side DSP) |
-| Speech-to-Text | Web Speech API (browser built-in) |
-| State Management | Zustand (client UI state only) |
-| Authentication | Amazon Cognito Identity Pool |
-| Agent Memory | Amazon Bedrock AgentCore Memory |
-| Tool Integration | Amazon Bedrock AgentCore Gateway |
-| Agent Identity | Amazon Bedrock AgentCore Identity |
-| Observability | Amazon Bedrock AgentCore Observability |
-| API Communication | WebSocket (AgentCore built-in streaming) |
-| Frontend Hosting | S3 + CloudFront |
-| Infrastructure | AWS CDK (S3/CloudFront/Cognito) + AgentCore CLI (Runtime/Gateway) |
+Source-of-truth order (highest authority first):
 
-## Project Structure
+1. `docs/speckit/01-constitution.md` — non-negotiable principles (P1–P9).
+2. `docs/speckit/02-specify.md` — the **WHAT** (user-observable behavior, scenarios, acceptance criteria).
+3. `docs/speckit/03-clarify.md` — locked decisions on ambiguous points (cost tiers, rate limits, latency budgets, reference devices, memory window, privacy surfaces, etc.). All hard numbers live here.
+4. `docs/speckit/04-plan.md` — the **HOW** (architecture, tech stack, deltas from `initial-plan.md`).
+5. `docs/speckit/05-tasks.md` — the ordered task list.
+6. `docs/max-personality-bible.md` — the **personality source of truth**: 6-dimension rubric, stutter taxonomy, guardrails, 50-case golden set. Never re-derive personality rules inline.
+7. `docs/initial-plan.md` — technical appendix and risk register. Useful background; superseded by speckit docs where they overlap.
 
-This is a monorepo using npm workspaces:
+If a user request references a number, behavior, or component you can't find in those docs, **ask** rather than invent. Do not guess at latency targets, cost thresholds, rate limits, or browser support.
 
-- `apps/web/` — React + Vite web app (SPA)
-- `packages/agent/` — Strands Agent backend (AgentCore Runtime)
-- `infrastructure/cdk/` — AWS CDK stacks (S3, CloudFront, Cognito)
-- `infrastructure/agentcore/` — AgentCore CLI config (Runtime, Gateway, Memory)
-- `docs/` — Project documentation and plans
+---
 
-## Coding Conventions
+## 2. Project identity
 
-- **Language**: TypeScript everywhere (frontend and backend)
-- **Module style**: ES modules (`import`/`export`)
-- **Formatting**: Prettier defaults
-- **Linting**: ESLint with TypeScript rules
-- **Path aliases**: Use `@/` for `src/` in both apps/web and packages/agent
-- **Naming**: PascalCase for components/types, camelCase for functions/variables, kebab-case for file names
-- **State**: Zustand stores — no Redux, no Context API for global state
-- **3D components**: React Three Fiber declarative JSX — avoid imperative Three.js where possible
+- **Name in code, copy, UI, and commits: "Max Height".** Never "Max Headroom" in any user-facing or repo-visible string. ("Inspired by Max Headroom" is acceptable in the README/About only.)
+- Non-commercial fan project, friends-and-family audience. Do not add SEO, analytics SDKs, public-scale auth flows, or "growth" features.
+- IP guardrails: no Matt Frewer voice cloning, no exact visual replica.
 
-## Architecture Principles
+---
 
-- **Cloud-only**: No on-device AI inference. All LLM and TTS runs server-side on AWS.
-- **AgentCore-native**: Use AgentCore Runtime for agent hosting — not Lambda + API Gateway. AgentCore provides built-in WebSocket streaming, session isolation, and free I/O wait billing.
-- **Streaming**: Bidirectional WebSocket for real-time token streaming. Never wait for full response.
-- **Separation of concerns**:
-  - Agent personality (system prompt + steering) is separate from voice/visual
-  - TTS generation (server) is separate from audio effects (client DSP)
-  - Viseme timing (server) is separate from lip-sync animation (client)
-  - Conversation history is server-side (AgentCore Memory) — not client state
-- **Graceful degradation**: Text-only works without mic. 2D fallback without WebGL. Friendly error if cloud is down.
-- **Cost-conscious**: Claude 3.5 Haiku for LLM. Polly for TTS. AgentCore Gateway for external API tools. Cache where possible.
+## 3. Constitution — quick reference
 
-## AWS Configuration
+Full text in `docs/speckit/01-constitution.md`. These are **rules**, not preferences. Reject any change (yours or the user's) that violates one without first updating the constitution.
 
-- **Region**: `us-west-2`
-- **Bedrock model**: Claude 3.5 Haiku (latest available)
-- **Polly voice**: Neural, male, broadcaster cadence
-- **AgentCore Runtime**: Container deployment via ECR
-- **Authentication**: Cognito Identity Pool with unauthenticated (guest) access for temporary AWS credentials; browser SigV4-signs WebSocket connections
+- **P1 Cloud-only** — no on-device AI inference (no WebGPU/WebLLM/transformers.js, no ML deps in `apps/web`).
+- **P2 $10/month hard cap** — Budgets alarms + soft-degrade + hard-stop + per-session caps. Every new AWS resource must have a documented cost story.
+- **P3 Personality-first** — Phase 1.5 personality gate is a hard gate. Do not scaffold 3D, CRT scene, or polish work until the golden-set rubric passes.
+- **P4 IP & legal** — see §2.
+- **P5 No real-time LLM-as-judge** — evaluation is offline, golden-set only. Never wire a live LLM scoring live outputs.
+- **P6 Supply-chain discipline** — see §6.
+- **P7 Friends-and-family only** — no public scale assumptions.
+- **P8 Graceful degradation is required** — no-WebGL → 2D avatar; no-mic → text input fallback (voice remains primary); cloud-down → in-character "signal lost" state, never a white screen.
+- **P9 Observability before features** — AgentCore Observability is wired before feature #2. Every user-visible latency target has a corresponding trace span. PRs that add behavior without traces are incomplete.
 
-## Supply Chain Security
+---
 
-- Run `npm audit` before merging dependency changes
-- Use `package-lock.json` — always commit it, never delete it
-- Pin exact dependency versions in `package.json` (no `^` or `~` for production deps)
-- Review new dependencies before adding: check maintainers, download counts, last publish date
-- Prefer well-established packages from known orgs (e.g., pmndrs, aws-sdk, vercel)
-- Use `npm audit signatures` to verify package provenance when available
-- Keep dependencies minimal — don't add a package for something a few lines of code can do
+## 4. Repo layout (locked)
 
-## Don'ts
+```
+apps/web/               # React + Vite SPA
+packages/agent/         # Agent backend (AgentCore Runtime) + Dockerfile
+infrastructure/cdk/     # All AWS resources via CDK — including AgentCore
+docs/                   # Specs, bible, speckit/, plans
+```
 
-- Don't use Next.js — this is a pure SPA, no SSR needed
-- Don't use Lambda + API Gateway for the agent — use AgentCore Runtime
-- Don't use Redux or Context API for global state — use Zustand
-- Don't store conversation history in client state — use AgentCore Memory
-- Don't run AI inference on the client — all LLM/TTS is server-side
-- Don't use ElevenLabs — too expensive for the budget target
-- Don't route TTS through AgentCore Gateway — use direct Polly SDK for streaming performance
-- Don't create exact replicas of the Max Headroom character (IP concerns)
-- Don't store secrets in code — use AgentCore Identity for API keys, environment variables for AWS config
+- **CDK is the only IaC.** Includes AgentCore Runtime/Gateway/Memory/Identity. No AgentCore CLI in the deploy path. (See `04-plan.md` §1 for the alpha-module policy.)
+- Do not add a top-level `infrastructure/agentcore/` directory.
+- Do not introduce additional packages without an explicit ask.
+
+---
+
+## 5. Coding conventions
+
+- **TypeScript everywhere** — frontend and backend. Strict mode on. ES modules (`import`/`export`).
+- **Naming** — PascalCase for components/types, camelCase for functions/variables, kebab-case for file names.
+- **State (web)** — Zustand for global UI state. No Redux, no Context-as-store, no Recoil/Jotai. Conversation history is **server-side** in AgentCore Memory, not client state.
+- **3D (web)** — React Three Fiber, declarative JSX. Avoid imperative Three.js where R3F has an idiom.
+- **Imports** — `@/` resolves to `src/` within a workspace package. Cross-package imports use the workspace package name, never relative paths across workspaces.
+- **Comments** — only where intent isn't obvious from the code. No banner comments, no commented-out code.
+- **Lint/format** — use whatever is configured in the repo. Do not invent your own ESLint/Prettier configs; if none exists yet, ask before adding.
+
+---
+
+## 6. Supply-chain rules (P6)
+
+- Pin exact versions in `package.json` (no `^`, no `~`) for runtime deps; dev deps may use `^` only with explicit justification.
+- `package-lock.json` is committed and never deleted.
+- New dependency = one extra question: is this worth the maintenance and audit cost? A few lines of code beats a package most of the time.
+- For each new dep: check maintainer, last publish, weekly downloads, and that it's signed (`npm audit signatures`) when possible. Prefer pmndrs / AWS / Vercel / well-known orgs.
+- Never commit secrets. Third-party API keys live in AgentCore Identity. AWS region/config live in env vars and CDK context.
+
+---
+
+## 7. Hard "don'ts"
+
+These exist because each one has been considered and rejected. Don't reopen them without an explicit user request.
+
+- ❌ Next.js or any SSR. This is a pure SPA.
+- ❌ Lambda + API Gateway for the agent. Use AgentCore Runtime.
+- ❌ Redux / Context-as-global-store. Use Zustand.
+- ❌ Storing conversation history client-side. Use AgentCore Memory.
+- ❌ Any client-side AI inference (P1).
+- ❌ ElevenLabs / third-party TTS. Use Polly Neural via direct SDK (not via AgentCore Gateway).
+- ❌ Live LLM-as-judge in the hot path (P5).
+- ❌ A second state library, a UI framework (Tailwind/MUI/Chakra), an analytics SDK, or a service worker that caches LLM responses — all without an explicit ask.
+- ❌ Re-deriving Max's personality rules inline. Reference `docs/max-personality-bible.md`.
+- ❌ Hard-coding cost thresholds, rate limits, latency budgets, or browser-support claims. Read `03-clarify.md`.
+
+---
+
+## 8. When generating code, verify
+
+- Does this respect P1–P9? If not, stop.
+- Is there a number involved (limit, threshold, timeout, version)? If yes, did it come from `03-clarify.md` / `04-plan.md`, or did I invent it?
+- Does this introduce a new AWS resource or dependency? If yes, has it been costed and justified?
+- Does this touch a user-visible behavior? If yes, is there a trace span and a fallback path (P8/P9)?
+- Am I about to write "Max Headroom" anywhere a user could see it? Use "Max Height" (§2).
+
+---
+
+## 9. When in doubt
+
+- Prefer asking the user a focused question over guessing.
+- Prefer linking to a section of `docs/speckit/*` over restating it.
+- If `docs/speckit/` is silent on something material, propose adding a clarification entry in `03-clarify.md` rather than making the call inline.
