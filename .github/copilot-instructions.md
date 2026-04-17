@@ -96,7 +96,8 @@ These exist because each one has been considered and rejected. Don't reopen them
 - ❌ Any client-side AI inference (P1).
 - ❌ ElevenLabs / third-party TTS. Use Polly Neural via direct SDK (not via AgentCore Gateway).
 - ❌ Live LLM-as-judge in the hot path (P5).
-- ❌ A second state library, a UI framework (Tailwind/MUI/Chakra), an analytics SDK, or a service worker that caches LLM responses — all without an explicit ask.
+- ❌ A second state library, a UI framework (Tailwind/MUI/Chakra), or an analytics SDK without an explicit ask.
+- ❌ A service worker / PWA cache that includes LLM responses, Polly audio, Cognito tokens, AgentCore Memory data, or any per-conversation content. PWA caching is **app-shell only** per `docs/speckit/03-clarify.md` PWA1 and `docs/speckit/04-plan.md` §3a.
 - ❌ Re-deriving Max's personality rules inline. Reference `docs/max-personality-bible.md`.
 - ❌ Hard-coding cost thresholds, rate limits, latency budgets, or browser-support claims. Read `03-clarify.md`.
 

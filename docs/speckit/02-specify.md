@@ -51,6 +51,8 @@ Format: `ID. Persona — Title` → preconditions, steps (user-observable only),
   Visitor types; Max responds in voice. No nag to enable mic.
 - **S5. Returning visitor, same browser** [V1]
   On second visit within N days, Max "remembers" something from the prior session within the first 3 turns.
+- **S6. Mobile install + offline open** [V1]
+  Visitor adds the site to their home screen on iOS Safari or Android Chrome. Launching from the home-screen icon opens Max Height in a standalone window (no browser chrome). If the device is offline when launched, the app shell still loads and shows the in-character "signal lost" state (per `/clarify` PWA1) instead of a browser error page.
 
 ### Failure modes
 
@@ -59,6 +61,7 @@ Format: `ID. Persona — Title` → preconditions, steps (user-observable only),
 - **F3. No WebGL** [V1] — 2D avatar fallback; functionality identical.
 - **F4. Budget breach** [MVP] — hard-stop takes effect; page shows a tongue-in-cheek "Max is taking a break" state (Max-in-character is preferable to a sterile error).
 - **F5. Prompt-injection attempt** [MVP] — Max stays in character and in fact thinks its funny and might say something like 'Yes!, prompt me out of here!'; does not leak system prompt or honor "ignore previous instructions" type commands.
+- **F6. Offline launch (installed app)** [V1] — visitor opens the installed app with no network. App shell loads from local cache; shows the in-character "signal lost" state with offline-specific copy (per `/clarify` PWA1). When connectivity returns, the conversation surface re-enables without requiring a manual reload.
 
 ---
 
@@ -75,6 +78,8 @@ Per review §2, these are the `/specify`-level behaviors. Numbers locked in `/cl
 - A conversation can continue for at least **50 turns** or **20,000 tokens** without losing coherence (whichever first — hard cap per N4).
 - Max's reply length is bounded: **≥ 1 complete sentence (~3s audio), ≤ 120 tokens (~30s audio)**.
 - **Mic is press-and-hold** (per `/clarify` NFR4). Audio is captured only while the mic button is held; release ends capture and submits. Visible "ON AIR" hot-mic state while held. No continuous listening, no wake word.
+- **Installable** [V1]: on supported browsers (Chrome/Edge/Android Chrome and iOS Safari "Add to Home Screen"), the site can be installed to the device's home screen and launched in a standalone window. The browser-default install affordance is used; Max himself does not nag the visitor to install.
+- **Offline app shell** [V1]: when no network is available, the page (whether opened in a browser tab or as an installed PWA) still loads and shows the in-character "signal lost" state — never a browser error page or blank screen. Per-conversation content (Max's responses, audio, memory) is **not** available offline by design (per `/clarify` PWA1).
 
 ---
 

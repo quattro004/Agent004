@@ -59,6 +59,25 @@
   - [ ] Naming conventions documented; CI check for "Max Headroom" / "Matt Frewer" in non-reference strings.
   - [ ] About / footer fan-project framing drafted.
 
+### T0.5. PWA scaffolding (app-shell only)
+- Phase: 0
+- Traces to: /specify §5 (installable, offline app shell), /specify §4 (S6, F6), /clarify PWA1, /constitution P1, P5, P8
+- Depends on: T0.1
+- Acceptance:
+  - [ ] `vite-plugin-pwa` added to `apps/web` with an exact pinned version (per P6); `npm audit signatures` clean.
+  - [ ] Web app manifest: `name: "Max Height"`, `short_name: "Max"`, `display: "standalone"`, theme color set, `start_url: "/"`, `scope: "/"`.
+  - [ ] Icon set generated: 192, 512, maskable, plus iOS `apple-touch-icon` set.
+  - [ ] Service worker precaches the app shell only (HTML, hashed JS/CSS bundles, fonts, static images, manifest, icons).
+  - [ ] Service worker explicitly bypasses (network-only, never cached): AgentCore Runtime WebSocket traffic, Polly audio + speech-mark requests, Cognito / SigV4-signed requests, AgentCore Memory endpoints (incl. "Forget me" / export), third-party STT requests. Bypass list lives next to the SW config and is reviewed on every change.
+  - [ ] CloudFront `Cache-Control` (CDK) set per /plan §3a: `sw.js` and `manifest.webmanifest` → `no-cache, must-revalidate`; hashed bundles → `public, max-age=31536000, immutable`; HTML → `no-cache, must-revalidate`.
+  - [ ] Update flow: `registerType: 'autoUpdate'` + an in-UI "new version available" toast on `controllerchange`. No silent SW swap mid-conversation.
+  - [ ] Install + offline-launch verified on the /clarify N2 reference device set: iPhone 13 (iOS Safari "Add to Home Screen"), Pixel 6 (Android Chrome install), M1 MacBook Air (Safari + Chrome), mid-range Windows laptop (Edge). Firefox desktop documented as "no install prompt" (browser limitation, not defect).
+  - [ ] Offline launch shows the in-character "signal lost" state with the offline-specific copy from /clarify PWA1 — never a browser error page or blank screen.
+  - [ ] On `online` event the conversation surface re-enables automatically; in-flight session is treated as ended.
+  - [ ] No custom in-app install nag implemented (browser-default affordance only).
+  - [ ] Observability counters wired (per /plan §3a): "shell-from-cache" vs "shell-from-network" on first paint, plus offline-state activations.
+- Out of scope: caching of any per-conversation content (responses, audio, memory, tokens) — explicitly forbidden; per-item PWA install nag UI; web-push notifications; background sync of agent traffic.
+
 ---
 
 ## Phase 1 — Agent text loop
@@ -145,13 +164,14 @@
 
 ### T3.3. Fallback paths
 - Phase: 3
-- Traces to: /constitution P8, /specify F1/F2/F4/F5
+- Traces to: /constitution P8, /specify F1/F2/F4/F5/F6
 - Depends on: T3.1
 - Acceptance:
   - [ ] No-mic path (F2): text input works; no repeated nag to enable mic.
   - [ ] Cloud-down path (F1): friendly retry state; no white screen.
   - [ ] Budget-breach (F4): in-character "signal lost" state using /clarify S3 draft copy.
   - [ ] Prompt-injection (F5): stays in character per /clarify NFR3; verified against 10 canned injection prompts.
+  - [ ] Offline (F6): app shell loads from SW cache and shows the offline-specific "signal lost" copy from /clarify PWA1; on reconnect the conversation surface re-enables without a manual reload. Verified by toggling devtools "Offline" and via airplane mode on the iPhone 13 / Pixel 6 reference devices (/clarify N2).
 
 ### T3.4. STT disclosure and mic interaction
 - Phase: 3

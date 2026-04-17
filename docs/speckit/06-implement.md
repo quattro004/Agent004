@@ -69,6 +69,7 @@ From `copilot-instructions`:
 - No routing TTS through AgentCore Gateway.
 - No exact Max Headroom replicas.
 - No secrets in code.
+- **No service worker that caches LLM responses, Polly audio, Cognito tokens, or AgentCore Memory data.** PWA caching is restricted to the app shell per `/clarify` PWA1 and `/plan` §3a. Any PR that broadens the SW cache list to include per-conversation content is rejected at review without debate.
 
 Any PR proposing one of these is rejected at review without debate.
 

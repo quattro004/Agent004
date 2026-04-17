@@ -10,7 +10,7 @@
 
 See `docs/initial-plan.md` — Architecture diagram, tech stack table. Summary here:
 
-- **Frontend**: React + Vite SPA, React Three Fiber for 3D, Zustand for UI state.
+- **Frontend**: React + Vite SPA, React Three Fiber for 3D, Zustand for UI state. Packaged as a **Progressive Web App** via `vite-plugin-pwa` (Workbox) — installable, with an app-shell-only service worker per `/clarify` PWA1.
 - **Agent backend**: Strands Agents SDK on Amazon Bedrock AgentCore Runtime (container via ECR).
 - **LLM**: Amazon Bedrock, Claude 3.5 Haiku (`us-west-2`).
 - **TTS**: Amazon Polly Neural (direct SDK, not via Gateway — streaming performance).
@@ -50,6 +50,30 @@ Meets `/specify` §5 / `/clarify` N1 targets.
 - **Client rendering**: Web Audio API for playback + DSP (stutter/pitch glitch applied client-side); React Three Fiber for avatar. Avatar framing must satisfy `/specify` §6 (head-and-shoulders inside a CRT bezel, wireframe/vector backdrop, continuous low-level glitching). No full-body model, no free-floating head.
 
 Cold-start: AgentCore Runtime warm-up pattern + "Max is waking up" UX for the ≤ 5s cold case.
+
+---
+
+## 3a. PWA / service-worker plan
+
+Implements `/clarify` PWA1. Bound by Constitution P1 (cloud-only), P5 (no quiet re-use of LLM outputs), P8 (graceful degradation), and the `copilot-instructions` §7 "no service worker that caches LLM responses" prohibition.
+
+- **Tooling**: `vite-plugin-pwa` (Workbox under the hood). Pin the exact version per P6 at scaffold time; gate upgrades on changelog review.
+- **Manifest**: `name: "Max Height"`, `short_name: "Max"`, `display: "standalone"`, theme color matching the CRT palette, `start_url: "/"`, `scope: "/"`. Icons at 192 / 512 / maskable, plus the iOS `apple-touch-icon` set (Safari PWA support is real but quirky).
+- **Service-worker scope (whitelist, not blacklist):**
+  - **Precached**: HTML entry, hashed JS/CSS bundles, fonts, static images, manifest, icons.
+  - **Runtime cached** (stale-while-revalidate, app-shell only): static assets fetched after first load.
+  - **Network-only, never cached**: all AgentCore Runtime WebSocket traffic, all Polly audio + speech-mark requests, all Cognito / SigV4-signed requests, all AgentCore Memory endpoints (incl. "Forget me" and export), any third-party STT request. The SW must explicitly bypass these origins/paths.
+- **Install UX**: browser-default install affordance only. No custom install banner, modal, or prompt in MVP or V1 (Max does not break character to ask to be installed).
+- **Offline behavior** (P8): app shell loads from cache; UI renders the in-character "signal lost" state with the offline-specific copy from `/clarify` PWA1. On `online` event, the conversation surface re-enables; any in-flight session is treated as ended and a new one starts on next input.
+- **Update strategy**: `registerType: 'autoUpdate'` (Workbox) + a small in-UI "new version available, refresh to update" toast on `controllerchange`. Never silently swap the SW mid-conversation — visitor must consent via the toast or a tab reload.
+- **CloudFront `Cache-Control` headers (set in CDK):**
+  - `sw.js`, `manifest.webmanifest` → `Cache-Control: no-cache, must-revalidate` (so SW updates ship promptly).
+  - Hashed JS/CSS/font bundles (Vite default naming) → `Cache-Control: public, max-age=31536000, immutable`.
+  - HTML entry → `Cache-Control: no-cache, must-revalidate` (short-lived; SW updates depend on it).
+- **Observability** (P9): emit a "shell-from-cache" vs "shell-from-network" counter on first paint, plus a counter for offline activations of the "signal lost" state. No new tracing infra — piggyback on the existing AgentCore Observability conventions.
+- **Reference-device verification** (per `/clarify` N2): install + offline fallback validated on iPhone 13 (iOS Safari), Pixel 6 (Android Chrome), M1 MacBook Air (Safari + Chrome), mid-range Windows laptop (Edge). Firefox desktop has no install prompt — that's a documented browser limitation, not a defect.
+
+**Cost impact**: zero. PWA is purely client-side; CloudFront egress drops slightly on repeat visits.
 
 ---
 
@@ -139,6 +163,7 @@ Decisions from `/clarify` that override or tighten the initial plan:
 - **Prompt-injection posture** — stay in character and deflect for minor probes; clean refusal only for safety-critical content (`/clarify` NFR3).
 - **Audience gating** — `/clarify` C2: unlisted URL + `robots.txt` disallow-all + rate limits, with a shared-password escape hatch pre-wired but off.
 - **Budget-breach UX copy** — in-character "signal lost" state with draft copy in `/clarify` S3. Supersedes any sterile error state implied by `initial-plan.md`.
+- **PWA capability** — new (not in `initial-plan.md`). Per `/clarify` PWA1: site is installable and ships an app-shell-only service worker. Service worker explicitly never caches AgentCore traffic, Polly audio, Cognito tokens, or memory data. Implemented via `vite-plugin-pwa`. See §3a.
 
 ---
 

@@ -140,6 +140,25 @@ Each item:
 
 ---
 
+## NFR clarifications
+
+### PWA1. Progressive Web App scope
+- **Q**: The app will be a PWA. What does the service worker cache, how is install offered, and what does the offline state look like?
+- **Options**:
+  a. Full offline support — cache the app shell *and* recent agent responses / audio for replay.
+  b. App-shell-only cache — cache HTML/JS/CSS/icons/manifest, never agent or audio content; offline shows a static in-character state.
+  c. No service worker — manifest only (installable but no offline at all).
+- **Recommended**: (b) — preserves Constitution P1 (cloud-only) and P5 (no surprise re-use of LLM outputs), removes any privacy concern about cached responses on shared devices, and keeps `Max Height` looking like the "broadcast signal" conceit (when the signal is gone, the screen says so).
+- **Decision**: **(b) App-shell-only cache.** Concretely:
+  - **Cached** by the service worker: HTML, JS/CSS bundles (hashed, cache-first), web app manifest, icons (192 / 512 / maskable + iOS `apple-touch-icon` set), fonts, static images.
+  - **Never cached** (network-only, no SW interception): AgentCore Runtime WebSocket frames, LLM response text, Polly audio streams, Polly speech marks (visemes), Cognito tokens / SigV4-signed requests, AgentCore Memory data, "Forget me" / export endpoints, third-party STT requests.
+  - **Install prompt**: browser-default only. No custom in-app install nag in MVP or V1 — Max does not break character to ask to be installed. Install affordance comes from the browser UI (Chrome/Edge install icon, iOS Safari "Add to Home Screen").
+  - **Offline copy**: reuses the "signal lost" visual state from S3 (budget-breach) but with a distinct line. Draft: **"…N-no signal, c-chumps. The network's a g-ghost. Try me again when your wires are back."** — same avatar treatment, different text. Online + agent-down keeps the existing S3 copy.
+  - **Reconnect**: when network returns, the conversation surface re-enables automatically (no forced reload). The active session, if any, is treated as ended — a new session starts on the next user input.
+- **Impact**: `/specify` §5 (installable + offline app-shell behaviors), `/specify` §4 (S6, F6 scenarios), `/plan` §1 (vite-plugin-pwa), `/plan` SW scope + CloudFront `Cache-Control` rules, `/tasks` Phase 0 PWA scaffolding task, `/implement` PR-review guardrail.
+
+---
+
 ## Constitutional enforcement table (from `/constitution`)
 
 Fill in trigger / mechanism / owner for each principle P1–P9.
