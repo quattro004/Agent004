@@ -118,3 +118,8 @@ These exist because each one has been considered and rejected. Don't reopen them
 - Prefer asking the user a focused question over guessing.
 - Prefer linking to a section of `docs/speckit/*` over restating it.
 - If `docs/speckit/` is silent on something material, propose adding a clarification entry in `03-clarify.md` rather than making the call inline.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
