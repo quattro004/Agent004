@@ -20,7 +20,7 @@ See `docs/initial-plan.md` — Architecture diagram, tech stack table. Summary h
 - **Tools**: AgentCore Gateway.
 - **Observability**: AgentCore Observability.
 - **Hosting**: S3 + CloudFront.
-- **IaC**: CDK for S3/CloudFront/Cognito; AgentCore CLI for Runtime/Gateway/Memory.
+- **IaC**: AWS CDK for **everything** — S3/CloudFront/Cognito **and** AgentCore Runtime/Gateway/Memory/Identity. AgentCore got full CloudFormation coverage (`AWS::BedrockAgentCore::*`) on 2025-09-22, and AWS ships an L2 module `@aws-cdk/aws-bedrock-agentcore-alpha` with `Runtime`, `RuntimeEndpoint`, and `Memory` constructs. The module is still alpha (subject to non-backward-compatible changes) but we adopt it to avoid maintaining a bespoke wrapper; resources without an L2 yet (Gateway, GatewayTarget, WorkloadIdentity, credential providers) drop to stable L1 (`Cfn*`) constructs from `aws-cdk-lib/aws-bedrockagentcore` in the same stack. Pin the alpha version in `package.json` and gate upgrades on changelog review. No AgentCore CLI in the deploy path.
 
 ---
 
@@ -98,9 +98,9 @@ Per `copilot-instructions`:
 
 ```
 apps/web/               # React + Vite SPA
-packages/agent/         # Strands agent (AgentCore Runtime)
-infrastructure/cdk/     # S3 / CloudFront / Cognito
-infrastructure/agentcore/ # AgentCore CLI config
+packages/agent/         # Strands agent (AgentCore Runtime) + Dockerfile
+infrastructure/cdk/     # All AWS resources: S3/CloudFront/Cognito +
+                        # AgentCore Runtime/Gateway/Memory/Identity
 docs/                   # Specs, bible, this plan
 ```
 
@@ -156,5 +156,5 @@ Decisions from `/clarify` that override or tighten the initial plan:
 ## Open questions for `/tasks`
 
 - Which AgentCore Runtime container base image + Node version?
-- CDK vs AgentCore CLI ownership boundary — who owns the Cognito Identity Pool?
+- Pin/upgrade policy for `@aws-cdk/aws-bedrock-agentcore-alpha` (track aws-cdk-lib version; review CHANGELOG before bumping; carry a small migration note per upgrade).
 - Golden-set harness: bespoke script or adopt an existing eval tool?
