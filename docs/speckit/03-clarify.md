@@ -1,11 +1,5 @@
 # `/clarify` — Max Height
 
-> **Purpose:** Resolve every ambiguity in `/specify` before `/plan`. Each item has a question, options, a recommended answer, and space for the user's decision.
-> Source: review §1, §3, §5, §6 TODOs + `/specify` open questions.
-> **Rule:** nothing leaves `/clarify` with "TBD." If it can't be answered, it's explicitly deferred with a named owner.
-
----
-
 ## How to use this file
 
 Each item:
@@ -177,6 +171,60 @@ Fill in trigger / mechanism / owner for each principle P1–P9.
 
 ---
 
+## Spec clarifications — interaction model
+
+### I1. MVP 2D avatar animation scope
+- **Q**: Does the MVP 2D avatar have animated lip-sync, or is that deferred to V1?
+- **Options**:
+  a. Full viseme-mapped lip-sync sprites at MVP.
+  b. Mouth-open/closed sprite swap tied to audio playback; full viseme lip-sync deferred to V1 3D.
+  c. Static avatar at MVP — lip-sync entirely a V1 feature.
+- **Recommended**: (b).
+- **Decision**: **(b) Mouth-open/closed at MVP. The 2D avatar uses a simple binary mouth state (open/closed) synced to audio playback. Full viseme-mapped lip-sync (FR-006's 100ms P95 target) is scoped to V1's 3D avatar. This gives the "talking head" illusion cheaply without a complex 2D animation pipeline.**
+- **Impact**: `/specify` FR-006 scope, `/tasks` Phase 1 avatar work, `/plan` animation architecture.
+
+### I2. Greeting generation strategy
+- **Q**: Is Max's unprompted greeting (FR-002, 2s P95) generated in real-time by the LLM, or pre-generated?
+- **Options**:
+  a. Pool of pre-generated greeting variants (text + pre-synthesized Polly audio), randomly selected on TV-on.
+  b. Real-time LLM generation on every TV-on, streamed to TTS.
+  c. Hybrid — pre-generated for cold-start, LLM-generated once the agent is warm.
+- **Recommended**: (a).
+- **Decision**: **(a) Pre-generated greetings with accompanying video. A pool of greeting variants (text + pre-synthesized Polly audio + a short video/GIF of Max's head animating) are randomly selected on TV-on. This trivially meets the 2s P95 target and avoids burning LLM tokens on a non-interactive moment. The LLM agent is initialized in the background during greeting playback, ready for the first real user input. The video component (even a simple animated GIF of Max's head moving) sells the "broadcast coming alive" illusion immediately.**
+- **Impact**: `/specify` FR-002 implementation, `/plan` asset pipeline (greeting pool), `/tasks` Phase 1 greeting system, cold-start UX.
+
+### I3. Conversation UI model
+- **Q**: Does the visitor see a scrollable chat transcript of all exchanges, or only the current response on the TV screen?
+- **Options**:
+  a. Broadcast mode — only the current response visible on the TV, no history.
+  b. Chat transcript — scrollable history of all exchanges.
+  c. Hybrid — current response prominent on TV, collapsible transcript drawer.
+- **Recommended**: (a).
+- **Decision**: **(a) Broadcast mode. The TV screen shows only Max's current response (text + avatar). Previous exchanges are not visible — reinforcing the "live broadcast" conceit. The text input area and mic button are always visible below the TV. This is simpler, more thematic, and avoids the "chatbot UI" feel. The visitor's last input may be shown briefly (like a caller question on a talk show) but scrollable history is not provided.**
+- **Impact**: `/specify` §Visual Presentation, `/plan` client component tree, `/tasks` Phase 1 UI layout.
+
+### I4. User interruption behavior
+- **Q**: What happens if a visitor speaks or types while Max is still talking?
+- **Options**:
+  a. Interrupt stops Max — audio halts, new input is processed, Max can react in-character to being cut off.
+  b. No interruption — mic/text input disabled while Max is speaking.
+  c. Queue — user input is buffered and processed after Max finishes.
+- **Recommended**: (a).
+- **Decision**: **(a) Interrupt stops Max. If the visitor holds the mic button or submits text while Max is mid-response, Max's audio stops immediately and the new input is processed. Max can occasionally acknowledge being interrupted in-character (e.g., "Rude. But go on." or "I wasn't f-f-finished, but FINE."). This feels natural and reinforces the "live broadcast" illusion. The interrupted response's partial text remains visible until Max's new response replaces it.**
+- **Impact**: `/specify` FR-008 interaction, `/plan` audio playback cancellation + WebSocket message handling, `/tasks` Phase 1 conversation loop.
+
+### I5. Transient backend failure retry behavior
+- **Q**: When the WebSocket drops or a single request fails transiently, does the client auto-retry before showing the in-character error state (FR-014)?
+- **Options**:
+  a. One silent auto-retry within 3 seconds, then in-character error state.
+  b. Immediate in-character error state, no auto-retry.
+  c. Up to 3 retries with in-character "buffering" UX, then error state.
+- **Recommended**: (a).
+- **Decision**: **(a) One silent auto-retry. On a transient failure (WebSocket drop, single request timeout), the client retries once silently within 3 seconds. If the retry also fails, the in-character "signal lost" error state is shown. The visitor can then manually retry by sending another message. This avoids flashing errors on brief network blips without masking real outages.**
+- **Impact**: `/specify` FR-014 implementation, `/plan` WebSocket reconnection logic, `/tasks` Phase 0 error handling.
+
+---
+
 ## Deferred (explicit non-answers)
 
 Items acknowledged but deliberately postponed, with owner & revisit trigger:
@@ -185,12 +233,3 @@ Items acknowledged but deliberately postponed, with owner & revisit trigger:
 - **D2. WebRTC voice streaming** (Phase 7 stretch) — deferred indefinitely. Owner: project owner. Revisit trigger: latency targets (N1) fail to hold on mobile at P95.
 - **D3. Multi-user / public auth posture** — deferred indefinitely per P7. Owner: project owner. Revisit trigger: explicit scope change from "friends and family" to "public."
 - **D4. Error-rate and cold-start incident thresholds** — deferred to first post-MVP ops pass. Starting assumption: error rate > 5% over 10 min, or cold-start P95 > 8s over 1 hour, triggers an email alarm.
-
----
-
-## Exit criteria for `/clarify`
-
-- Every `____` above is filled in.
-- No "TBD" in `/specify`.
-- Enforcement table complete.
-- `/plan` can begin without re-asking the user.
