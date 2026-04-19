@@ -1,32 +1,27 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : (none) → 1.0.0
-  Bump rationale : MAJOR — initial ratification of project constitution.
+  Version change : 1.0.0 → 1.1.0
+  Bump rationale : MINOR — new principle added (P10. Unit Tests
+                   Where Possible).
+
+  Modified principles : None.
 
   Added principles:
-    P1. Cloud-Only, No On-Device AI
-    P2. Budget Ceiling — $10/Month Hard Cap
-    P3. Personality-First Build Order
-    P4. IP & Legal Posture
-    P5. No Real-Time LLM-as-Judge
-    P6. Supply-Chain Discipline
-    P7. Friends-and-Family Audience Only
-    P8. Graceful Degradation Required
-    P9. Observability Before Features
+    P10. Unit Tests Where Possible
 
   Added sections:
-    - Core Principles (9 principles)
-    - Technology Stack
-    - Quality Gates
-    - Governance
+    - Quality gate #6 (Test coverage gate) under Quality Gates.
 
-  Removed sections : None (initial ratification).
+  Removed sections : None.
 
   Templates requiring updates:
-    ✅ plan-template.md — Constitution Check section is generic; compatible.
-    ✅ spec-template.md — Requirements format is generic; compatible.
-    ✅ tasks-template.md — Phase structure is generic; compatible.
+    ✅ plan-template.md — Constitution Check section is generic;
+       compatible. Test tasks already present in template.
+    ✅ spec-template.md — Requirements format is generic;
+       compatible.
+    ✅ tasks-template.md — Phase structure already includes test
+       tasks; compatible.
     ✅ No command templates found in .specify/templates/commands/.
 
   Follow-up TODOs : None.
@@ -150,6 +145,19 @@ NOT ship. Trace-first development:
 **Rationale**: A solo developer cannot afford "works on my
 machine" debugging. Traces are the substitute for a QA team.
 
+### P10. Unit Tests Where Possible
+
+All non-trivial logic MUST have unit tests. PRs that add or
+modify behavior MUST include corresponding test coverage.
+Trivial glue code (e.g., re-exports, simple config wiring) is
+exempt, but the bar for "trivial" is high — when in doubt,
+test.
+
+**Rationale**: A solo-developer project has no second pair of
+eyes. Automated tests are the substitute for code review
+confidence. They also protect against personality and behavior
+regressions that traces alone cannot catch.
+
 ## Technology Stack
 
 | Layer | Technology |
@@ -190,6 +198,11 @@ The following gates MUST pass before work proceeds past them:
 5. **Observability gate**: Trace spans MUST exist for every
    user-visible latency path before the feature ships, per P9.
 
+6. **Test coverage gate**: PRs that add or modify non-trivial
+   logic MUST include unit tests covering the changed behavior,
+   per P10. Exemptions for trivial glue code MUST be justified
+   in the PR description.
+
 ## Governance
 
 This constitution is the supreme governing document for the
@@ -223,4 +236,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-04-19
+**Version**: 1.1.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-04-19
