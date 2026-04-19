@@ -23,6 +23,18 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 
 ---
 
+## Clarifications
+
+### Session 2026-04-19
+
+- Q: What is the MVP 2D avatar animation scope? → A: Mouth-open/closed binary state synced to audio playback. Full viseme lip-sync (FR-006 100ms P95) deferred to V1 3D avatar.
+- Q: What is the greeting generation strategy? → A: Pre-generated pool (text + Polly audio + short video/GIF of Max animating) randomly selected on TV-on. LLM initialized in background during greeting playback.
+- Q: What is the conversation UI model? → A: Broadcast mode — TV screen shows only Max's current response (text + avatar). No scrollable history. Text input and mic always visible below TV.
+- Q: How does user interruption work? → A: Interrupt stops Max immediately. New input processed. Max may acknowledge interruption in-character. Partial text remains until replaced.
+- Q: What is the transient backend failure retry behavior? → A: One silent auto-retry within 3 seconds. If retry fails, show in-character "signal lost" error. Visitor retries manually by sending another message.
+
+---
+
 ## Personas
 
 Each persona has at least one happy-path and one failure-mode scenario.
@@ -133,7 +145,7 @@ A visitor adds the site to their home screen on iOS Safari or Android Chrome. La
 
 ### Edge Cases
 
-- **Cloud unavailable** [MVP]: Visitor sees a friendly in-character error state suggesting retry; never a white screen or raw error.
+- **Cloud unavailable** [MVP]: On transient failure, client retries once silently within 3 seconds. If retry fails, visitor sees a friendly in-character "signal lost" error state; never a white screen or raw error. Visitor can manually retry by sending another message.
 - **Mic permission denied mid-session** [MVP]: Seamless fallback to text input with no context loss; conversation continues uninterrupted.
 - **No WebGL support** [V1]: 2D avatar fallback is used; all functionality remains identical.
 - **Budget breach** [MVP]: At the spending hard-stop, the page shows a tongue-in-cheek "Max is taking a break" in-character state rather than a sterile error.
@@ -162,11 +174,12 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 ### Functional Requirements
 
 - **FR-001**: The page MUST present a CRT television set with a "Turn on the TV" knob as the single entry-point gesture to begin the experience.
-- **FR-002**: Max MUST deliver an unprompted in-character greeting within 2 seconds (P95) of the TV-on gesture, in both voice and on-screen text.
+- **FR-002**: Max MUST deliver an unprompted in-character greeting within 2 seconds (P95) of the TV-on gesture, in both voice and on-screen text. Greetings are served from a pre-generated pool of variants (text + pre-synthesized Polly audio + short animated video/GIF of Max's head), randomly selected on TV-on. The LLM agent MUST be initialized in the background during greeting playback, ready for the visitor's first real input.
 - **FR-003**: If the visitor is silent after the greeting, Max MUST deliver exactly one idle nudge (in-character) within a randomized 4–10 second window. No further nudges after this first one.
 - **FR-004**: Max MUST begin replying within 1.5 seconds (P95) of the user finishing input.
 - **FR-005**: Voice audio MUST begin within 2.5 seconds (P95) of input end.
-- **FR-006**: Lip-sync MUST track audio within 100ms (P95) visual offset.
+- **FR-006** [V1]: Lip-sync MUST track audio within 100ms (P95) visual offset using viseme-mapped animation on the 3D avatar.
+- **FR-006a** [MVP]: The 2D avatar MUST use a binary mouth state (open/closed) synced to audio playback to create a "talking head" illusion. Full viseme lip-sync is deferred to V1.
 - **FR-007**: Max MUST respond in his defined personality: stuttering, editorial, evasive, ironic — never giving straight factual answers. All responses must conform to `docs/max-personality-bible.md`.
 - **FR-008**: The mic MUST be press-and-hold only. Audio is captured only while the mic button is held; release ends capture and submits. A visible "ON AIR" indicator MUST display while the mic is held. No continuous listening, no wake word.
 - **FR-009**: Max's reply length MUST be bounded: at least 1 complete sentence (~3 seconds audio), at most 120 tokens (~30 seconds audio).
@@ -186,6 +199,9 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-023** [V1]: When offline, the app shell MUST load and display an in-character "signal lost" state — never a browser error page or blank screen.
 - **FR-024** [V1]: When connectivity returns from the "signal lost" state, the conversation surface MUST re-enable without requiring a manual page reload.
 - **FR-025** [V1]: Per-item memory deletion MUST be available in addition to the full wipe.
+- **FR-026** [MVP]: The TV screen MUST display only Max's current response (text + avatar) in broadcast mode. No scrollable conversation history is provided. The visitor's last input MAY be shown briefly (like a caller question on a talk show) but is replaced when Max's next response arrives. The text input area and mic button MUST be always visible below the TV frame.
+- **FR-027** [MVP]: If the visitor submits new input (text or mic) while Max is mid-response, Max's audio MUST stop immediately and the new input MUST be processed. Max MAY acknowledge being interrupted in-character (e.g., "Rude. But go on."). The interrupted response's partial text remains visible until Max's new response replaces it.
+- **FR-028** [MVP]: On a transient backend failure (WebSocket drop, single request timeout), the client MUST retry once silently within 3 seconds. If the retry also fails, the in-character "signal lost" error state MUST be shown. The visitor can then manually retry by sending another message.
 
 ### Key Entities
 
@@ -276,4 +292,4 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - A single monthly cost budget of $10 is sufficient for the expected low traffic (personal/educational project, not a commercial product).
 - The site is unlisted and not indexed by search engines; traffic comes only from direct links or sharing.
 - Memory retention of 30 days rolling is adequate; long-term archival is not needed.
-- The 2D placeholder avatar for MVP can be a static or minimally-animated stylized head-and-shoulders illustration — it does not need to be photorealistic or fully animated, but must respect the CRT/wireframe framing.
+- The 2D placeholder avatar for MVP uses a binary mouth state (open/closed) synced to audio playback to create a "talking head" illusion. It does not need to be photorealistic, but must respect the CRT/wireframe framing. Full viseme-mapped lip-sync is a V1 3D avatar feature.
