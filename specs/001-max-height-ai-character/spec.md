@@ -65,22 +65,7 @@ A desktop visitor (Max fan or newcomer) lands on the page and sees a CRT televis
 
 ---
 
-### User Story 2 — Newcomer Delight: The Bit Lands Cold (Priority: P1) [MVP]
-
-A visitor with zero knowledge of Max Headroom has the same experience as Story 1. Within the first 5 responses, the comedic bit lands — the visitor reacts with laughter, a smile plus verbal reaction, a screenshot, or an unprompted share.
-
-**Why this priority**: Equal to Story 1 because the product must be entertaining to people unfamiliar with the source material. If Max only appeals to 80s fans, the audience is too narrow.
-
-**Independent Test**: Recruit 5 testers with no Max Headroom knowledge. If ≥ 3 of 5 visibly react (laugh, smile, screenshot, or share) within the first 5 responses, the test passes.
-
-**Acceptance Scenarios**:
-
-1. **Given** 5 newcomer testers (no prior Max Headroom knowledge), **When** each completes a first visit with at least 5 exchanges, **Then** ≥ 3 react with an observable delight signal (audible laugh, smile + verbal reaction, screenshot, or unprompted share).
-2. **Given** a newcomer with no context, **When** they read Max's first 3 responses, **Then** the personality, humor, and character are immediately apparent without any external explanation.
-
----
-
-### User Story 3 — Mobile Visitor on iOS Safari (Priority: P2) [MVP]
+### User Story 2 — Mobile Visitor on iOS Safari (Priority: P2) [MVP]
 
 A visitor on iOS Safari taps "Turn on the TV." Despite iOS autoplay restrictions, the first audio (Max's greeting) plays immediately after the tap gesture. Visual glitch effects are automatically reduced in intensity on mobile. The visitor can type input or use the press-and-hold mic button. The experience is functionally equivalent to desktop.
 
@@ -96,7 +81,7 @@ A visitor on iOS Safari taps "Turn on the TV." Despite iOS autoplay restrictions
 
 ---
 
-### User Story 4 — Text-Only Visitor (Mic Blocked) (Priority: P2) [MVP]
+### User Story 3 — Text-Only Visitor (Mic Blocked) (Priority: P2) [MVP]
 
 A visitor in a corporate or locked-down browser environment where the microphone is unavailable types their messages instead. Max still responds with voice audio and on-screen text. The page never nags the visitor to enable the mic.
 
@@ -111,7 +96,7 @@ A visitor in a corporate or locked-down browser environment where the microphone
 
 ---
 
-### User Story 5 — Returning Visitor Memory (Priority: P3) [V1]
+### User Story 4 — Returning Visitor Memory (Priority: P3) [V1]
 
 A visitor returns within 30 days. Within the first 3 turns of the new session, Max "remembers" something from the prior visit and references it in-character (e.g., "Oh, you're back — still asking about *that*?"). The visitor can see what Max remembers, export it as a download, and wipe it with a single click.
 
@@ -127,7 +112,7 @@ A visitor returns within 30 days. Within the first 3 turns of the new session, M
 
 ---
 
-### User Story 6 — Mobile Install and Offline Launch (Priority: P3) [V1]
+### User Story 5 — Mobile Install and Offline Launch (Priority: P3) [V1]
 
 A visitor adds the site to their home screen on iOS Safari or Android Chrome. Launching from the home-screen icon opens Max Height in a standalone window (no browser chrome). If the device is offline when launched, the app shell loads from local cache and shows an in-character "signal lost" state — never a browser error page or blank screen. When connectivity returns, the conversation surface re-enables without requiring a manual reload.
 
