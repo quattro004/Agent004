@@ -1,30 +1,23 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.0.0 → 1.1.0
-  Bump rationale : MINOR — new principle added (P10. Unit Tests
-                   Where Possible).
+  Version change : 1.1.0 → 1.2.0
+  Bump rationale : MINOR — Technology Stack table amended (LLM
+                   row changed from specific model to tier-based;
+                   IaC row updated to include AgentCore CLI).
 
   Modified principles : None.
 
-  Added principles:
-    P10. Unit Tests Where Possible
+  Modified sections:
+    - Technology Stack table (LLM row, IaC row).
 
-  Added sections:
-    - Quality gate #6 (Test coverage gate) under Quality Gates.
-
-  Removed sections : None.
+  Added/Removed : None.
 
   Templates requiring updates:
-    ✅ plan-template.md — Constitution Check section is generic;
-       compatible. Test tasks already present in template.
-    ✅ spec-template.md — Requirements format is generic;
-       compatible.
-    ✅ tasks-template.md — Phase structure already includes test
-       tasks; compatible.
-    ✅ No command templates found in .specify/templates/commands/.
+    ✅ plan.md — updated; spec.md and tasks template unaffected.
 
-  Follow-up TODOs : None.
+  Follow-up TODOs : plan.md and research.md already reference
+    Claude Haiku 4.5 as the specific model.
 -->
 
 # Max Height Constitution
@@ -164,17 +157,21 @@ regressions that traces alone cannot catch.
 |-------|------------|
 | Frontend | React + Vite SPA, React Three Fiber, Zustand, Web Audio API |
 | Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime |
-| LLM | Amazon Bedrock — Claude 3.5 Haiku |
+| LLM | Amazon Bedrock — Anthropic Haiku-class (specific model version in plan) |
 | TTS | Amazon Polly Neural (direct SDK, streaming) |
 | STT | Web Speech API (browser built-in) |
 | Auth | Amazon Cognito Identity Pool (guest/unauthenticated) |
 | Memory | AgentCore Memory (30-day rolling window) |
 | Observability | AgentCore Observability (traces, metrics, logs) |
 | Hosting | S3 + CloudFront |
-| IaC | AWS CDK (all infrastructure, including AgentCore resources) |
+| IaC | AWS CDK (infrastructure) + AgentCore CLI (agent deployment) |
 
 Technology choices are load-bearing — changes to this table
 require a constitution amendment (MINOR version bump minimum).
+The LLM row pins the model tier (e.g., Haiku-class), not the
+specific version. The exact model ID is specified in the feature
+plan's Technical Context section. This allows model version
+upgrades within the same tier without a constitution amendment.
 
 ## Quality Gates
 
@@ -236,4 +233,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-04-19
+**Version**: 1.2.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-04-20
