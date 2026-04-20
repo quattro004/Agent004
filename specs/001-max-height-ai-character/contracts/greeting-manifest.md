@@ -57,7 +57,7 @@ public/
     },
     "greetings": {
       "type": "array",
-      "minItems": 8,
+      "minItems": 16,
       "items": {
         "$ref": "#/definitions/Greeting"
       }
@@ -138,7 +138,7 @@ public/
 
 ### Edge case: Pool exhaustion
 
-If all greetings are filtered out (small pool + frequent visits), reset the no-repeat window to 1 session instead of 3, and log a warning. The pool must have at least 8 greetings (1 per archetype minimum).
+If all greetings are filtered out (small pool + frequent visits), reset the no-repeat window to 1 session instead of 3, and log a warning. The pool must have at least 16 greetings (2 per archetype minimum).
 
 ---
 
@@ -146,11 +146,11 @@ If all greetings are filtered out (small pool + frequent visits), reset the no-r
 
 | Rule | Constraint | Source |
 |------|-----------|--------|
-| Minimum pool size | ≥ 8 greetings (1 per archetype) | Personality bible §5 |
+| Minimum pool size | ≥ 16 greetings (2 per archetype × 8 archetypes) | Spec clarification session 2 |
 | No repeat within 3 sessions | Filter by visitor's `greetingHistory` | FR-002 |
 | Text length | 40–100 words | data-model.md |
 | Audio exists | `audioPath` must resolve to valid MP3 | Build-time validation |
-| Each archetype represented | At least 1 greeting per archetype value | Pool completeness |
+| Each archetype represented | At least 2 greetings per archetype value | Pool completeness + spec clarification |
 
 ---
 
@@ -159,6 +159,6 @@ If all greetings are filtered out (small pool + frequent visits), reset the no-r
 A CI step should validate:
 1. `manifest.json` passes the JSON Schema above.
 2. Every `audioPath` resolves to an existing `.mp3` file.
-3. All 8 archetypes have at least 1 greeting.
+3. All 8 archetypes have at least 2 greetings each (16 total minimum).
 4. No duplicate `id` values.
 5. All `audioDurationMs` values are within ±500ms of actual MP3 duration.

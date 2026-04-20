@@ -160,4 +160,5 @@ Session  1──1 Greeting      (each session uses exactly one greeting)
 | RateLimitState | `dailyCount` ≤ 500 | FR-020 |
 | Memory | `expiresAt` = visitor's `lastSeenAt` + 30 days | Spec §Key Entities |
 | Greeting | No repeat within 3 sessions per visitor | FR-002, personality bible §5 |
+| Greeting | Pool size ≥ 16 (2 per archetype × 8 archetypes) | Spec clarification session 2 |
 | Visitor | `displayAlias` ≤ 50 chars, optional | Design decision: simple alias |

@@ -2,7 +2,7 @@
 
 **Feature**: 001-max-height-ai-character
 **Date**: 2026-04-20
-**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, and version refresh.
+**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, version refresh, and spec clarification session 2 (accessibility, greeting count, displayAlias, abuse gate removal).
 
 ---
 
@@ -206,3 +206,47 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 - Jest for everything: Requires `ts-jest` transpiler, slower feedback loop for Vite projects.
 - Vitest for CDK: Not officially supported by AWS, fewer examples.
 - Cypress for E2E: No native WebSocket interception.
+
+---
+
+## R6. Spec Clarification Session 2 (2026-04-20)
+
+The following items were resolved during the second clarification session and are incorporated into the plan and sub-artifacts.
+
+### R6a. Accessibility (MVP)
+
+**Decision**: Keyboard navigation and visible focus indicators required for MVP. Full screen reader / ARIA support deferred to V1.
+
+**Rationale**: MVP accessibility scope balances inclusiveness with build velocity. Keyboard nav and focus indicators are achievable with standard HTML semantics and a focused CSS pass. Full ARIA support (live regions for streaming text, role annotations for the CRT frame, screen reader announcements for Max's responses) requires more design work and is deferred.
+
+**Implementation notes**:
+- All interactive elements (TV knob, text input, mic button, "Forget me", export) must be keyboard-reachable via `Tab` and activatable via `Enter`/`Space`.
+- Visible focus indicators via `:focus-visible` CSS, styled to match the CRT/retro theme (e.g., glowing cyan outline).
+- Logical tab order: TV knob → text input → mic button → settings/menu.
+
+### R6b. Greeting Pool Size
+
+**Decision**: 16 greetings total — 2 per archetype (8 archetypes × 2 variants).
+
+**Rationale**: Provides sufficient no-repeat coverage for the 3-session no-repeat rule. With 16 greetings and a 3-session exclusion window, a returning visitor always has ≥10 eligible greetings. Two variants per archetype ensure archetype diversity isn't sacrificed by the exclusion filter.
+
+**Impact**: Greeting manifest `minItems` updated from 8 to 16. Validation rule updated to require ≥2 per archetype.
+
+### R6c. Visitor displayAlias Collection
+
+**Decision**: Max asks in-character during the first session within the first 3 turns (e.g., "So what do they call you?"). Visitor's response is extracted and stored as `displayAlias`. If declined or unanswered, remains null.
+
+**Rationale**: In-character collection preserves immersion. The alias is optional — Max uses generic references ("you", "my friend") when null. No separate form or modal; the conversation IS the collection mechanism.
+
+**Implementation notes**:
+- Agent system prompt includes a directive to ask for name within first 3 turns of a new visitor's first session.
+- Memory extraction pipeline detects name-response patterns and stores as `displayAlias`.
+- Subsequent sessions load `displayAlias` from AgentCore Memory and inject into system prompt context.
+
+### R6d. Abuse Gate Removal
+
+**Decision**: Shared-password abuse gate removed from all milestones.
+
+**Rationale**: The unlisted URL combined with per-visitor rate limits (60/hr, 500/day) and the $10 hard-stop provide sufficient abuse protection for the friends-and-family audience (constitution P7). A password gate would degrade the "turn on the TV" first-impression experience.
+
+**Previous design**: Earlier iterations considered a shared password prompt before the TV-on gesture. This has been explicitly rejected per spec clarification.
