@@ -13,9 +13,10 @@
 | npm | 10+ | Bundled with Node |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.250+ | `npm install -g aws-cdk` |
+| AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |
 | Docker | 24+ | [docker.com](https://www.docker.com/) |
 
-AWS account with Bedrock model access enabled for `anthropic.claude-3-5-haiku-20241022-v1:0` in your target region.
+AWS account with Bedrock model access enabled for `anthropic.claude-haiku-4-5-20251001-v1:0` in your target region.
 
 ---
 
@@ -68,9 +69,17 @@ The frontend dev server supports hot module replacement. Local mode uses mock We
 
 ```bash
 cd packages/agent
+agentcore dev
+# Starts local agent dev server with hot reload on port 8080
+# Requires AWS credentials for Bedrock API calls
+```
+
+Alternatively, without the AgentCore CLI:
+
+```bash
+cd packages/agent
 npm run dev
 # Starts local agent server on port 8080
-# Requires AWS credentials for Bedrock API calls
 ```
 
 ### Infrastructure
@@ -116,6 +125,16 @@ CDK deploy outputs the WebSocket endpoint and Cognito pool ID. Copy these to `.e
 
 ## Deployment
 
+### Agent (via AgentCore CLI)
+
+```bash
+cd packages/agent
+agentcore deploy
+# Deploys to AgentCore Runtime
+```
+
+### Infrastructure (via CDK)
+
 ```bash
 cd packages/infra
 npx cdk deploy --all
@@ -123,9 +142,11 @@ npx cdk deploy --all
 
 This deploys:
 1. **CognitoStack** — Guest identity pool + IAM roles.
-2. **AgentStack** — AgentCore Runtime (container), Memory, WebSocket API.
+2. **AgentStack** — AgentCore Memory, WebSocket API + Lambda integration.
 3. **FrontendStack** — S3 bucket + CloudFront distribution.
 4. **BudgetStack** — Cost alerts ($5/$8 SNS) + hard-stop ($10 Lambda).
+
+The agent itself is deployed separately via `agentcore deploy` (see above).
 
 Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/frontend && npm run build && aws s3 sync dist/ s3://<bucket>`.
 

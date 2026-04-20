@@ -1,22 +1,72 @@
 # Research: Max Height AI Character
 
 **Feature**: 001-max-height-ai-character
-**Date**: 2026-04-19
-**Status**: Complete — all NEEDS CLARIFICATION items resolved
+**Date**: 2026-04-20
+**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, and version refresh.
+
+---
+
+## R0. LLM Model Selection (Updated 2026-04-20)
+
+**Decision**: Claude Haiku 4.5 on Amazon Bedrock (replacing Claude 3.5 Haiku)
+
+**Rationale**: The constitution specifies Claude 3.5 Haiku, but AWS has scheduled it as **legacy by June 19, 2026** — unsuitable for a new project starting now. Claude Haiku 4.5 is the direct successor with superior performance, a larger output window (64K vs 8K), and ongoing support through at least October 2026.
+
+**Model details**:
+- Model ID: `global.anthropic.claude-haiku-4-5-20251001-v1:0`
+- Context: 200K tokens input, 64K tokens max output
+- Pricing (global endpoint): $1.00/1M input, $5.00/1M output
+- Prompt caching: $0.10/1M reads, $1.25/1M writes
+
+**Alternatives considered**:
+- Claude 3.5 Haiku — going legacy June 2026; untenable for new project
+- Claude 3.5 Sonnet — better quality but ~3× more expensive; exceeds budget
+- Claude Sonnet 4 / 4.5 — premium tier; budget-incompatible
+
+**Action required**: Constitution amendment (MINOR bump → v1.2.0) to update the Technology Stack table from "Claude 3.5 Haiku" to "Claude Haiku 4.5".
+
+### Version Summary (April 2026)
+
+| Package | Version | Notes |
+|---------|---------|-------|
+| React | 19.x (19.2.5) | Latest stable |
+| Vite | 8.x (8.0.8) | Rolldown bundler (Rust-based) |
+| TypeScript | 5.x | Latest stable |
+| Zustand | 5.x (5.0.12) | Latest stable |
+| React Three Fiber | 9.x [V1] | R3F v9 = React 19 compatible |
+| `@strands-agents/sdk` | Latest stable | TypeScript, production-ready |
+| `@aws/agentcore-cli` | 0.9.1 | GA, recommended for new projects |
+| AWS CDK | 2.x (2.250.0) | Latest stable |
+| Node.js | 20 LTS | Required by Strands TS SDK |
+
+### Cost Model (Claude Haiku 4.5 + Polly Neural)
+
+**Per-turn**: ~$0.011 (LLM ~$0.003 + Polly Neural ~$0.008)
+**Per full session** (50 turns): ~$0.56
+**Per average session** (15 turns): ~$0.17
+**Monthly infrastructure**: ~$1.00 (S3, CloudFront, CloudWatch)
+**Monthly conversation budget**: ~$9.00 → ~16 full or ~53 average sessions
+
+Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice off) provides additional headroom for text-only sessions.
 
 ---
 
 ## R1. Strands Agents TypeScript SDK
 
-**Decision**: Use `@strands-agents/sdk` (v0.0.1-dev, pinned exact) with `bedrock-agentcore` (v0.2.2, pinned exact). The SDK is production-adjacent — actively maintained with weekly commits, 577 GitHub stars, comprehensive streaming support, and proven AgentCore deployment patterns.
+**Decision**: Use `@strands-agents/sdk` (TypeScript, production-ready) with AgentCore CLI (`@aws/agentcore-cli` v0.9.1) for development and deployment. The Python SDK is at v1.36.0 (production since v1.0 in July 2025); the TypeScript SDK reached production-ready status for core features in early 2026.
 
 **Rationale**:
-- Full ESM, Node 20+, TypeScript-first. Excellent streaming via `agent.stream()` async generator delivering token-by-token events.
-- Tool integration uses `tool()` factory with Zod schemas — type-safe, superior to Python SDK.
-- Only 4 vended tools (bash, fileEditor, httpRequest, notebook) vs Python's 30+, but Max's needs (stutter injection, personality guards, editorial enforcement) are custom anyway.
+- Full ESM, Node 20+, TypeScript-first. Streaming via `agent.stream()` async generator delivering token-by-token events.
+- Tool integration uses `tool()` factory with Zod schemas — type-safe.
+- TypeScript chosen over Python because the developer is a TypeScript developer — unified language stack with the React frontend eliminates context-switching and enables shared types across the monorepo.
 - Hooks are **observational, not interceptive** — you can observe `afterModelCallEvent` and request retry (`event.retry = true`), but cannot modify response content mid-stream. Stutter injection must be post-processing on the complete response text, not mid-stream interception.
-- AgentCore Runtime entry point uses `BedrockAgentCoreApp` from `bedrock-agentcore` with async generator yielding `{ event: 'message', data: { text } }` for SSE streaming.
-- ⚠️ `zod@^4` peer dependency conflict — resolve with `--legacy-peer-deps` or pin `zod@^4.1.12`.
+- AgentCore CLI provides project scaffolding, local dev with hot reload, and direct deployment to AgentCore Runtime.
+- ⚠️ `zod@^4` peer dependency conflict may still apply — resolve with `--legacy-peer-deps` or pin `zod@^4.1.12`.
+
+**SDK status (April 2026)**:
+- Python: v1.36.0, production since July 2025, millions of downloads
+- TypeScript: `@strands-agents/sdk`, production-ready for core features, TypeScript announced December 2025
+- AgentCore CLI: `@aws/agentcore-cli` v0.9.1, GA, supports Strands TS natively
 
 **Alternatives considered**:
 - LangChain.js: Heavier, less type-safe, leaky abstractions. Consider only if Strands hits a critical bug.
@@ -27,7 +77,7 @@
 
 ## R2. AgentCore Runtime CDK Deployment
 
-**Decision**: Use `@aws-cdk/aws-bedrock-agentcore-alpha` L2 constructs (CDK v2.250.0+) for Runtime, Memory, and Observability. WebSocket connections via API Gateway WebSocket API + Lambda integration with SigV4-signed presigned URLs.
+**Decision**: Use AgentCore CLI (`@aws/agentcore-cli` v0.9.1) for agent development and deployment. Use `@aws-cdk/aws-bedrock-agentcore-alpha` L2 constructs (CDK v2.250.0+) for infrastructure provisioning (Memory, Observability). WebSocket connections via API Gateway WebSocket API + Lambda integration with SigV4-signed presigned URLs.
 
 **Rationale**:
 - L2 constructs (`Runtime`, `AgentRuntimeArtifact`) from RFC #785 simplify deployment. `AgentRuntimeArtifact.fromAsset()` handles Docker image building and ECR push.
@@ -41,6 +91,21 @@
 - L1 CfnRuntime constructs: Too verbose, more IAM boilerplate.
 - Lambda URL instead of API Gateway WebSocket: No native streaming support.
 - HTTP API: Simpler but no bidirectional streaming.
+
+### R2b. AgentCore CLI
+
+**Decision**: Use `@aws/agentcore-cli` (v0.9.1) as the primary agent development and deployment tool.
+
+**Rationale**: The AgentCore CLI is GA (platform GA since October 2025) and the officially recommended tool for new AgentCore projects. It provides project scaffolding with Strands framework support, local dev server with hot reload, built-in evaluation tools, direct deploy to AgentCore Runtime, and gateway management.
+
+**Architecture split**:
+- AgentCore CLI: agent project scaffolding, local development, agent deployment to Runtime
+- AWS CDK: everything else (S3, CloudFront, Cognito, Budgets, Lambda, Observability dashboards)
+
+**Alternatives considered**:
+- Python Starter Toolkit: deprecated in favor of the CLI.
+- CDK-only deployment: more complex; CLI handles agent-specific concerns natively.
+- Manual deployment: no scaffolding, no hot reload, no built-in evals.
 
 ---
 

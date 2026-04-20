@@ -1,53 +1,57 @@
 # Implementation Plan: Max Height AI Character
 
-**Branch**: `001-max-height-ai-character` | **Date**: 2026-04-19 | **Spec**: `specs/001-max-height-ai-character/spec.md`
-**Input**: Feature specification from `/specs/001-max-height-ai-character/spec.md`
+**Branch**: `001-max-height-ai-character` | **Date**: 2026-04-20 | **Spec**: `specs/001-max-height-ai-character/spec.md`
+**Input**: Feature specification from `specs/001-max-height-ai-character/spec.md`
 
 ## Summary
 
-Build an interactive AI character web experience — **Max Height** — inspired by Max Headroom. A visitor opens a web page, sees a CRT television set, clicks "Turn on the TV," and converses with a stuttering, editorial, ironic AI personality via voice and text. The MVP delivers text + voice + personality + 2D placeholder avatar in a broadcast-mode UI. The backend is a Strands Agents TypeScript agent hosted on Amazon Bedrock AgentCore Runtime, using Claude 3.5 Haiku for personality generation, Amazon Polly Neural for TTS, and Web Speech API for STT. The frontend is a React + Vite SPA with CRT visual effects, Web Audio API DSP for glitch audio, and Zustand for state management. All infrastructure is deployed via AWS CDK.
+Max Height is an interactive AI character web experience: a stylized talking head inside a CRT television that converses with visitors via voice and text in a stuttering, editorial, ironic persona. The MVP delivers text + voice conversation + personality + 2D placeholder avatar. The backend uses a Strands Agents SDK (TypeScript) agent running on Amazon Bedrock AgentCore Runtime, with Claude Haiku 4.5 for inference and Amazon Polly Neural for TTS. The frontend is a React + Vite SPA hosted on S3/CloudFront.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.x (strict mode), Node.js 20 LTS (backend), ES2022+ (frontend)
-**Primary Dependencies**: React 18+, Vite 5+, React Three Fiber (V1 3D), Zustand, Strands Agents SDK (TypeScript, v0.0.1-dev — pin exact), bedrock-agentcore (v0.2.2 — pin exact), @aws-sdk/client-polly, @aws-sdk/client-bedrock-agentcore, AWS CDK v2
-**Storage**: Amazon Bedrock AgentCore Memory (short-term session context + long-term semantic recall, 30-day rolling window)
-**Testing**: Vitest (unit + integration), Playwright (E2E browser), AgentCore Evaluations (personality golden-set scoring — async batch)
-**Target Platform**: Modern browsers — Chrome/Edge last 2 major, Safari 16+, iOS 16+, Firefox last 2 major, Android Chrome last 2 major
-**Project Type**: Web application (React SPA frontend + serverless Strands agent backend on AgentCore Runtime)
-**Performance Goals**: 1.5s P95 reply start, 2.5s P95 voice start, 2s P95 greeting delivery, 5s P95 cold start, 60fps CRT visual effects
-**Constraints**: $10/month hard budget cap, 50 turns or 20K tokens per session, 60 msgs/hr + 500 msgs/day per visitor rate limits, <200MB container image for cold-start optimization
-**Scale/Scope**: Friends-and-family audience (~20–50 messages/day), single-page application, ~4 major subsystems (agent, voice, avatar, CRT effects)
+**Language/Version**: TypeScript 5.x on Node.js 20 LTS (frontend + agent + infra)
+**Primary Dependencies**: React 19, Vite 8, Zustand 5, `@strands-agents/sdk`, `@aws/agentcore-cli`, `@aws-sdk/client-polly`, Three.js + React Three Fiber 9 [V1], AWS CDK 2.250+
+**Storage**: AgentCore Memory (30-day rolling), localStorage (visitor ID, greeting history, rate limits)
+**Testing**: Vitest (frontend + agent), Jest (CDK infra), Playwright (E2E), AgentCore Evaluations (personality golden set)
+**Target Platform**: Modern browsers (Chrome/Edge last 2, Safari 16+, Firefox last 2, iOS 16+, Android Chrome last 2)
+**Project Type**: Web application (SPA frontend + agentic backend + IaC)
+**Performance Goals**: 1.5s P95 text response, 2.5s P95 voice audio, 2s P95 greeting, 60fps UI, cold start <5s P95
+**Constraints**: $10/month hard budget cap, 50 turns or 20K tokens per session, 60 msg/hr + 500 msg/day rate limits
+**Scale/Scope**: Friends-and-family audience (~5–20 visitors/month), single-page experience, ~15 average turns per session
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
+### Principle Compliance
+
 | Principle | Status | Notes |
 |-----------|--------|-------|
-| **P1. Cloud-Only** | ✅ PASS | LLM (Bedrock Claude Haiku) and TTS (Polly) are server-side. STT uses browser built-in Web Speech API (not on-device LLM). |
-| **P2. Budget Cap $10/mo** | ✅ PASS | Cost model estimates $1.61–5.53/mo. Alarms at $5/$8, soft-degrade at $8, hard-stop at $10 all specified. |
-| **P3. Personality-First** | ✅ PASS | Build order: personality (Phase 1) → voice (Phase 3) → visuals (Phase 4). Personality gate (Phase 1.5) is a hard gate before visual work. |
-| **P4. IP/Legal** | ✅ PASS | Named "Max Height" throughout. No voice cloning. Fan-project framing in UI. Non-commercial. |
-| **P5. No RT LLM-as-Judge** | ✅ PASS | Heuristic guards at runtime. LLM-as-judge only in async batch evaluation via AgentCore Evaluations. |
-| **P6. Supply-Chain** | ✅ PASS | Pre-1.0 deps (Strands SDK, bedrock-agentcore) pinned to exact versions. package-lock.json committed. npm audit clean required. |
-| **P7. Friends-and-Family** | ✅ PASS | Cognito guest identity. Rate limiting. No public registration or marketing. |
-| **P8. Graceful Degradation** | ✅ PASS | Text fallback (no mic), 2D avatar fallback (no WebGL — V1), in-character error states ("signal lost", "taking a break"). |
-| **P9. Observability Before Features** | ✅ PASS | AgentCore Observability wired before second feature. Trace spans for all latency paths. |
-| **P10. Unit Tests** | ✅ PASS | Vitest for all non-trivial logic. Golden-set evaluation for personality. Playwright for E2E. |
+| P1. Cloud-Only | ✅ PASS | All inference (Claude Haiku 4.5) and TTS (Polly Neural) server-side on AWS. No on-device models. |
+| P2. Budget Ceiling | ✅ PASS | Cost model in `research.md §R5` shows ~$0.56/full-session, ~18 full or ~55 avg sessions/month within $10. CDK deploys Budget alarms at $5/$8 and hard-stop Lambda at $10. |
+| P3. Personality-First | ✅ PASS | Personality gate (50-case golden set) is a hard blocker before visual/audio polish. |
+| P4. IP & Legal | ✅ PASS | "Max Height" naming throughout. No voice cloning. Fan-project framing in About/footer. Non-commercial. |
+| P5. No RT LLM-as-Judge | ✅ PASS | Personality evaluation via offline golden sets and AgentCore Evaluations. No live LLM scoring in hot path. |
+| P6. Supply-Chain | ✅ PASS | Exact version pinning, package-lock committed, npm audit before dep merges, dep review process. |
+| P7. Friends-and-Family | ✅ PASS | Cognito guest identity + per-session caps. No registration, no analytics beyond operational. |
+| P8. Graceful Degradation | ✅ PASS | Three axes: no WebGL → 2D fallback, no mic → text input, cloud down → in-character "signal lost". |
+| P9. Observability | ✅ PASS | AgentCore Observability (traces, metrics, logs) wired before second feature. Trace spans for all latency paths. |
+| P10. Unit Tests | ✅ PASS | Vitest for frontend + agent, Jest for CDK. All non-trivial logic tested. |
 
-**Quality Gates:**
+### Quality Gate Readiness
 
-| Gate | Status | Evidence |
-|------|--------|----------|
-| 1. Cost model | ✅ PASS | Detailed cost analysis in `docs/initial-plan.md` §Cost Analysis: $1.61–5.53/mo estimated. |
-| 2. Personality gate | ✅ PASS | 50-case golden set defined in spec. 6-dimension rubric in personality bible §9. Hard gate at Phase 1.5. |
-| 3. Dependency gate | ⚠️ MONITOR | Strands SDK v0.0.1-dev and bedrock-agentcore v0.2.2 are pre-1.0. Pinned exact per P6. Must monitor for breaking changes. |
-| 4. Degradation gate | ✅ PASS | Three fallback axes defined: no mic → text, no WebGL → 2D, cloud down → "signal lost". |
-| 5. Observability gate | ✅ PASS | AgentCore Observability planned for Phase 1. Trace spans for greeting, reply, voice, cold-start latency paths. |
-| 6. Test coverage gate | ✅ PASS | Unit tests via Vitest. Personality evaluation via golden set. E2E via Playwright. |
+| Gate | Ready | How |
+|------|-------|-----|
+| 1. Cost model | ✅ | `research.md §R5` — detailed per-turn, per-session, monthly estimates |
+| 2. Personality | ⏳ | Golden set in personality bible; evaluation via AgentCore Evaluations after implementation |
+| 3. Dependency | ✅ | All deps reviewed in research.md; versions pinned in plan |
+| 4. Degradation | ⏳ | Three fallback axes defined; testing after implementation |
+| 5. Observability | ⏳ | AgentCore Observability planned; trace spans defined in contracts |
+| 6. Test coverage | ⏳ | Test strategy in `research.md §R5`; execution during implementation |
 
-**Constitution Check Result: PASS** — No gate failures. Dependency gate flagged for monitoring (pre-1.0 SDKs) but compliant with P6 pinning requirements.
+### Pending Constitution Amendment
+
+**Claude Haiku 4.5**: The Technology Stack table specifies "Claude 3.5 Haiku", which AWS has scheduled as legacy by June 19, 2026. This plan uses Claude Haiku 4.5 (`global.anthropic.claude-haiku-4-5-20251001-v1:0`). A constitution amendment (MINOR bump → v1.2.0) is required to update the table. Cost impact: ~25% increase in per-token pricing ($1.00 vs $0.80 input, $5.00 vs $4.00 output) — still within budget.
 
 ## Project Structure
 
@@ -55,12 +59,16 @@ Build an interactive AI character web experience — **Max Height** — inspired
 
 ```text
 specs/001-max-height-ai-character/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+├── plan.md              # This file
+├── research.md          # Phase 0: technology decisions + cost model
+├── data-model.md        # Phase 1: entity definitions + state transitions
+├── quickstart.md        # Phase 1: developer setup guide
+├── contracts/           # Phase 1: API and integration contracts
+│   ├── websocket-api.md       # WebSocket connection + message wire format
+│   ├── message-protocol.md    # Frontend ↔ Agent application protocol
+│   ├── polly-tts.md           # Polly TTS integration contract
+│   └── greeting-manifest.md   # Pre-generated greeting pool schema
+└── tasks.md             # Phase 2 output (/speckit.tasks — NOT created by /speckit.plan)
 ```
 
 ### Source Code (repository root)
@@ -70,62 +78,58 @@ packages/
 ├── frontend/                    # React + Vite SPA
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── tv/              # CRT frame, knob, screen container
-│   │   │   ├── avatar/          # 2D placeholder (MVP), 3D avatar (V1)
-│   │   │   ├── chat/            # Text input, mic button, broadcast display
-│   │   │   └── effects/         # CRT shader, glitch overlay, scanlines
-│   │   ├── hooks/               # Custom React hooks (useAudio, useWebSocket, useSpeech)
-│   │   ├── services/
-│   │   │   ├── polly.ts         # Direct Polly TTS client
-│   │   │   ├── websocket.ts     # SigV4 WebSocket to AgentCore Runtime
-│   │   │   ├── cognito.ts       # Guest identity + credential management
-│   │   │   └── audio-dsp/       # AudioWorklet processors (stutter, pitch, static)
-│   │   ├── stores/              # Zustand state stores
-│   │   │   ├── connection.ts    # WebSocket status, reconnection
-│   │   │   ├── audio.ts         # Playback state, DSP effects, volume
-│   │   │   ├── avatar.ts        # Mouth state, expressions, glitch triggers
-│   │   │   └── ui.ts            # Mode (text/voice), loading, errors
-│   │   ├── types/               # Shared TypeScript interfaces
-│   │   └── App.tsx
+│   │   │   ├── tv/              # CRT frame, power knob, screen container
+│   │   │   ├── avatar/          # 2D SVG avatar (MVP), 3D R3F avatar (V1)
+│   │   │   ├── input/           # Text input, mic button, ON AIR indicator
+│   │   │   └── effects/         # Glitch, scanlines, wireframe backdrop
+│   │   ├── hooks/               # useAgent, useSpeechRecognition, useAudio, useGreeting
+│   │   ├── stores/              # Zustand: connection, conversation, voice, visitor
+│   │   ├── services/            # AgentClient, PollyService, AudioManager, SpeechService
+│   │   ├── assets/              # Static assets
+│   │   └── types/               # Frontend-specific types
 │   ├── public/
-│   │   └── greetings/           # Pre-generated greeting pool (audio + animation)
+│   │   └── greetings/           # Pre-generated greeting pool (manifest.json + MP3s)
 │   └── tests/
-│       ├── unit/
+│       ├── unit/                # Vitest + React Testing Library
 │       └── e2e/                 # Playwright browser tests
 │
-├── agent/                       # Strands Agent backend
+├── agent/                       # Strands agent (AgentCore project)
 │   ├── src/
-│   │   ├── agent.ts             # Strands agent definition + tool registration
-│   │   ├── runtime.ts           # AgentCore Runtime entry point (port 8080)
-│   │   ├── prompts/
-│   │   │   └── max-persona.ts   # System prompt derived from personality bible
-│   │   ├── tools/               # Native Strands tools (weather, news, search)
-│   │   ├── steering/            # Post-processing handlers
-│   │   │   ├── stutter.ts       # Stutter injection (6 types from bible §2.1)
-│   │   │   ├── personality.ts   # Heuristic personality guard
-│   │   │   ├── catchphrase.ts   # Catchphrase probabilistic injection
-│   │   │   └── editorial.ts     # Editorial sandwich enforcement
-│   │   ├── memory/              # AgentCore Memory adapter
-│   │   └── types/
-│   ├── evals/
-│   │   ├── golden-set.ts        # 50-case personality test corpus
-│   │   └── rubric.ts            # 6-dimension scoring rubric
-│   ├── Dockerfile               # Multi-stage, Alpine, <200MB target
-│   └── tests/
-│       └── unit/
+│   │   ├── index.ts             # AgentCore Runtime entry point
+│   │   ├── agent.ts             # Max Height agent definition (Strands SDK)
+│   │   ├── tools/               # Agent tools (Polly TTS, memory ops, rate-limit)
+│   │   ├── prompts/             # System prompt, personality directives
+│   │   ├── handlers/            # Post-processing (stutter injection, personality guard)
+│   │   └── types/               # Agent-specific types
+│   ├── tests/
+│   │   └── unit/                # Vitest + aws-sdk-client-mock
+│   └── agentcore.config.ts      # AgentCore CLI configuration
 │
-└── infra/                       # AWS CDK infrastructure
-    ├── lib/
-    │   ├── agentcore-stack.ts   # AgentCore Runtime, Memory, Observability
-    │   ├── auth-stack.ts        # Cognito Identity Pool + IAM policies
-    │   ├── hosting-stack.ts     # S3 + CloudFront
-    │   └── budget-stack.ts      # AWS Budgets alarms + hard-stop Lambda
-    └── tests/
-        └── unit/
+├── infra/                       # AWS CDK
+│   ├── lib/
+│   │   ├── hosting-stack.ts     # S3 + CloudFront
+│   │   ├── auth-stack.ts        # Cognito Identity Pool (guest)
+│   │   ├── budget-stack.ts      # AWS Budgets + SNS alerts + hard-stop Lambda
+│   │   └── observability-stack.ts # CloudWatch dashboards + alarms
+│   ├── bin/
+│   │   └── app.ts               # CDK app entry
+│   └── test/                    # Jest + CDK assertions
+│
+└── shared/                      # Shared across packages
+    ├── types/                   # Visitor, Session, Memory, Greeting types
+    └── constants/               # Rate limits, token caps, session caps
+
+docs/
+├── max-personality-bible.md     # Character spec (source of truth for personality)
+└── initial-plan.md              # Historical planning document
+
+specs/                           # Feature specifications
 ```
 
-**Structure Decision**: Monorepo with `packages/` layout (frontend, agent, infra). This separates concerns cleanly: the SPA frontend, the Strands agent backend (containerized for AgentCore Runtime), and CDK infrastructure. Each package has its own `tests/` directory. Shared types can be extracted to a `packages/shared/` package if needed.
+**Structure Decision**: npm workspaces monorepo with 4 packages (`frontend`, `agent`, `infra`, `shared`). The frontend deploys to S3/CloudFront via CDK. The agent deploys to AgentCore Runtime via the AgentCore CLI. Infrastructure provisions via CDK. Shared types eliminate duplication across frontend and agent.
 
 ## Complexity Tracking
 
-> No constitutional violations requiring justification. Pre-1.0 dependency risk (Strands SDK, bedrock-agentcore) is managed via P6 exact pinning and documented in Dependency gate monitoring above.
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| Constitution amendment (Claude 3.5 Haiku → Haiku 4.5) | Claude 3.5 Haiku going legacy June 2026 | Staying on 3.5 Haiku would require migration within 2 months of starting development |
