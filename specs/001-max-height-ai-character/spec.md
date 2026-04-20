@@ -33,6 +33,14 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 - Q: How does user interruption work? → A: Interrupt stops Max immediately. New input processed. Max may acknowledge interruption in-character. Partial text remains until replaced.
 - Q: What is the transient backend failure retry behavior? → A: One silent auto-retry within 3 seconds. If retry fails, show in-character "signal lost" error. Visitor retries manually by sending another message.
 
+### Session 2026-04-20
+
+- Q: What accessibility requirements apply to MVP? → A: Keyboard navigation and visible focus indicators are required for MVP. Full screen reader / ARIA support is deferred to V1.
+- Q: What format should the FR-018 memory export use? → A: JSON file. The export is a single `.json` download containing all stored memory data, matching the Memory entity schema from `data-model.md`.
+- Q: How is the visitor's optional `displayAlias` collected? → A: Max asks in-character during the first session (e.g., "So what do they call you?") within the first 3 turns. The visitor's response is extracted and stored as `displayAlias`. If the visitor declines or doesn't answer, `displayAlias` remains null and Max uses generic references ("you", "my friend").
+- Q: How many greetings ship with MVP? → A: 16 total — 2 per archetype (8 archetypes × 2 variants). This provides sufficient no-repeat coverage for the 3-session no-repeat rule.
+- Q: Should the shared-password abuse gate be implemented? → A: Removed. The unlisted URL combined with per-visitor rate limits (60/hr, 500/day) and the $10 hard-stop provide sufficient abuse protection for the friends-and-family audience. No password gate in any milestone.
+
 ---
 
 ## Personas
@@ -108,7 +116,7 @@ A visitor returns within 30 days. Within the first 3 turns of the new session, M
 
 1. **Given** a returning visitor within 30 days, **When** they start a new session, **Then** Max references a specific fact from the prior session within the first 3 turns ≥ 70% of the time (measured on a 20-scenario golden set).
 2. **Given** a visitor clicks "Forget me", **When** they return, **Then** Max treats them as a completely new visitor with no prior-session references.
-3. **Given** a visitor requests "Export what Max remembers", **When** the download completes, **Then** they receive a structured file containing all stored memory data.
+3. **Given** a visitor requests "Export what Max remembers", **When** the download completes, **Then** they receive a JSON file containing all stored memory data.
 
 ---
 
@@ -176,7 +184,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-015**: At the $10 hard-stop, the page MUST show an in-character "Max is taking a break" state.
 - **FR-016**: At the $8 soft-degrade, voice output MUST disable gracefully and the text-only path MUST remain available.
 - **FR-017**: A visitor MUST be able to wipe all stored data with a single-click "Forget me" action [MVP].
-- **FR-018**: A visitor MUST be able to export what Max remembers as a downloadable structured file [MVP].
+- **FR-018**: A visitor MUST be able to export what Max remembers as a downloadable JSON file [MVP].
 - **FR-019**: On first mic activation, an explicit disclosure MUST name the browser's speech provider (Google/Apple), plus a persistent small-print notice at the mic control.
 - **FR-020**: Rate limits of 60 messages/hour and 500 messages/day per visitor MUST be enforced. Breach triggers in-character refusal copy, not a system error.
 - **FR-021** [V1]: On a return visit within 30 days, Max MUST reference a specific prior-session fact within the first 3 turns (≥ 70% of the time on the golden set).
@@ -212,7 +220,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - Prompt-injection posture: Max stays in character and deflects; clean break-character refusal reserved for safety-critical content only.
 - Authenticated browser identity scoped to minimum permissions needed.
 - Content Security Policy on the page.
-- Unlisted public URL with search-engine disallow. Shared-password gate pre-wired as a toggleable escape hatch if abuse occurs.
+- Unlisted public URL with search-engine disallow. Rate limits (60/hr, 500/day) and the $10 hard-stop provide abuse protection.
 
 ### Cost Protection
 
