@@ -15,7 +15,7 @@ Build an interactive AI character web experience ("Max Height") inspired by Max 
 
 **Language/Version**: TypeScript 5.x on Node.js 20 LTS
 **Runtime**: Vite 8.x (Rolldown bundler) for frontend; AgentCore Runtime (Docker, `LINUX_ARM64`) for agent
-**Primary Dependencies**: React 19.x, Zustand 5.x, Three.js (via React Three Fiber 9.x for V1), `@strands-agents/sdk`, `@aws-sdk/client-polly` v3, `@aws-cdk/aws-bedrock-agentcore-alpha`, AWS CDK 2.250+
+**Primary Dependencies**: React 19.x, Zustand 5.x, Three.js (via React Three Fiber 9.x), `@strands-agents/sdk`, `@aws-sdk/client-polly` v3, `@aws-cdk/aws-bedrock-agentcore-alpha`, AWS CDK 2.250+
 **Storage**: AgentCore Memory (semantic + summary + user preferences, 30-day rolling), browser localStorage (visitor identity, greeting history, rate limits)
 **Testing**: Vitest + React Testing Library (frontend + agent), Jest + CDK assertions (infra), Playwright (E2E), AgentCore Evaluations (personality golden set)
 **Target Platform**: Web — Chrome/Edge last 2, Safari 16+, iOS 16+, Firefox last 2, Android Chrome last 2
@@ -122,6 +122,8 @@ packages/
       agent-stack.ts           # AgentCore Memory, WebSocket API Gateway + Lambda
       frontend-stack.ts        # S3 + CloudFront distribution
       budget-stack.ts          # Cost alerts ($5/$8) + hard-stop ($10 Lambda)
+      handlers/                # Lambda function code
+        websocket-handler.ts   # $connect auth, $disconnect cleanup, $default routing
     tests/                     # Jest + CDK assertions
 specs/                         # Feature specifications (source of truth)
 docs/                          # Personality bible, initial plan

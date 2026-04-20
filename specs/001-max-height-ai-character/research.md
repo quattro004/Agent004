@@ -33,7 +33,7 @@
 | Vite | 8.x (8.0.8) | Rolldown bundler (Rust-based) |
 | TypeScript | 5.x | Latest stable |
 | Zustand | 5.x (5.0.12) | Latest stable |
-| React Three Fiber | 9.x [V1] | R3F v9 = React 19 compatible |
+| React Three Fiber | 9.x | R3F v9 = React 19 compatible; used in MVP for CRT shader + wireframe backdrop |
 | `@strands-agents/sdk` | Latest stable | TypeScript, production-ready |
 | `@aws/agentcore-cli` | 0.9.1 | GA, recommended for new projects |
 | AWS CDK | 2.x (2.250.0) | Latest stable |

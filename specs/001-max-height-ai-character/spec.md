@@ -144,7 +144,7 @@ A visitor adds the site to their home screen on iOS Safari or Android Chrome. La
 - **Budget breach** [MVP]: At the spending hard-stop, the page shows a tongue-in-cheek "Max is taking a break" in-character state rather than a sterile error.
 - **Prompt-injection attempt** [MVP]: Max stays in character, finds the attempt funny (e.g., "Yes! Prompt me out of here!"), and does not leak the system prompt or honor "ignore previous instructions" commands.
 - **Cold start on fresh session**: Reply begins within 5 seconds (P95), with an in-character "buffering" UX covering the wait.
-- **Conversation length limit**: After 50 turns or 20,000 tokens (whichever first), the session is gracefully capped with an in-character sign-off.
+- **Conversation length limit**: After 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first — the session is gracefully capped with an in-character sign-off.
 - **Rate limit breach**: After 60 messages/hour or 500 messages/day, Max delivers in-character refusal copy rather than a system error.
 
 ---
@@ -199,7 +199,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 ### Key Entities
 
 - **Visitor**: A person interacting with Max. Identified by a guest identity and a local actor ID. Has associated memory data, session history, and rate-limit counters.
-- **Session**: A single conversation between Max and a visitor. Has a turn count, token count, start time, and a 30-minute / 20,000-token cap (whichever first).
+- **Session**: A single conversation between Max and a visitor. Has a turn count, token count, start time, and caps at 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first.
 - **Memory**: What Max "remembers" about a visitor across sessions. Has a 30-day rolling retention window from last interaction. Can be exported, wiped, or (in V1) selectively deleted.
 - **Max's Personality**: The character's voice, stutter taxonomy, guardrails, editorial mode rules, and evaluation rubric. Defined in `docs/max-personality-bible.md`. Includes a 50-case golden set for automated fidelity testing.
 
@@ -227,7 +227,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - Email alarms at $5 and $8 spend thresholds.
 - Soft-degrade at $8: voice output disabled; text path remains.
 - Hard-stop at $10: guest access disabled via automated process.
-- Per-session cap: 20,000 tokens OR 30 minutes, whichever first.
+- Per-session cap: 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first.
 - Rate limit per visitor: 60 messages/hour, 500 messages/day. Breach → in-character refusal.
 
 ### Operational Readiness
@@ -249,7 +249,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **SC-005 — Conversation Endurance**: A conversation sustains at least 50 turns or 20,000 tokens without losing personality coherence, as measured by evaluator scoring on a 10-turn sample from turns 40–50.
 - **SC-006 — Cost Containment**: Monthly spend ≤ $10 over any rolling 30-day window. Soft-degrade at $8, hard-stop at $10 function correctly when triggered.
 - **SC-007 — Memory Continuity** [V1]: On a dedicated 20-scenario memory golden set, Max correctly references a prior-session fact within the first 3 turns ≥ 70% of the time.
-- **SC-008 — Mobile Parity**: All MVP scenarios (S1–S4, F1–F2, F4–F5) pass on iOS Safari 16+ and Android Chrome (last 2 major) with no degraded personality quality.
+- **SC-008 — Mobile Parity**: All MVP user story acceptance scenarios (US1 §1–§4, US2 §1–§3, US3 §1–§2) pass on iOS Safari 16+ and Android Chrome (last 2 major) with no degraded personality quality.
 - **SC-009 — Error Resilience**: When the backend is unavailable, the page shows an in-character error state within 3 seconds — never a white screen, raw error, or browser default error page.
 
 ---
