@@ -39,7 +39,7 @@ docs/                # Design documents, personality bible
 # Clone and install
 git clone <repo-url>
 cd Agent004
-npm install --legacy-peer-deps   # Required for zod@^4 peer conflict
+npm install                      # See note below if Zod peer conflict arises
 
 # Configure AWS credentials
 aws configure                    # Or use SSO / env vars
@@ -49,7 +49,7 @@ cd packages/infra
 npx cdk bootstrap
 ```
 
-> **Note**: `--legacy-peer-deps` is required due to a peer dependency conflict between `@strands-agents/sdk` and `zod@^4`. See `research.md §R1` for details.
+> **Note**: If a Zod peer dependency conflict occurs between `@strands-agents/sdk` and transitive dependencies still on Zod 3, add an `overrides` block to the root `package.json`: `"overrides": { "zod": "^4.3.6" }`. Zod 4 includes a `zod/v3` compatibility mode for gradual migration. Avoid `--legacy-peer-deps` — it silently masks conflicts. See `research.md §R1` for details.
 
 ---
 
@@ -167,7 +167,7 @@ Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/
 
 | Problem | Solution |
 |---------|----------|
-| `zod` peer dependency error | Use `npm install --legacy-peer-deps` |
+| `zod` peer dependency error | Add `"overrides": { "zod": "^4.3.6" }` to root `package.json`, then `npm install`. Use `--legacy-peer-deps` only as a last resort. |
 | CDK bootstrap error | Ensure CDK CLI ≥ 2.250.0 and correct AWS region |
 | Polly "not authorized" | Check Cognito guest role has `polly:SynthesizeSpeech` |
 | WebSocket connection fails | Verify presigned URL generation, check Cognito identity pool |
