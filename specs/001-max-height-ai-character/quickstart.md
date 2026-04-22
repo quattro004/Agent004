@@ -118,6 +118,9 @@ cd packages/frontend && npm run test:e2e   # Playwright
 | `VITE_WS_ENDPOINT` | WebSocket API URL (set after deploy) | Frontend (prod) |
 | `VITE_COGNITO_IDENTITY_POOL_ID` | Cognito pool ID (set after deploy) | Frontend (prod) |
 | `VITE_MOCK_AGENT` | `true` for local UI dev without backend | Frontend (dev) |
+| `NEWS_API_KEY` | API key for news provider (selected in research.md §R7) | Agent |
+| `WEATHER_API_KEY` | API key for weather provider (selected in research.md §R7) | Agent |
+| `WEB_SEARCH_API_KEY` | API key for web search provider (if required, TBD) | Agent |
 
 CDK deploy outputs the WebSocket endpoint and Cognito pool ID. Copy these to `.env.local` in `packages/frontend/`.
 
@@ -173,3 +176,4 @@ Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/
 | WebSocket connection fails | Verify presigned URL generation, check Cognito identity pool |
 | Agent cold start > 5s | Check container image size (target < 200MB) |
 | Audio doesn't play on iOS | Ensure TV-on gesture unlocks AudioContext before playback |
+| Tool API returns errors | Check `NEWS_API_KEY` / `WEATHER_API_KEY` env vars are set in agent container. See research.md §R7 for provider details |

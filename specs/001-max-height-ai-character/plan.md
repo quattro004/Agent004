@@ -7,7 +7,7 @@
 
 ## Summary
 
-Max Height is an interactive AI character web experience — a stylized talking head on a glitchy CRT that converses with visitors in a stuttering, editorial, ironic persona via voice and text. The system uses a React + Vite SPA frontend with Three.js/React Three Fiber for CRT visual effects and wireframe backdrop, connected via WebSocket to a Strands Agents TypeScript SDK agent running on Amazon Bedrock AgentCore Runtime. Amazon Polly Neural (Matthew voice) provides TTS, browser Web Speech API handles STT, and Cognito guest identity provides auth-free access scoped to minimum permissions. Cost is hard-capped at $10/month with automated enforcement.
+Max Height is an interactive AI character web experience — a stylized talking head on a glitchy CRT that converses with visitors in a stuttering, editorial, ironic persona via voice and text. The agent has access to three tools (news, weather, web search) for fetching real-world data, which Max reports in-character using factual tool results — never fabricating news or weather. The system uses a React + Vite SPA frontend with Three.js/React Three Fiber for CRT visual effects and wireframe backdrop, connected via WebSocket to a Strands Agents TypeScript SDK agent running on Amazon Bedrock AgentCore Runtime. Amazon Polly Neural (Matthew voice) provides TTS, browser Web Speech API handles STT, and Cognito guest identity provides auth-free access scoped to minimum permissions. Cost is hard-capped at $10/month with automated enforcement.
 
 MVP delivers text + voice + personality + 2D placeholder avatar (SVG with binary mouth state). 3D avatar, PWA installability, and cross-session memory recall are V1.
 
@@ -37,7 +37,7 @@ MVP delivers text + voice + personality + 2D placeholder avatar (SVG with binary
 | Principle | Status | Evidence |
 |-----------|--------|----------|
 | **P1. Cloud-Only, No On-Device AI** | ✅ PASS | All LLM inference via Bedrock AgentCore Runtime. TTS via Amazon Polly. STT via browser Web Speech API (not a local model). No on-device model weights. |
-| **P2. Budget Ceiling — $10/Month** | ✅ PASS | Cost model documented in research.md §R0. AWS Budgets $5/$8 alerts, $10 hard-stop via Lambda. Per-session caps enforced. |
+| **P2. Budget Ceiling — $10/Month** | ✅ PASS | Cost model documented in research.md §R0. AWS Budgets $5/$8 alerts, $10 hard-stop via Lambda. Per-session caps enforced. External tool API costs (news, weather, web search) must fit within the same $10/month ceiling — provider selection in research.md §R7 must account for this. |
 | **P3. Personality-First Build Order** | ✅ PASS | MVP = personality + text + voice + 2D placeholder avatar. 3D deferred to V1. Golden-set rubric is a ship gate (SC-001, SC-003). |
 | **P4. IP & Legal Posture** | ✅ PASS | Name is "Max Height" throughout. No voice cloning. Fan-project framing in spec. Non-commercial. |
 | **P5. No Real-Time LLM-as-Judge** | ✅ PASS | Personality evaluation uses offline golden sets via AgentCore Evaluations (research.md §R5). No live LLM scoring in hot path. |
@@ -51,7 +51,7 @@ MVP delivers text + voice + personality + 2D placeholder avatar (SVG with binary
 
 | Gate | Status | Evidence |
 |------|--------|----------|
-| **Cost model gate** | ✅ PASS | research.md §R0: ~$0.17/avg session, ~$0.56/full session, ~$1.00 infra. Budget feasible at ~53 average sessions/month. |
+| **Cost model gate** | ✅ PASS | research.md §R0: ~$0.17/avg session, ~$0.56/full session, ~$1.00 infra. Budget feasible at ~53 average sessions/month. Tool API costs (news, weather, web search) to be validated in research.md §R7 — must remain within $10/month ceiling. |
 | **Personality gate** | ✅ PASS (design) | 50-case golden set defined in personality bible. AgentCore Evaluations used for offline scoring (research.md §R5). Ship gate = SC-001 + SC-003. |
 | **Dependency gate** | ✅ PASS | All deps listed with version, maintainer status, and download counts evaluated. research.md §R0 version table is current. |
 | **Degradation gate** | ✅ PASS (design) | All three fallback axes designed in spec edge cases + contracts. Implementation testing required before ship. |
@@ -102,6 +102,7 @@ packages/
   ├── src/
   │   ├── index.ts       # Main agent entry point (AgentCore-compatible, system prompt, tool bindings)
   │   ├── personality/   # Stutter injection, editorial voice, guardrails
+  │   ├── tools/         # Agent tools (newsTool.ts, weatherTool.ts, webSearchTool.ts)
   │   ├── handlers/      # Post-processing handlers (stutter, catchphrase, compliance)
   │   └── types/         # Agent-specific types
   ├── evals/             # AgentCore Evaluations (golden-set configs)
@@ -123,7 +124,7 @@ docs/                    # Supporting design documents
 specs/                   # Feature specifications (source of truth)
 ```
 
-**Structure Decision**: Monorepo with `packages/` directory containing three workspaces: `frontend` (React SPA), `agent` (Strands agent), and `infra` (CDK stacks). This mirrors the "web application" pattern with a clear separation between the client, the AI agent backend, and infrastructure-as-code. The agent is deployed separately via AgentCore CLI; the infrastructure via CDK. The frontend is built and synced to S3.
+**Structure Decision**: Monorepo with `packages/` directory containing three workspaces: `frontend` (React SPA), `agent` (Strands agent), and `infra` (CDK stacks). This mirrors the "web application" pattern with a clear separation between the client, the AI agent backend, and infrastructure-as-code. The agent includes a `tools/` directory for Strands tool definitions (news, weather, web search) using the `tool()` factory with Zod schemas. The agent is deployed separately via AgentCore CLI; the infrastructure via CDK. The frontend is built and synced to S3.
 
 ---
 
@@ -132,7 +133,7 @@ specs/                   # Feature specifications (source of truth)
 | Principle | Post-Design Status | Notes |
 |-----------|-------------------|-------|
 | **P1. Cloud-Only** | ✅ PASS | No on-device AI in any design artifact. WebGL shader effects are visual only, not inference. |
-| **P2. Budget Ceiling** | ✅ PASS | Cost model validated in research.md §R0. BudgetStack (infra) implements automated alerts and hard-stop. |
+| **P2. Budget Ceiling** | ✅ PASS | Cost model validated in research.md §R0. BudgetStack (infra) implements automated alerts and hard-stop. External tool API costs accounted for in research.md §R7. |
 | **P3. Personality-First** | ✅ PASS | Agent handlers, golden-set evals, and personality bible integration are core MVP tasks. 3D deferred. |
 | **P4. IP & Legal** | ✅ PASS | "Max Height" naming enforced in copilot-instructions.md §3. No voice cloning in Polly contract. |
 | **P5. No Live Judge** | ✅ PASS | AgentCore Evaluations are async batch. No real-time scoring in message-protocol.md flow. |

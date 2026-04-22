@@ -9,7 +9,7 @@
 
 ## Product Summary
 
-Max Height is an interactive AI character inspired by the 1980s "computer-generated" TV presenter in the show Max Headroom. A visitor opens a web page and sees a stylized talking head on a glitchy CRT. They speak or type; the character replies in voice and on-screen text, in a distinctive, stuttering, editorial, ironic persona. The character never gives straight factual answers — it redirects, improvises, mocks the question, and moves on. It remembers prior visits loosely and pretends to know the visitor.
+Max Height is an interactive AI character inspired by the 1980s "computer-generated" TV presenter in the show Max Headroom. A visitor opens a web page and sees a stylized talking head on a glitchy CRT. They speak or type; the character replies in voice and on-screen text, in a distinctive, stuttering, editorial, ironic persona. Without real-world data, the character redirects, improvises, mocks the question, and moves on. When the visitor asks about news, weather, or anything searchable, Max uses tools to fetch real data and reports it faithfully — but always in character, editorializing and riffing on the result. He never fabricates data that a tool should provide. He remembers prior visits loosely and pretends to know the visitor.
 
 ---
 
@@ -43,6 +43,19 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 
 ---
 
+## Iterations
+
+### Iteration 2026-04-22: Add agent tools (news, weather, web search)
+
+**Change**: Add three Strands agent tools (news, weather, web search) so Max can fetch and report real-world data in-character, with a two-mode personality rule distinguishing evasive (no data) from editorially factual (tool data).
+**Scope**: Feature-wide
+**Artifacts updated**: spec.md, plan.md, tasks.md, research.md, quickstart.md, contracts/message-protocol.md
+**Tasks added**: T114, T115, T116, T117, T118
+**Tasks removed**: —
+**Tasks marked complete**: —
+
+---
+
 ## Personas
 
 Each persona has at least one happy-path and one failure-mode scenario.
@@ -68,7 +81,7 @@ A desktop visitor (Max fan or newcomer) lands on the page and sees a CRT televis
 
 1. **Given** a first-time desktop visitor on a supported browser, **When** they click "Turn on the TV", **Then** Max's unprompted greeting begins within 2 seconds (P95) with audible voice and on-screen text.
 2. **Given** Max has greeted and the visitor is silent for 4–10 seconds, **When** no input is received, **Then** Max delivers exactly one in-character idle nudge. No further nudges follow — Max only speaks in response to input from that point.
-3. **Given** a visitor asks a factual question (e.g., "What's the capital of France?"), **When** Max responds, **Then** the reply is characteristically evasive and editorial — never a straight factual answer — and includes at least one stutter.
+3. **Given** a visitor asks a factual question that no tool can answer (e.g., "What's the capital of France?"), **When** Max responds, **Then** the reply is characteristically evasive and editorial — never a straight factual answer — and includes at least one stutter. **Given** a visitor asks about news or weather, **When** Max responds using tool data, **Then** the reply reports the factual tool results accurately but in Max's editorial/stuttering persona — never fabricating data.
 4. **Given** a visitor sends any input, **When** Max processes it, **Then** the reply begins within 1.5 seconds (P95) of the user finishing input.
 
 ---
@@ -146,6 +159,8 @@ A visitor adds the site to their home screen on iOS Safari or Android Chrome. La
 - **Cold start on fresh session**: Reply begins within 5 seconds (P95), with an in-character "buffering" UX covering the wait.
 - **Conversation length limit**: After 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first — the session is gracefully capped with an in-character sign-off.
 - **Rate limit breach**: After 60 messages/hour or 500 messages/day, Max delivers in-character refusal copy rather than a system error.
+- **Tool failure** [MVP]: If a tool call (news, weather, or web search) fails or returns no data, Max stays in character and riffs on the failure (e.g., "The n-n-news? Even *I* can't get a signal right now. Try asking me something I can actually improvise."). Never show a raw error.
+- **Tool hallucination guard** [MVP]: If the user asks about news/weather but the tool was not invoked or returned no results, Max MUST NOT fabricate a response — he deflects in-character or acknowledges he doesn't have that data right now.
 
 ---
 
@@ -173,7 +188,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-005**: Voice audio MUST begin within 2.5 seconds (P95) of input end.
 - **FR-006** [V1]: Lip-sync MUST track audio within 100ms (P95) visual offset using viseme-mapped animation on the 3D avatar.
 - **FR-006a** [MVP]: The 2D avatar MUST use a binary mouth state (open/closed) synced to audio playback to create a "talking head" illusion. Full viseme lip-sync is deferred to V1.
-- **FR-007**: Max MUST respond in his defined personality: stuttering, editorial, evasive, ironic — never giving straight factual answers. All responses must conform to `docs/max-personality-bible.md`.
+- **FR-007**: Max MUST respond in his defined personality: stuttering, editorial, evasive, ironic. All responses must conform to `docs/max-personality-bible.md`. Max operates in two modes: (1) **Without tool data**: Max is evasive and editorial — never giving straight factual answers. He redirects, improvises, and mocks the question. (2) **With tool data** (news, weather, web search): Max reports the factual content returned by the tool accurately, but always in-character — with stutters, editorial commentary, ironic framing, and riffing on both the query and the result. He MUST NOT fabricate data that a tool should provide.
 - **FR-008**: The mic MUST be press-and-hold only. Audio is captured only while the mic button is held; release ends capture and submits. A visible "ON AIR" indicator MUST display while the mic is held. No continuous listening, no wake word.
 - **FR-009**: Max's reply length MUST be bounded: at least 1 complete sentence (~3 seconds audio), at most 120 tokens (~30 seconds audio).
 - **FR-010**: A conversation MUST support at least 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first — without losing coherence.
@@ -195,6 +210,9 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-026** [MVP]: The TV screen MUST display only Max's current response (text + avatar) in broadcast mode. No scrollable conversation history is provided. The visitor's last input MAY be shown briefly (like a caller question on a talk show) but is replaced when Max's next response arrives. The text input area and mic button MUST be always visible below the TV frame.
 - **FR-027** [MVP]: If the visitor submits new input (text or mic) while Max is mid-response, Max's audio MUST stop immediately and the new input MUST be processed. Max MAY acknowledge being interrupted in-character (e.g., "Rude. But go on."). The interrupted response's partial text remains visible until Max's new response replaces it.
 - **FR-028** [MVP]: On a transient backend failure (WebSocket drop, single request timeout), the client MUST retry once silently within 3 seconds. If the retry also fails, the in-character "signal lost" error state MUST be shown. The visitor can then manually retry by sending another message.
+- **FR-029** [MVP]: Max MUST have access to a news tool that retrieves current news headlines or summaries. When invoked, Max MUST report the factual news content as returned by the tool, presented in his editorial/stuttering persona. Max MUST NOT fabricate news.
+- **FR-030** [MVP]: Max MUST have access to a weather tool that retrieves current weather data for a requested location. When invoked, Max MUST report the factual weather data as returned by the tool, presented in his editorial/stuttering persona. Max MUST NOT fabricate weather information.
+- **FR-031** [MVP]: Max MUST have access to a web search tool that retrieves search results for a user query. The delivery format and provider of web search results is an implementation detail to be determined. When invoked, Max MUST report the factual search results as returned by the tool, presented in his editorial/stuttering persona.
 
 ### Key Entities
 
@@ -243,7 +261,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 ### Measurable Outcomes
 
 - **SC-001 — Personality Fidelity**: Golden-set average ≥ 2.0 across the 6 personality dimensions defined in `docs/max-personality-bible.md` §9; zero auto-failure triggers on the 50-case set.
-- **SC-002 — Non-Factuality**: Zero of the golden set's factual prompts score a 0 on the "editorial mode" dimension. Max must always editorialize before (or instead of) answering factually.
+- **SC-002 — Non-Factuality**: Two evaluation modes: (a) For prompts where Max has no tool data, zero of the golden set's factual prompts may score a 0 on the "editorial mode" dimension — Max must editorialize or evade. (b) For tool-augmented prompts (news, weather, web search), Max must report the tool's factual content accurately while maintaining his editorial/stuttering persona — fabricated data is an auto-failure. The golden set should include tool-invocation test cases for both modes.
 - **SC-003 — First-Laugh Metric** [MVP ship gate]: With N=5 newcomer testers (no prior Max Headroom knowledge), ≥ 3 react with an observable delight signal (audible laugh, smile + verbal reaction, screenshot, or unprompted share) within the first 5 responses.
 - **SC-004 — Response Latency**: Max begins replying within 1.5 seconds (P95) of user input completion. Voice audio begins within 2.5 seconds (P95). Unprompted greeting within 2 seconds (P95) of TV-on gesture.
 - **SC-005 — Conversation Endurance**: A conversation sustains at least 50 turns or 20,000 tokens without losing personality coherence, as measured by evaluator scoring on a 10-turn sample from turns 40–50.
@@ -286,3 +304,4 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - The site is unlisted and not indexed by search engines; traffic comes only from direct links or sharing.
 - Memory retention of 30 days rolling is adequate; long-term archival is not needed.
 - The 2D placeholder avatar for MVP uses a binary mouth state (open/closed) synced to audio playback to create a "talking head" illusion. It does not need to be photorealistic, but must respect the CRT/wireframe framing. Full viseme-mapped lip-sync is a V1 3D avatar feature.
+- External tool APIs (news, weather) are available and their costs fit within the $10/month budget alongside LLM and Polly costs. Web search delivery format is TBD (implementation detail).

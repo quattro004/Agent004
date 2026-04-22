@@ -41,7 +41,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 **Purpose**: Initialize the TypeScript monorepo, tooling, and per-package scaffolding.
 
 - [ ] T001 Initialize npm workspaces monorepo with root package.json (workspaces: packages/*), .npmrc, Zod override (overrides: { "zod": "^4.3.6" }), and .nvmrc (Node 24 LTS)
-- [ ] T002 Create full directory structure per plan.md §Project Structure (packages/frontend/src/{components,hooks,stores,services,audio,effects,types}, packages/frontend/public/greetings/{audio}, packages/agent/src/{personality,memory,handlers,types}, packages/agent/tests, packages/infra/lib/{handlers}, packages/infra/tests)
+- [ ] T002 Create full directory structure per plan.md §Project Structure (packages/frontend/src/{components,hooks,stores,services,audio,effects,types}, packages/frontend/public/greetings/{audio}, packages/agent/src/{personality,tools,memory,handlers,types}, packages/agent/tests, packages/infra/lib/{handlers}, packages/infra/tests)
 - [ ] T003 [P] Configure TypeScript with root tsconfig.json (strict, ESNext module, NodeNext resolution) and per-package tsconfig.json files extending root in packages/frontend/, packages/agent/, packages/infra/
 - [ ] T004 [P] Configure ESLint + Prettier for TypeScript monorepo with shared flat config in eslint.config.js and .prettierrc at repo root
 - [ ] T005 [P] Initialize React 19 + Vite 8 SPA in packages/frontend/ (package.json with react 19.x, vite 8.x, zustand 5.x, three.js, @react-three/fiber 9.x — R3F is an MVP dependency for CRT effects and wireframe backdrop per research.md R3b/R3e; vite.config.ts with React plugin; index.html entry point; src/main.tsx bootstrap)
@@ -125,13 +125,21 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ### Agent Personality + Turn Processing
 
-- [ ] T036 [US1] Implement personality system prompt builder in packages/agent/src/personality/systemPrompt.ts (construct system prompt from docs/max-personality-bible.md context: stuttering taxonomy, editorial mode rules, evasive response guidelines, catchphrase triggers, ironic tone directives; inject displayAlias if known from session_start payload; inject visitor memory context placeholder for V1; include directive to never give straight factual answers per FR-007; include directive to ask visitor's name within first 3 turns of a new visitor's first session per R6c — response stored client-side as displayAlias in MVP, server-side via AgentCore Memory in V1)
+- [ ] T036 [US1] Implement personality system prompt builder in packages/agent/src/personality/systemPrompt.ts (construct system prompt from docs/max-personality-bible.md context: stuttering taxonomy, editorial mode rules, evasive response guidelines, catchphrase triggers, ironic tone directives; inject displayAlias if known from session_start payload; inject visitor memory context placeholder for V1; include two-mode personality directive per FR-007: (1) without tool data — never give straight factual answers, be evasive and editorial; (2) with tool data — report factual content from tools accurately but always in-character with stutters, editorial commentary, and ironic framing; include directive to never fabricate news, weather, or search results; include directive to ask visitor's name within first 3 turns of a new visitor's first session per R6c — response stored client-side as displayAlias in MVP, server-side via AgentCore Memory in V1)
 - [ ] T037 [P] [US1] Implement stutter injection post-processor in packages/agent/src/personality/stutterInjection.ts (count stutters in LLM response text, if below minimum threshold inject character-consistent stutters as repeated syllables e.g. "M-M-Max", "th-th-the", mark stutter positions in text for frontend audio processing)
-- [ ] T038 [P] [US1] Implement personality guard in packages/agent/src/handlers/personalityCheck.ts (verify response evasiveness — flag if response gives straight factual answer, check stutter count meets minimum, verify editorial voice markers present, verify response contains at least 1 complete sentence per FR-009 minimum length, detect and deflect prompt-injection attempts per FR-013 — stay in character and find it funny)
-- [ ] T039 [US1] Implement Strands agent entry point in packages/agent/src/index.ts (create agent via @strands-agents/sdk agent factory, configure Bedrock model global.anthropic.claude-haiku-4-5-20251001-v1:0, inject system prompt from T036, enable streaming via agent.stream() async generator for token-by-token delivery, configure max output tokens to 120 per FR-009, wire observability trace spans from T017)
+- [ ] T038 [P] [US1] Implement personality guard in packages/agent/src/handlers/personalityCheck.ts (verify response evasiveness — flag if response gives straight factual answer WITHOUT tool data backing it, check stutter count meets minimum, verify editorial voice markers present, verify response contains at least 1 complete sentence per FR-009 minimum length, detect and deflect prompt-injection attempts per FR-013 — stay in character and find it funny; tool-augmented responses: factual content from tools is allowed when presented in-character per FR-007 two-mode rule — flag only if tool data is fabricated or persona is dropped)
+- [ ] T039 [US1] Implement Strands agent entry point in packages/agent/src/index.ts (create agent via @strands-agents/sdk agent factory, configure Bedrock model global.anthropic.claude-haiku-4-5-20251001-v1:0, inject system prompt from T036, register tools from T114/T115/T116 via tool bindings so LLM can invoke them autonomously based on user queries, enable streaming via agent.stream() async generator for token-by-token delivery, configure max output tokens to 120 per FR-009, wire observability trace spans from T017)
 - [ ] T040 [US1] Implement turn handler in packages/agent/src/handlers/turnHandler.ts (receive user_message from WebSocket Lambda, validate turnCount ≤ 50 and tokenCount ≤ 20000 and duration ≤ 30 min, invoke Strands agent with user text, stream agent_token frames to client, collect full response, run through personality guard T038 + stutter injection T037, emit agent_turn_complete with fullText and updated counters per message-protocol.md §Agent Responsibilities, start "reply.first_token" trace span on message receipt and end on first token emit)
 - [ ] T041 [US1] Implement session manager in packages/agent/src/handlers/sessionManager.ts (session_start: create session with actorId namespace, load greeting context, init caps and start timer; session_resume: restore session from agentCoreSessionId; session_end: cleanup; cap enforcement: emit session_state_change→ENDED when ANY of these triggers: turnCount reaches 50, tokenCount reaches 20,000, or session duration reaches 30 minutes — whichever first, with in-character sign-off per data-model.md + NFR §Cost Protection; state machine transitions per data-model.md SessionState enum; start "session.cold_start" trace span on session_start and end on connection_ack)
 - [ ] T042 [P] [US1] Implement idle nudge handler in packages/agent/src/handlers/idleNudge.ts (start random 4–10s timer after greeting completes, if no user_message received within window deliver one in-character prod as agent_turn_complete, set idleNudgeDelivered=true, cancel timer if user_message arrives first, never fire more than once per message-protocol.md §Idle Nudge Protocol)
+
+### Agent Tools (FR-029, FR-030, FR-031)
+
+- [ ] T114 [P] [US1] Define news tool in packages/agent/src/tools/newsTool.ts using Strands `tool()` factory with Zod schema — accepts optional topic/query parameter, returns structured news data (headlines, summaries, source attribution). Calls external news API (provider selected in research.md §R7). On failure: return structured error that the agent can riff on in-character per tool-failure edge case. Max MUST NOT fabricate news per FR-029.
+- [ ] T115 [P] [US1] Define weather tool in packages/agent/src/tools/weatherTool.ts using Strands `tool()` factory with Zod schema — accepts location parameter (city/region), returns structured weather data (temperature, conditions, forecast). Calls external weather API (provider selected in research.md §R7). On failure: return structured error for in-character riffing. Max MUST NOT fabricate weather per FR-030.
+- [ ] T116 [P] [US1] Define web search tool in packages/agent/src/tools/webSearchTool.ts using Strands `tool()` factory with Zod schema — accepts query string, returns search results in a format TBD. Delivery format and provider is an implementation detail to be resolved during development per FR-031.
+- [ ] T117 [US1] Wire all three tools into Strands agent entry point in T039 (packages/agent/src/index.ts) — register tools with the agent via tool bindings so the LLM can invoke them autonomously based on user queries per FR-029/FR-030/FR-031. Depends on T114, T115, T116.
+- [ ] T118 [P] [US1] Write Vitest tests for tool definitions and tool-result personality formatting in packages/agent/tests/tools/ — verify each tool's Zod schema validates correctly, verify tool-failure handling returns structured error for in-character fallback, verify the agent does not fabricate data when tools return empty results per tool-hallucination-guard edge case.
 
 ### UI Components
 
@@ -179,7 +187,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ### Personality Gate Evaluation (Constitution P3 — Hard Gate)
 
-- [ ] T069 [US1] Build 50-case golden-set evaluation configuration for AgentCore Evaluations in packages/agent/tests/evaluations/personality-gate.ts (define 50 test cases from docs/max-personality-bible.md §9 golden set covering all 6 personality dimensions: stuttering fidelity, editorial mode, evasiveness, ironic tone, catchphrase usage, factual deflection; include at least 5 late-conversation coherence cases simulating turns 40–50 to validate SC-005 endurance; configure AgentCore Evaluations async batch runner with LLM-as-judge scoring rubric per constitution P5 — offline only, never in hot path; define pass criteria: SC-001 avg ≥ 2.0 across all dimensions on 50 cases, SC-002 zero factual failures on editorial dimension)
+- [ ] T069 [US1] Build 50-case golden-set evaluation configuration for AgentCore Evaluations in packages/agent/tests/evaluations/personality-gate.ts (define 50 test cases from docs/max-personality-bible.md §9 golden set covering all 6 personality dimensions: stuttering fidelity, editorial mode, evasiveness, ironic tone, catchphrase usage, factual deflection; include at least 5 late-conversation coherence cases simulating turns 40–50 to validate SC-005 endurance; include tool-invocation test cases per SC-002 update: verify Max reports tool results accurately and in-character, verify Max does not fabricate news/weather when no tool data is available, verify tool-failure deflection stays in-character; configure AgentCore Evaluations async batch runner with LLM-as-judge scoring rubric per constitution P5 — offline only, never in hot path; define pass criteria: SC-001 avg ≥ 2.0 across all dimensions on 50 cases, SC-002 zero factual failures on editorial dimension AND zero fabrication failures on tool-augmented cases)
 - [ ] T070 [US1] Run personality gate evaluation and validate results (execute AgentCore Evaluations batch against deployed agent, verify SC-001: golden-set average ≥ 2.0 across 6 dimensions, verify SC-002: zero auto-failure triggers on factual prompts, document results in evaluation report; **HARD GATE per constitution P3**: no Phase 6+ visual/audio polish or stretch features may proceed until this gate passes; if gate fails, iterate on system prompt T036 and personality guard T038 until passing)
 
 **Checkpoint**: User Story 1 should be fully functional and independently testable — open page, click TV knob, hear greeting, converse with Max in voice+text. Personality gate passed.
@@ -367,7 +375,7 @@ Phase 8 (Polish + E2E Tests)
 
 **Phase 1**: T003–T009 (7 tasks) can all run in parallel after T001+T002
 **Phase 2**: T010–T016 (types + stores, 7 tasks) can run in parallel; T021–T024 (CDK stacks, 4 tasks) can run in parallel; T018+T019 (connection services) can run in parallel; T025–T027 (tests) can run in parallel
-**Phase 3**: AudioWorklet processors T051–T054 (4 tasks) can run in parallel; UI components T043–T049 (7 tasks) can run in parallel; agent personality T037+T038 can run in parallel; tests T028–T032 can run in parallel
+**Phase 3**: AudioWorklet processors T051–T054 (4 tasks) can run in parallel; UI components T043–T049 (7 tasks) can run in parallel; agent personality T037+T038 can run in parallel; agent tools T114+T115+T116 can run in parallel; tests T028–T032 + T118 can run in parallel
 **Phase 4+5**: US2 and US3 can run in parallel (different concerns)
 **Phase 6**: Memory adapter T086 and extractor T087 can run in parallel
 
@@ -392,6 +400,12 @@ Track A — Agent Personality (parallel within track):
   T038: Personality guard
   T042: Idle nudge handler
 
+Track A2 — Agent Tools (all parallel):
+  T114: News tool definition
+  T115: Weather tool definition
+  T116: Web search tool definition
+  T118: Tool tests
+
 Track B — UI Components (all parallel):
   T043: CRT TV frame
   T044: TV knob
@@ -412,7 +426,7 @@ Track D — Greeting Content (parallel):
   T034: Synthesize greeting audio
 
 # Then sequential assembly:
-  T036 → T039 → T040 → T041  (agent pipeline)
+  T036 → T039 (+ T117 tool wiring) → T040 → T041  (agent pipeline)
   T050 → T055                 (Polly + audio chain)
   T056, T057, T058            (hooks)
   T059 → T061 → T062          (error handling)
@@ -465,19 +479,19 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 
 | Metric | Value |
 |--------|-------|
-| **Total tasks** | 113 |
+| **Total tasks** | 118 |
 | **Phase 1 — Setup** | 9 tasks |
 | **Phase 2 — Foundational** | 18 tasks (incl. observability, Lambda handler, tests) |
-| **Phase 3 — US1: First Visit (P1 MVP)** | 43 tasks (incl. 5 test tasks + personality gate) |
+| **Phase 3 — US1: First Visit (P1 MVP)** | 48 tasks (incl. 5 test tasks + personality gate + 5 tool tasks) |
 | **Phase 4 — US2: iOS/Mobile (P2 MVP)** | 9 tasks (incl. 2 test tasks) |
 | **Phase 5 — US3: Text-Only (P2 MVP)** | 4 tasks (incl. 1 test task) |
 | **Phase 6 — US4: Memory (P3 V1)** | 9 tasks (incl. 2 test tasks) |
 | **Phase 7 — US5: PWA/Offline (P3 V1)** | 6 tasks (incl. 1 test task) |
 | **Phase 8 — Polish** | 15 tasks (incl. 3 E2E Playwright, 3 operational readiness) |
-| **Test tasks embedded in phases** | 18 total (14 Vitest/Jest + 3 Playwright + 1 CDK alarm test) |
-| **MVP tasks (Phases 1–5)** | 83 tasks |
+| **Test tasks embedded in phases** | 19 total (15 Vitest/Jest + 3 Playwright + 1 CDK alarm test) |
+| **MVP tasks (Phases 1–5)** | 88 tasks |
 | **V1 additional (Phases 6–8)** | 30 tasks |
-| **Max parallel tasks (Phase 3)** | ~18 simultaneous |
+| **Max parallel tasks (Phase 3)** | ~21 simultaneous |
 
 ---
 
@@ -498,4 +512,5 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 - Accessibility: keyboard nav + focus indicators in MVP per R6a; full ARIA in V1
 - Abuse gate: removed per R6d; unlisted URL + rate limits + hard-stop sufficient
 - Commit after each task or logical group
+- **Agent tools** (iteration 2026-04-22): T114–T118 add news, weather, and web search tools; T036/T038/T039/T069 updated for two-mode personality (evasive without tools, editorially factual with tools); tool API providers selected in research.md §R7
 - Stop at any checkpoint to validate story independently

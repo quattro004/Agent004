@@ -101,7 +101,7 @@ A single conversation turn follows this sequence:
 3. Process through Strands agent pipeline:
    - System prompt (personality, memory context, editorial guidelines).
    - User message.
-   - Tool calls if needed (none in MVP).
+   - Tool calls if applicable (news, weather, web search — see spec.md FR-029/FR-030/FR-031). Tools are agent-internal; their results are woven into Max's editorial voice and streamed as regular `agent_token` frames. No new wire-format message types are needed for tool-augmented responses.
 4. Stream response tokens via `agent_token` frames.
 5. Post-process complete response:
    - Verify personality compliance (stutter count, evasiveness).
