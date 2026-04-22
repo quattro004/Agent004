@@ -9,8 +9,8 @@
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Node.js | 20 LTS | [nodejs.org](https://nodejs.org/) |
-| npm | 10+ | Bundled with Node |
+| Node.js | 24 LTS | [nodejs.org](https://nodejs.org/) |
+| npm | 11+ | Bundled with Node 24 |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.250+ | `npm install -g aws-cdk` |
 | AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |

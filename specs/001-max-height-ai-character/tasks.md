@@ -40,7 +40,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 **Purpose**: Initialize the TypeScript monorepo, tooling, and per-package scaffolding.
 
-- [ ] T001 Initialize npm workspaces monorepo with root package.json (workspaces: packages/*), .npmrc (legacy-peer-deps=true for zod@^4 conflict), and .nvmrc (Node 20 LTS)
+- [ ] T001 Initialize npm workspaces monorepo with root package.json (workspaces: packages/*), .npmrc, Zod override (overrides: { "zod": "^4.3.6" }), and .nvmrc (Node 24 LTS)
 - [ ] T002 Create full directory structure per plan.md §Project Structure (packages/frontend/src/{components,hooks,stores,services,audio,effects,types}, packages/frontend/public/greetings/{audio}, packages/agent/src/{personality,memory,handlers,types}, packages/agent/tests, packages/infra/lib/{handlers}, packages/infra/tests)
 - [ ] T003 [P] Configure TypeScript with root tsconfig.json (strict, ESNext module, NodeNext resolution) and per-package tsconfig.json files extending root in packages/frontend/, packages/agent/, packages/infra/
 - [ ] T004 [P] Configure ESLint + Prettier for TypeScript monorepo with shared flat config in eslint.config.js and .prettierrc at repo root
@@ -292,7 +292,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 - [ ] T102 [P] Implement Content Security Policy headers in packages/infra/lib/frontend-stack.ts (CloudFront response headers policy: script-src self, connect-src for WebSocket endpoint + Polly + Cognito, img-src self + data:, style-src self unsafe-inline for CRT effects, media-src self for greeting audio)
 - [ ] T103 [P] Add robots.txt and meta noindex in packages/frontend/public/robots.txt (Disallow: /) and packages/frontend/index.html (<meta name="robots" content="noindex, nofollow">) for unlisted URL per spec §Security
-- [ ] T104 [P] Create CI pipeline in .github/workflows/ci.yml (steps: checkout, Node 20 setup, npm ci --legacy-peer-deps, npm run lint, npm run typecheck, npm test for all packages — Vitest frontend+agent, Jest infra, npm run build, greeting manifest validation, npm audit per constitution P6)
+- [ ] T104 [P] Create CI pipeline in .github/workflows/ci.yml (steps: checkout, Node 24 setup, npm ci, npm run lint, npm run typecheck, npm test for all packages — Vitest frontend+agent, Jest infra, npm run build, greeting manifest validation, npm audit per constitution P6)
 
 ### Performance + Validation
 

@@ -2,7 +2,7 @@
 
 **Feature**: 001-max-height-ai-character
 **Date**: 2026-04-20
-**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, version refresh, and spec clarification session 2 (accessibility, greeting count, displayAlias, abuse gate removal).
+**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-04-22 with Node.js 24 LTS upgrade (Node 20 EOL April 30, 2026), TypeScript pinned to 5.8.x for MVP stability, Vite patch bump. Previously updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, version refresh, and spec clarification session 2.
 
 ---
 
@@ -30,14 +30,14 @@
 | Package | Version | Notes |
 |---------|---------|-------|
 | React | 19.x (19.2.5) | Latest stable |
-| Vite | 8.x (8.0.8) | Rolldown bundler (Rust-based) |
-| TypeScript | 5.x | Latest stable |
+| Vite | 8.x (8.0.9) | Rolldown bundler (Rust-based) |
+| TypeScript | 5.8.x (5.8.2) | Latest stable 5.x — TS 6.0 available but deferred to post-MVP for ecosystem maturity |
 | Zustand | 5.x (5.0.12) | Latest stable |
 | React Three Fiber | 9.x | R3F v9 = React 19 compatible; used in MVP for CRT shader + wireframe backdrop |
 | `@strands-agents/sdk` | Latest stable | TypeScript, production-ready |
 | `@aws/agentcore-cli` | 0.9.1 | GA, recommended for new projects |
 | AWS CDK | 2.x (2.250.0) | Latest stable |
-| Node.js | 20 LTS | Required by Strands TS SDK |
+| Node.js | 24 LTS (24.15.0) | Active LTS through April 2028 — Node 20 EOL April 30, 2026. Strands TS SDK requires Node 20+; 22 confirmed, 24 expected compatible. |
 
 ### Cost Model (Claude Haiku 4.5 + Polly Neural)
 
