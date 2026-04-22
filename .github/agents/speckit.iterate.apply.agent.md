@@ -31,7 +31,7 @@ Goal: Execute the iteration plan defined in `pending-iteration.md` by updating a
 
 ### 1. Initialize Feature Context
 
-Run `.specify/scripts/bash/check-prerequisites.sh --json --paths-only` from repo root **once**. Parse JSON payload fields:
+Run `.specify/scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly` from repo root **once**. Parse JSON payload fields:
 
 - `FEATURE_DIR`
 - `FEATURE_SPEC`

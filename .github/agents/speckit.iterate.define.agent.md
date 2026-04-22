@@ -28,7 +28,7 @@ Goal: Analyze a requested change against the feature's current spec state and im
 
 ### 1. Initialize Feature Context
 
-Run `.specify/scripts/bash/check-prerequisites.sh --json --paths-only` from repo root **once**. Parse JSON payload fields:
+Run `.specify/scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly` from repo root **once**. Parse JSON payload fields:
 
 - `FEATURE_DIR`
 - `FEATURE_SPEC`
@@ -76,12 +76,13 @@ Parse `tasks.md` (if it exists) to determine:
 
 Run these commands to detect code changes on the feature branch:
 
-```bash
+```powershell
 # Changed files on this branch vs its base
-git diff --name-status $(git merge-base HEAD main)..HEAD
+$mergeBase = git merge-base HEAD main
+git diff --name-status "$mergeBase..HEAD"
 
 # Recent commits on this branch
-git log --oneline $(git merge-base HEAD main)..HEAD
+git log --oneline "$mergeBase..HEAD"
 
 # Uncommitted changes
 git diff --name-only
