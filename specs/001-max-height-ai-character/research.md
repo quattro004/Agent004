@@ -255,22 +255,22 @@ The following items were resolved during the second clarification session and ar
 
 ## R7. Agent Tool API Selection (Added 2026-04-22)
 
-**Decision**: Max's agent has access to three tools — news, weather, and web search — implemented as Strands `tool()` definitions in `packages/agent/src/tools/`. Specific API providers for news and weather are a Phase 3 implementation decision. Web search delivery format is explicitly TBD per user direction.
+**Decision**: Max's agent has access to tools — news and weather in MVP, web search added in V1 — implemented as Strands `tool()` definitions in `packages/agent/src/tools/`. Specific API providers for news and weather are a Phase 3 implementation decision. Web search (delivery format and provider TBD) is deferred to V1 to reduce MVP scope and eliminate the unresolved format dependency.
 
 **Rationale**: Tools give Max access to real-world data, enabling him to be genuinely useful while staying in character. The two-mode personality rule (FR-007) ensures Max remains evasive/editorial on topics without tool data, but reports factual tool results accurately — always in his stuttering, ironic, editorial voice. This makes Max more engaging without compromising the character.
 
 **Tool categories**:
 
-| Tool | Input | Output | Provider |
-|------|-------|--------|----------|
-| News | Optional topic/query | Headlines, summaries, source attribution | TBD — evaluate during Phase 3 (e.g., NewsAPI free tier, RSS aggregation) |
-| Weather | Location (city/region) | Temperature, conditions, forecast | TBD — evaluate during Phase 3 (e.g., OpenWeatherMap free tier, wttr.in) |
-| Web Search | Query string | Search results (format TBD) | TBD — delivery format is an implementation detail to be resolved during development |
+| Tool | Input | Output | Provider | Milestone |
+|------|-------|--------|----------|-----------|
+| News | Optional topic/query | Headlines, summaries, source attribution | TBD — evaluate during Phase 3 (e.g., NewsAPI free tier, RSS aggregation) | MVP |
+| Weather | Location (city/region) | Temperature, conditions, forecast | TBD — evaluate during Phase 3 (e.g., OpenWeatherMap free tier, wttr.in) | MVP |
+| Web Search | Query string | Search results (format TBD) | TBD — delivery format is an implementation detail to be resolved during development | V1 |
 
-**Budget consideration**: External tool API costs must fit within the $10/month ceiling alongside LLM (~$0.003/turn) and Polly Neural (~$0.008/turn) costs. Most candidate APIs offer generous free tiers:
-- NewsAPI: 100 requests/day free tier (sufficient for friends-and-family traffic)
-- OpenWeatherMap: 1,000 calls/day free tier (far exceeds projected usage)
-- Web search: Provider TBD; free-tier options exist (e.g., SearXNG self-hosted, DuckDuckGo Instant Answer API)
+**Budget consideration**: External tool API costs must fit within the $10/month ceiling alongside LLM (~$0.003/turn) and Polly Neural (~$0.008/turn) costs. MVP tool cost estimate: **$0/month** — both candidate APIs offer generous free tiers that far exceed projected friends-and-family traffic:
+- NewsAPI: 100 requests/day free tier (sufficient for friends-and-family traffic) — projected usage: <20 requests/day = $0
+- OpenWeatherMap: 1,000 calls/day free tier (far exceeds projected usage) — projected usage: <20 requests/day = $0
+- Web search (V1): Provider TBD; free-tier options exist (e.g., SearXNG self-hosted, DuckDuckGo Instant Answer API). Cost estimate will be documented when provider is selected.
 
 **Implementation approach**: Each tool is defined using the Strands SDK `tool()` factory with Zod input/output schemas. The LLM decides autonomously when to invoke a tool based on the user's query. Tool results are returned to the LLM, which incorporates them into Max's editorial response. Failed tool calls return structured errors that the agent can riff on in-character.
 

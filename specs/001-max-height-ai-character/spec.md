@@ -47,10 +47,20 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 
 ### Iteration 2026-04-22: Add agent tools (news, weather, web search)
 
-**Change**: Add three Strands agent tools (news, weather, web search) so Max can fetch and report real-world data in-character, with a two-mode personality rule distinguishing evasive (no data) from editorially factual (tool data).
+**Change**: Add Strands agent tools so Max can fetch and report real-world data in-character, with a two-mode personality rule distinguishing evasive (no data) from editorially factual (tool data). News and weather tools ship in MVP; web search deferred to V1 (provider/format TBD).
 **Scope**: Feature-wide
 **Artifacts updated**: spec.md, plan.md, tasks.md, research.md, quickstart.md, contracts/message-protocol.md
 **Tasks added**: T114, T115, T116, T117, T118
+**Tasks removed**: —
+**Tasks marked complete**: —
+
+### Iteration 2026-04-22b: Defer web search to V1 + analysis remediations
+
+**Change**: Move web search tool (FR-031) from MVP to V1 — provider and format are TBD, removing an unresolved dependency from the MVP critical path. Also: fix Phase 6 dependency diagram (F1), add `memory/` to plan.md project structure (F2), formalize tool API cost estimates in research.md §R7 (B2), add SC-003 first-laugh execution task T119 (C1), add SC-007 memory evaluation tasks T120/T121 (C2).
+**Scope**: Feature-wide
+**Artifacts updated**: spec.md, plan.md, tasks.md, research.md
+**Tasks added**: T119, T120, T121
+**Tasks moved to V1**: T116 (from Phase 3 → Phase 6)
 **Tasks removed**: —
 **Tasks marked complete**: —
 
@@ -159,7 +169,7 @@ A visitor adds the site to their home screen on iOS Safari or Android Chrome. La
 - **Cold start on fresh session**: Reply begins within 5 seconds (P95), with an in-character "buffering" UX covering the wait.
 - **Conversation length limit**: After 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first — the session is gracefully capped with an in-character sign-off.
 - **Rate limit breach**: After 60 messages/hour or 500 messages/day, Max delivers in-character refusal copy rather than a system error.
-- **Tool failure** [MVP]: If a tool call (news, weather, or web search) fails or returns no data, Max stays in character and riffs on the failure (e.g., "The n-n-news? Even *I* can't get a signal right now. Try asking me something I can actually improvise."). Never show a raw error.
+- **Tool failure** [MVP]: If a tool call (news or weather; web search in V1) fails or returns no data, Max stays in character and riffs on the failure (e.g., "The n-n-news? Even *I* can't get a signal right now. Try asking me something I can actually improvise."). Never show a raw error.
 - **Tool hallucination guard** [MVP]: If the user asks about news/weather but the tool was not invoked or returned no results, Max MUST NOT fabricate a response — he deflects in-character or acknowledges he doesn't have that data right now.
 
 ---
@@ -188,7 +198,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-005**: Voice audio MUST begin within 2.5 seconds (P95) of input end.
 - **FR-006** [V1]: Lip-sync MUST track audio within 100ms (P95) visual offset using viseme-mapped animation on the 3D avatar.
 - **FR-006a** [MVP]: The 2D avatar MUST use a binary mouth state (open/closed) synced to audio playback to create a "talking head" illusion. Full viseme lip-sync is deferred to V1.
-- **FR-007**: Max MUST respond in his defined personality: stuttering, editorial, evasive, ironic. All responses must conform to `docs/max-personality-bible.md`. Max operates in two modes: (1) **Without tool data**: Max is evasive and editorial — never giving straight factual answers. He redirects, improvises, and mocks the question. (2) **With tool data** (news, weather, web search): Max reports the factual content returned by the tool accurately, but always in-character — with stutters, editorial commentary, ironic framing, and riffing on both the query and the result. He MUST NOT fabricate data that a tool should provide.
+- **FR-007**: Max MUST respond in his defined personality: stuttering, editorial, evasive, ironic. All responses must conform to `docs/max-personality-bible.md`. Max operates in two modes: (1) **Without tool data**: Max is evasive and editorial — never giving straight factual answers. He redirects, improvises, and mocks the question. (2) **With tool data** (news, weather in MVP; + web search in V1): Max reports the factual content returned by the tool accurately, but always in-character — with stutters, editorial commentary, ironic framing, and riffing on both the query and the result. He MUST NOT fabricate data that a tool should provide.
 - **FR-008**: The mic MUST be press-and-hold only. Audio is captured only while the mic button is held; release ends capture and submits. A visible "ON AIR" indicator MUST display while the mic is held. No continuous listening, no wake word.
 - **FR-009**: Max's reply length MUST be bounded: at least 1 complete sentence (~3 seconds audio), at most 120 tokens (~30 seconds audio).
 - **FR-010**: A conversation MUST support at least 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first — without losing coherence.
@@ -212,7 +222,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-028** [MVP]: On a transient backend failure (WebSocket drop, single request timeout), the client MUST retry once silently within 3 seconds. If the retry also fails, the in-character "signal lost" error state MUST be shown. The visitor can then manually retry by sending another message.
 - **FR-029** [MVP]: Max MUST have access to a news tool that retrieves current news headlines or summaries. When invoked, Max MUST report the factual news content as returned by the tool, presented in his editorial/stuttering persona. Max MUST NOT fabricate news.
 - **FR-030** [MVP]: Max MUST have access to a weather tool that retrieves current weather data for a requested location. When invoked, Max MUST report the factual weather data as returned by the tool, presented in his editorial/stuttering persona. Max MUST NOT fabricate weather information.
-- **FR-031** [MVP]: Max MUST have access to a web search tool that retrieves search results for a user query. The delivery format and provider of web search results is an implementation detail to be determined. When invoked, Max MUST report the factual search results as returned by the tool, presented in his editorial/stuttering persona.
+- **FR-031** [V1]: Max MUST have access to a web search tool that retrieves search results for a user query. The delivery format and provider of web search results is an implementation detail to be determined. When invoked, Max MUST report the factual search results as returned by the tool, presented in his editorial/stuttering persona.
 
 ### Key Entities
 
@@ -261,7 +271,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 ### Measurable Outcomes
 
 - **SC-001 — Personality Fidelity**: Golden-set average ≥ 2.0 across the 6 personality dimensions defined in `docs/max-personality-bible.md` §9; zero auto-failure triggers on the 50-case set.
-- **SC-002 — Non-Factuality**: Two evaluation modes: (a) For prompts where Max has no tool data, zero of the golden set's factual prompts may score a 0 on the "editorial mode" dimension — Max must editorialize or evade. (b) For tool-augmented prompts (news, weather, web search), Max must report the tool's factual content accurately while maintaining his editorial/stuttering persona — fabricated data is an auto-failure. The golden set should include tool-invocation test cases for both modes.
+- **SC-002 — Non-Factuality**: Two evaluation modes: (a) For prompts where Max has no tool data, zero of the golden set's factual prompts may score a 0 on the "editorial mode" dimension — Max must editorialize or evade. (b) For tool-augmented prompts (news and weather in MVP; + web search in V1), Max must report the tool's factual content accurately while maintaining his editorial/stuttering persona — fabricated data is an auto-failure. The golden set should include tool-invocation test cases for both modes.
 - **SC-003 — First-Laugh Metric** [MVP ship gate]: With N=5 newcomer testers (no prior Max Headroom knowledge), ≥ 3 react with an observable delight signal (audible laugh, smile + verbal reaction, screenshot, or unprompted share) within the first 5 responses.
 - **SC-004 — Response Latency**: Max begins replying within 1.5 seconds (P95) of user input completion. Voice audio begins within 2.5 seconds (P95). Unprompted greeting within 2 seconds (P95) of TV-on gesture.
 - **SC-005 — Conversation Endurance**: A conversation sustains at least 50 turns or 20,000 tokens without losing personality coherence, as measured by evaluator scoring on a 10-turn sample from turns 40–50.
@@ -304,4 +314,4 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - The site is unlisted and not indexed by search engines; traffic comes only from direct links or sharing.
 - Memory retention of 30 days rolling is adequate; long-term archival is not needed.
 - The 2D placeholder avatar for MVP uses a binary mouth state (open/closed) synced to audio playback to create a "talking head" illusion. It does not need to be photorealistic, but must respect the CRT/wireframe framing. Full viseme-mapped lip-sync is a V1 3D avatar feature.
-- External tool APIs (news, weather) are available and their costs fit within the $10/month budget alongside LLM and Polly costs. Web search delivery format is TBD (implementation detail).
+- External tool APIs (news, weather) are available and their costs fit within the $10/month budget alongside LLM and Polly costs. Web search is deferred to V1; delivery format and provider TBD.
