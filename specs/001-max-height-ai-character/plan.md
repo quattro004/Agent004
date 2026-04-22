@@ -91,8 +91,8 @@ packages/
   │   ├── hooks/         # Custom hooks (useWebSocket, useAudio, useSpeechRecognition)
   │   ├── stores/        # Zustand stores (connection, conversation, voice, visitor)
   │   ├── services/      # Polly TTS client, greeting selector, rate limiter
-  │   ├── shaders/       # GLSL fragment shaders (CRT scanline, glitch, barrel distortion)
-  │   ├── workers/       # AudioWorklet processors (stutter, pitch, static, EQ)
+  │   ├── effects/       # CRT shaders, CSS fallback, wireframe backdrop
+  │   ├── audio/         # AudioWorklet processors (stutter, pitch, static, EQ)
   │   └── types/         # Shared TypeScript types
   ├── public/
   │   └── greetings/     # manifest.json + audio/*.mp3 (pre-generated)
@@ -100,7 +100,7 @@ packages/
 
   agent/                 # Strands agent for AgentCore Runtime
   ├── src/
-  │   ├── agent.ts       # Main agent definition (system prompt, tool bindings)
+  │   ├── index.ts       # Main agent entry point (AgentCore-compatible, system prompt, tool bindings)
   │   ├── personality/   # Stutter injection, editorial voice, guardrails
   │   ├── handlers/      # Post-processing handlers (stutter, catchphrase, compliance)
   │   └── types/         # Agent-specific types
@@ -109,6 +109,7 @@ packages/
 
   infra/                 # AWS CDK stacks
   ├── lib/
+  │   ├── handlers/             # Lambda handlers (WebSocket $connect/$disconnect/$default)
   │   ├── cognito-stack.ts      # Guest identity pool + IAM roles
   │   ├── agent-stack.ts        # AgentCore Memory, WebSocket API + Lambda
   │   ├── frontend-stack.ts     # S3 + CloudFront distribution

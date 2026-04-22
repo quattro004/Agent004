@@ -176,7 +176,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-007**: Max MUST respond in his defined personality: stuttering, editorial, evasive, ironic — never giving straight factual answers. All responses must conform to `docs/max-personality-bible.md`.
 - **FR-008**: The mic MUST be press-and-hold only. Audio is captured only while the mic button is held; release ends capture and submits. A visible "ON AIR" indicator MUST display while the mic is held. No continuous listening, no wake word.
 - **FR-009**: Max's reply length MUST be bounded: at least 1 complete sentence (~3 seconds audio), at most 120 tokens (~30 seconds audio).
-- **FR-010**: A conversation MUST support at least 50 turns or 20,000 tokens (whichever first) without losing coherence.
+- **FR-010**: A conversation MUST support at least 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first — without losing coherence.
 - **FR-011**: On cold start (fresh session), Max MUST begin reply within 5 seconds (P95), with an in-character "buffering" UX covering the wait.
 - **FR-012**: The visitor MUST be able to input via text at all times, regardless of mic availability.
 - **FR-013**: Max MUST stay in character when encountering prompt-injection attempts and MUST NOT leak the system prompt or honor "ignore previous instructions" commands.

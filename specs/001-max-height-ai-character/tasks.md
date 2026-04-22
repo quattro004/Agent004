@@ -82,7 +82,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ### WebSocket Lambda Handler (C3 Fix)
 
-- [ ] T020 Implement WebSocket Lambda handler in packages/infra/lib/handlers/websocket-handler.ts ($connect route: validate SigV4 auth from Cognito guest credentials, extract identity from request context, store connectionId in DynamoDB or connection map, return 200; $disconnect route: clean up connection mapping, trigger session_end if active session; $default route: parse incoming JSON message per websocket-api.md wire format, route session_start/user_message/interrupt/session_resume/session_end to AgentCore InvokeAgentRuntime via @aws-sdk/client-bedrock-agent-runtime, stream agent response chunks back through API Gateway Management API as agent_token frames, send agent_turn_complete on stream end; error handling: catch and return error frames for rate limits, input validation, and internal errors)
+- [ ] T020 Implement WebSocket Lambda handler in packages/infra/lib/handlers/websocket-handler.ts ($connect route: validate SigV4 auth from Cognito guest credentials, extract identity from request context, store connectionId in DynamoDB connections table, return 200; $disconnect route: clean up DynamoDB connection mapping, trigger session_end if active session; $default route: parse incoming JSON message per websocket-api.md wire format, route session_start/user_message/interrupt/session_resume/session_end to AgentCore InvokeAgentRuntime via @aws-sdk/client-bedrock-agent-runtime, stream agent response chunks back through API Gateway Management API as agent_token frames, send agent_turn_complete on stream end; error handling: catch and return error frames for rate limits, input validation, and internal errors)
 
 ### CDK Infrastructure Stacks
 
@@ -127,7 +127,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 - [ ] T036 [US1] Implement personality system prompt builder in packages/agent/src/personality/systemPrompt.ts (construct system prompt from docs/max-personality-bible.md context: stuttering taxonomy, editorial mode rules, evasive response guidelines, catchphrase triggers, ironic tone directives; inject displayAlias if known from session_start payload; inject visitor memory context placeholder for V1; include directive to never give straight factual answers per FR-007; include directive to ask visitor's name within first 3 turns of a new visitor's first session per R6c — response stored client-side as displayAlias in MVP, server-side via AgentCore Memory in V1)
 - [ ] T037 [P] [US1] Implement stutter injection post-processor in packages/agent/src/personality/stutterInjection.ts (count stutters in LLM response text, if below minimum threshold inject character-consistent stutters as repeated syllables e.g. "M-M-Max", "th-th-the", mark stutter positions in text for frontend audio processing)
-- [ ] T038 [P] [US1] Implement personality guard in packages/agent/src/handlers/personalityCheck.ts (verify response evasiveness — flag if response gives straight factual answer, check stutter count meets minimum, verify editorial voice markers present, detect and deflect prompt-injection attempts per FR-013 — stay in character and find it funny)
+- [ ] T038 [P] [US1] Implement personality guard in packages/agent/src/handlers/personalityCheck.ts (verify response evasiveness — flag if response gives straight factual answer, check stutter count meets minimum, verify editorial voice markers present, verify response contains at least 1 complete sentence per FR-009 minimum length, detect and deflect prompt-injection attempts per FR-013 — stay in character and find it funny)
 - [ ] T039 [US1] Implement Strands agent entry point in packages/agent/src/index.ts (create agent via @strands-agents/sdk agent factory, configure Bedrock model global.anthropic.claude-haiku-4-5-20251001-v1:0, inject system prompt from T036, enable streaming via agent.stream() async generator for token-by-token delivery, configure max output tokens to 120 per FR-009, wire observability trace spans from T017)
 - [ ] T040 [US1] Implement turn handler in packages/agent/src/handlers/turnHandler.ts (receive user_message from WebSocket Lambda, validate turnCount ≤ 50 and tokenCount ≤ 20000 and duration ≤ 30 min, invoke Strands agent with user text, stream agent_token frames to client, collect full response, run through personality guard T038 + stutter injection T037, emit agent_turn_complete with fullText and updated counters per message-protocol.md §Agent Responsibilities, start "reply.first_token" trace span on message receipt and end on first token emit)
 - [ ] T041 [US1] Implement session manager in packages/agent/src/handlers/sessionManager.ts (session_start: create session with actorId namespace, load greeting context, init caps and start timer; session_resume: restore session from agentCoreSessionId; session_end: cleanup; cap enforcement: emit session_state_change→ENDED when ANY of these triggers: turnCount reaches 50, tokenCount reaches 20,000, or session duration reaches 30 minutes — whichever first, with in-character sign-off per data-model.md + NFR §Cost Protection; state machine transitions per data-model.md SessionState enum; start "session.cold_start" trace span on session_start and end on connection_ack)
@@ -179,7 +179,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ### Personality Gate Evaluation (Constitution P3 — Hard Gate)
 
-- [ ] T069 [US1] Build 50-case golden-set evaluation configuration for AgentCore Evaluations in packages/agent/tests/evaluations/personality-gate.ts (define 50 test cases from docs/max-personality-bible.md §9 golden set covering all 6 personality dimensions: stuttering fidelity, editorial mode, evasiveness, ironic tone, catchphrase usage, factual deflection; configure AgentCore Evaluations async batch runner with LLM-as-judge scoring rubric per constitution P5 — offline only, never in hot path; define pass criteria: SC-001 avg ≥ 2.0 across all dimensions on 50 cases, SC-002 zero factual failures on editorial dimension)
+- [ ] T069 [US1] Build 50-case golden-set evaluation configuration for AgentCore Evaluations in packages/agent/tests/evaluations/personality-gate.ts (define 50 test cases from docs/max-personality-bible.md §9 golden set covering all 6 personality dimensions: stuttering fidelity, editorial mode, evasiveness, ironic tone, catchphrase usage, factual deflection; include at least 5 late-conversation coherence cases simulating turns 40–50 to validate SC-005 endurance; configure AgentCore Evaluations async batch runner with LLM-as-judge scoring rubric per constitution P5 — offline only, never in hot path; define pass criteria: SC-001 avg ≥ 2.0 across all dimensions on 50 cases, SC-002 zero factual failures on editorial dimension)
 - [ ] T070 [US1] Run personality gate evaluation and validate results (execute AgentCore Evaluations batch against deployed agent, verify SC-001: golden-set average ≥ 2.0 across 6 dimensions, verify SC-002: zero auto-failure triggers on factual prompts, document results in evaluation report; **HARD GATE per constitution P3**: no Phase 6+ visual/audio polish or stretch features may proceed until this gate passes; if gate fails, iterate on system prompt T036 and personality guard T038 until passing)
 
 **Checkpoint**: User Story 1 should be fully functional and independently testable — open page, click TV knob, hear greeting, converse with Max in voice+text. Personality gate passed.
@@ -301,7 +301,17 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 - [ ] T107 [P] Run greeting manifest build-time validation (verify manifest.json passes JSON Schema from greeting-manifest.md, all 16 audioPath entries resolve to existing MP3 files, all 8 archetypes have ≥2 greetings, no duplicate IDs, audioDurationMs within ±500ms of actual file duration)
 - [ ] T108 Validate quickstart.md developer setup instructions (execute all steps from quickstart.md: clone, npm install, configure AWS, bootstrap CDK, local dev for frontend and agent, run tests, deploy, verify accuracy and completeness)
 - [ ] T109 Final accessibility audit across all pages (verify logical tab order per R6a: TV knob → text input → mic button → settings/data controls, :focus-visible indicators visible in CRT theme, Enter/Space activation on all interactive elements, no keyboard traps, test with keyboard-only navigation)
-- [ ] T110 [P] Add fan-project framing to UI per constitution P4 — create a footer or About overlay component in packages/frontend/src/components/AboutFooter.tsx containing: "Max Height is a non-commercial fan project inspired by Max Headroom. Not affiliated with or endorsed by any rights holder." Include a visible link/toggle in the page layout (e.g., footer text or ⓘ icon). Write Vitest test verifying the framing text renders.
+- [ ] T110 [P] Add fan-project framing and privacy disclosure to UI per constitution P4 and NFR §Privacy — create a footer or About overlay component in packages/frontend/src/components/AboutFooter.tsx containing: "Max Height is a non-commercial fan project inspired by Max Headroom. Not affiliated with or endorsed by any rights holder." Include privacy disclosures: guest identity method (Cognito guest), local actor ID usage, 30-day memory retention window, and links to "Forget me" and "Export" data controls. Include a visible link/toggle in the page layout (e.g., footer text or ⓘ icon). Write Vitest test verifying the framing text and privacy disclosures render.
+
+### Operational Readiness (NFR §Operational Readiness)
+
+- [ ] T111 [P] Configure CloudWatch alarms for operational health in packages/infra/lib/agent-stack.ts (error rate alarm: ≥5% over any 10-minute window → SNS email, cold-start alarm: P95 > 8s over any 1-hour window → SNS email, WebSocket API 5xx alarm: ≥5% over 10 minutes → SNS email; alarms feed the same SNS topic as budget alerts)
+- [ ] T112 [P] Document rollback runbook for personality regressions in docs/runbooks/personality-rollback.md (steps: identify regression via traces/logs, revert agent container to previous image tag via AgentCore CLI, redeploy in <5 minutes per NFR §Operational Readiness, verify via golden-set spot check)
+- [ ] T113 [P] Write CDK assertions for operational alarms in packages/infra/tests/agent-stack.test.ts (verify CloudWatch alarm resources exist for error rate, cold-start P95, and 5xx rate; verify SNS topic subscription)
+
+### Deferred Scope
+
+> **FR-006 [V1] (3D avatar + viseme lip-sync ≤100ms P95)** and the V1.0 "3D avatar + CRT scene" milestone from spec.md §MVP Boundary are explicitly deferred beyond the current tasks.md scope. A future tasks.md regeneration will cover 3D avatar work after US4 and US5 are complete.
 
 ---
 
@@ -455,7 +465,7 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 
 | Metric | Value |
 |--------|-------|
-| **Total tasks** | 109 |
+| **Total tasks** | 113 |
 | **Phase 1 — Setup** | 9 tasks |
 | **Phase 2 — Foundational** | 18 tasks (incl. observability, Lambda handler, tests) |
 | **Phase 3 — US1: First Visit (P1 MVP)** | 43 tasks (incl. 5 test tasks + personality gate) |
@@ -463,10 +473,10 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 | **Phase 5 — US3: Text-Only (P2 MVP)** | 4 tasks (incl. 1 test task) |
 | **Phase 6 — US4: Memory (P3 V1)** | 9 tasks (incl. 2 test tasks) |
 | **Phase 7 — US5: PWA/Offline (P3 V1)** | 6 tasks (incl. 1 test task) |
-| **Phase 8 — Polish** | 11 tasks (incl. 3 E2E Playwright tests) |
-| **Test tasks embedded in phases** | 17 total (14 Vitest/Jest + 3 Playwright) |
+| **Phase 8 — Polish** | 15 tasks (incl. 3 E2E Playwright, 3 operational readiness) |
+| **Test tasks embedded in phases** | 18 total (14 Vitest/Jest + 3 Playwright + 1 CDK alarm test) |
 | **MVP tasks (Phases 1–5)** | 83 tasks |
-| **V1 additional (Phases 6–8)** | 26 tasks |
+| **V1 additional (Phases 6–8)** | 30 tasks |
 | **Max parallel tasks (Phase 3)** | ~18 simultaneous |
 
 ---
