@@ -131,18 +131,39 @@ A single conversation turn follows this sequence:
 
 ## Idle Nudge Protocol
 
-Per spec: if visitor is silent for 4–10 seconds after greeting, Max delivers exactly ONE in-character prod.
+Per FR-003: if visitor is silent for 4–10 seconds after greeting, Max delivers exactly ONE in-character post-greeting prod.
 
 ```
 Greeting playback completes
         │
-        ├── Timer starts (random 4–10s)
+        ├── Timer starts (random 4–10s, uniform distribution)
         │
         ├── If user_message received → cancel timer, process normally
         │
         └── If timer fires → agent sends idle nudge as agent_turn_complete
                               sets idleNudgeDelivered = true
-                              no further nudges regardless of silence
+                              no further post-greeting nudges regardless of silence
+```
+
+## Mid-Session Re-Engagement Protocol
+
+Per personality bible §5.1: if visitor goes silent for 90–120s during an active conversation, Max delivers up to 2 re-engagement messages. This system is **independent** of the post-greeting nudge above — they operate at different timescales.
+
+```
+Last user_message or re-engagement message
+        │
+        ├── Timer starts (90–120s configurable)
+        │
+        ├── If user_message received → cancel timer, reset reEngagementCount to 0
+        │
+        └── If timer fires AND reEngagementCount < 2
+              → agent sends re-engagement as agent_turn_complete
+                (rotate archetypes per bible §5.1; 2nd shorter/more genuine)
+                increment reEngagementCount
+                restart timer for potential 2nd re-engagement
+        │
+        └── If timer fires AND reEngagementCount >= 2
+              → session ends gracefully (no further messages from Max)
 ```
 
 ---

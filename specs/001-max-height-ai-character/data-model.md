@@ -39,7 +39,8 @@ A single conversation between Max and a visitor. Capped at 50 turns or 20,000 to
 | `tokenCount` | integer | 0–20,000 | Tracked from agent response metadata |
 | `state` | SessionState enum | Required | See state transitions below |
 | `greetingId` | string | Required | Which pre-generated greeting was used |
-| `idleNudgeDelivered` | boolean | Default false | True after the one permitted idle nudge |
+| `idleNudgeDelivered` | boolean | Default false | True after the one permitted post-greeting idle nudge (FR-003) |
+| `reEngagementCount` | integer | 0–2, default 0 | Count of mid-session idle re-engagement messages sent (bible §5.1). Independent of post-greeting nudge. Max 2 per idle stretch. |
 
 **Storage**: Server-side in AgentCore Memory (short-term events). Client-side shadow in Zustand `connection` store for UI state.
 

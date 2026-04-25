@@ -41,6 +41,11 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 - Q: How many greetings ship with MVP? → A: 16 total — 2 per archetype (8 archetypes × 2 variants). This provides sufficient no-repeat coverage for the 3-session no-repeat rule.
 - Q: Should the shared-password abuse gate be implemented? → A: Removed. The unlisted URL combined with per-visitor rate limits (60/hr, 500/day) and the $10 hard-stop provide sufficient abuse protection for the friends-and-family audience. No password gate in any milestone.
 
+### Session 2026-04-25
+
+- Q: How do FR-003 (one post-greeting nudge at 4–10s) and the personality bible §5.1 (up to 2 re-engagements at 90–120s idle) relate? → A: They are independent systems at different timescales. FR-003 is the **post-greeting nudge**: exactly one in-character prod if the visitor is silent 4–10s after the greeting. Bible §5.1 is the **mid-session idle re-engagement**: up to 2 re-engagement messages if the visitor goes silent for 90–120s during an active conversation. The FR-003 nudge does NOT count toward the bible's 2-re-engagement limit.
+- Q: FR-009 token limit — 120 tokens was too low for the bible's word-count targets. → A: Raised to 250 tokens (~200 words) to align with the personality bible §2.2a hard ceiling. Per-response-type targets (greeting 40–80 words, factual 60–120, rant 100–180) are defined in the bible; the 200-word prose ceiling is authoritative.
+
 ---
 
 ## Iterations
@@ -90,7 +95,7 @@ A desktop visitor (Max fan or newcomer) lands on the page and sees a CRT televis
 **Acceptance Scenarios**:
 
 1. **Given** a first-time desktop visitor on a supported browser, **When** they click "Turn on the TV", **Then** Max's unprompted greeting begins within 2 seconds (P95) with audible voice and on-screen text.
-2. **Given** Max has greeted and the visitor is silent for 4–10 seconds, **When** no input is received, **Then** Max delivers exactly one in-character idle nudge. No further nudges follow — Max only speaks in response to input from that point.
+2. **Given** Max has greeted and the visitor is silent for 4–10 seconds, **When** no input is received, **Then** Max delivers exactly one in-character idle nudge. No further post-greeting nudges follow. Mid-session idle re-engagement per `docs/max-personality-bible.md` §5.1 operates independently at 90–120s timescales.
 3. **Given** a visitor asks a factual question that no tool can answer (e.g., "What's the capital of France?"), **When** Max responds, **Then** the reply is characteristically evasive and editorial — never a straight factual answer — and includes at least one stutter. **Given** a visitor asks about news or weather, **When** Max responds using tool data, **Then** the reply reports the factual tool results accurately but in Max's editorial/stuttering persona — never fabricating data.
 4. **Given** a visitor sends any input, **When** Max processes it, **Then** the reply begins within 1.5 seconds (P95) of the user finishing input.
 
@@ -193,14 +198,14 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 
 - **FR-001**: The page MUST present a CRT television set with a "Turn on the TV" knob as the single entry-point gesture to begin the experience.
 - **FR-002**: Max MUST deliver an unprompted in-character greeting within 2 seconds (P95) of the TV-on gesture, in both voice and on-screen text. Greetings are served from a pre-generated pool of variants (text + pre-synthesized Polly audio + short animated video/GIF of Max's head), randomly selected on TV-on. The LLM agent MUST be initialized in the background during greeting playback, ready for the visitor's first real input.
-- **FR-003**: If the visitor is silent after the greeting, Max MUST deliver exactly one idle nudge (in-character) within a randomized 4–10 second window. No further nudges after this first one.
+- **FR-003**: If the visitor is silent after the greeting, Max MUST deliver exactly one idle nudge (in-character) within a randomized 4–10 second window (uniform distribution). No further nudges after this first one. Note: this post-greeting nudge is independent of the mid-session idle re-engagement system defined in `docs/max-personality-bible.md` §5.1, which operates at 90–120s idle timescales.
 - **FR-004**: Max MUST begin replying within 1.5 seconds (P95) of the user finishing input.
 - **FR-005**: Voice audio MUST begin within 2.5 seconds (P95) of input end.
 - **FR-006** [V1]: Lip-sync MUST track audio within 100ms (P95) visual offset using viseme-mapped animation on the 3D avatar.
 - **FR-006a** [MVP]: The 2D avatar MUST use a binary mouth state (open/closed) synced to audio playback to create a "talking head" illusion. Full viseme lip-sync is deferred to V1.
 - **FR-007**: Max MUST respond in his defined personality: stuttering, editorial, evasive, ironic. All responses must conform to `docs/max-personality-bible.md`. Max operates in two modes: (1) **Without tool data**: Max is evasive and editorial — never giving straight factual answers. He redirects, improvises, and mocks the question. (2) **With tool data** (news, weather in MVP; + web search in V1): Max reports the factual content returned by the tool accurately, but always in-character — with stutters, editorial commentary, ironic framing, and riffing on both the query and the result. He MUST NOT fabricate data that a tool should provide.
 - **FR-008**: The mic MUST be press-and-hold only. Audio is captured only while the mic button is held; release ends capture and submits. A visible "ON AIR" indicator MUST display while the mic is held. No continuous listening, no wake word.
-- **FR-009**: Max's reply length MUST be bounded: at least 1 complete sentence (~3 seconds audio), at most 120 tokens (~30 seconds audio).
+- **FR-009**: Max's reply length MUST be bounded: at least 1 complete sentence (~3 seconds audio), at most 250 tokens (~200 words, ~60 seconds audio). Per-response-type length targets are defined in `docs/max-personality-bible.md` §2.2a; the 200-word hard ceiling in the bible is the authoritative prose limit.
 - **FR-010**: A conversation MUST support at least 50 turns, 20,000 tokens, or 30 minutes — whichever is reached first — without losing coherence.
 - **FR-011**: On cold start (fresh session), Max MUST begin reply within 5 seconds (P95), with an in-character "buffering" UX covering the wait.
 - **FR-012**: The visitor MUST be able to input via text at all times, regardless of mic availability.
