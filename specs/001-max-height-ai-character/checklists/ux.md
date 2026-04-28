@@ -35,10 +35,10 @@
 
 ## Scenario Coverage
 
-- [ ] CHK021 — Are requirements defined for the visual transition from "TV off" to "TV on" state (animation, timing, visual treatment of the CRT powering up)? [Coverage, Gap] **⚠️ Minor gap — UX polish opportunity.** The interaction is defined (FR-001: click knob → greeting begins) but no CRT power-up animation is specified. A brief CRT warm-up visual (static → signal → Max appears) would enhance the first impression. **Recommendation:** Add a note to spec §Visual Presentation: "The TV-on gesture SHOULD trigger a brief CRT power-up transition (≤1 second) before the greeting begins."
-- [ ] CHK022 — Are requirements specified for what the TV/CRT looks like in its "off" state before the visitor clicks the knob? [Coverage, Gap] **⚠️ Minor gap — UX polish opportunity.** The landing state isn't specified. A powered-off CRT (dark screen, visible bezel, knob affordance) would set the mood before interaction. **Recommendation:** Add a note: "Before the visitor interacts, the page displays the CRT frame in a powered-off state with the knob visible as the primary affordance."
+- [x] CHK021 — Are requirements defined for the visual transition from "TV off" to "TV on" state (animation, timing, visual treatment of the CRT powering up)? [Coverage, Gap] **Resolved.** Added to spec §Visual Presentation: "The TV-on gesture SHOULD trigger a brief CRT power-up transition (≤1 second) — e.g., static → signal → Max appears — before the greeting begins."
+- [x] CHK022 — Are requirements specified for what the TV/CRT looks like in its "off" state before the visitor clicks the knob? [Coverage, Gap] **Resolved.** Added to spec §Visual Presentation: "Before the visitor interacts, the page displays the CRT frame in a powered-off state (dark screen, visible bezel) with the knob visible as the primary affordance."
 - [x] CHK023 — Are visual requirements for the interruption flow defined — what happens visually when the visitor interrupts Max mid-response (partial text behavior, avatar state, transition)? [Coverage, Spec §FR-027] **Addressed.** FR-027: "Max's audio MUST stop immediately... partial text remains visible until Max's new response replaces it." Visual behavior during interruption is defined.
-- [ ] CHK024 — Are requirements for the session-end visual state specified (what does the CRT show after 50-turn/20K-token/30-min cap is hit)? [Coverage, Spec §FR-010] **⚠️ Minor gap.** The in-character sign-off is specified (FR-010 + bible §3.4 + Example 14). But what the CRT shows AFTER the sign-off isn't (does it go dark? show static? "End of broadcast" card?). **Recommendation:** Add a note: "After session cap sign-off, the CRT transitions to an in-character 'end of broadcast' state with the knob re-enabled for a new session."
+- [x] CHK024 — Are requirements for the session-end visual state specified (what does the CRT show after 50-turn/20K-token/30-min cap is hit)? [Coverage, Spec §FR-010] **Resolved.** Added to spec §Visual Presentation: "After the session cap sign-off, the CRT transitions to an in-character 'end of broadcast' state (e.g., static, test pattern, or sign-off card) with the knob re-enabled for a new session."
 - [x] CHK025 — Are requirements specified for the rate-limit breach visual state (in-character refusal copy presentation within CRT frame)? [Coverage, Spec §FR-020] **Addressed.** FR-020: "Breach triggers in-character refusal copy, not a system error." The refusal IS a Max response shown within the CRT frame using the same text display as any other response. No special visual state needed.
 
 ## Edge Case Coverage
@@ -55,8 +55,8 @@
 ## Accessibility
 
 - [x] CHK031 — Are keyboard focus indicator visual requirements defined for all interactive elements (TV knob, text input, mic button, Forget me, Export)? [Completeness, Spec §Clarifications 2026-04-20] **Addressed.** Spec clarification 2026-04-20: "Keyboard navigation and visible focus indicators are required for MVP." The requirement exists. Visual design of focus indicators follows standard web accessibility (WCAG 2.1 §2.4.7 focus visible). No custom spec needed.
-- [ ] CHK032 — Are color contrast requirements specified for text displayed within the CRT frame (Max's responses against the glitch/wireframe backdrop)? [Gap] **⚠️ Minor gap — accessibility concern.** Text within the CRT frame sits atop an animated wireframe/glitch backdrop. WCAG 2.1 contrast ratios (4.5:1 for normal text) should be ensured. **Recommendation:** Add a note to spec §Visual Presentation: "Text displayed within the CRT frame MUST maintain WCAG 2.1 AA contrast ratio (4.5:1) against the backdrop, using a semi-transparent background behind text or sufficient color separation."
-- [ ] CHK033 — Are reduced-motion requirements specified for visitors who prefer reduced motion (prefers-reduced-motion media query handling for glitch effects)? [Gap] **⚠️ Gap — accessibility best practice.** Constant glitching, frame skips, and abrupt backdrop changes may affect visitors with motion sensitivities. The `prefers-reduced-motion` CSS media query should be respected. **Recommendation:** Add to spec §Visual Presentation or §Clarifications: "When the visitor's browser reports `prefers-reduced-motion: reduce`, glitch effects (frame skips, image tears, backdrop changes) MUST be minimized or disabled. Static scanlines and the wireframe backdrop at rest are acceptable."
+- [x] CHK032 — Are color contrast requirements specified for text displayed within the CRT frame (Max's responses against the glitch/wireframe backdrop)? [Gap] **Resolved.** Added to spec §Visual Presentation: "Text displayed within the CRT frame MUST maintain WCAG 2.1 AA contrast ratio (4.5:1) against the backdrop, using a semi-transparent background behind text or sufficient color separation."
+- [x] CHK033 — Are reduced-motion requirements specified for visitors who prefer reduced motion (prefers-reduced-motion media query handling for glitch effects)? [Gap] **Resolved.** Added to spec §Visual Presentation: "When the visitor's browser reports `prefers-reduced-motion: reduce`, glitch effects (frame skips, image tears, backdrop changes) MUST be minimized or disabled. Static scanlines and the wireframe backdrop at rest are acceptable."
 
 ## Notes
 
@@ -65,15 +65,15 @@
 - Items are numbered sequentially for easy reference
 - This checklist covers MVP requirements unless tagged [V1]
 
-## Triage Summary (2026-04-25)
+## Triage Summary (2026-04-25, updated 2026-04-28)
 
-**Result: 28/33 addressed, 5 minor gaps. No blocking gaps.**
+**Result: 33/33 resolved.** All gaps addressed via spec §Visual Presentation updates.
 
 Many UX checklist items ask for exact visual parameters (dimensions, colors, animation timings) that the spec intentionally leaves to implementation. This is appropriate — the spec defines behavioral constraints and aesthetic direction, not pixel-perfect mockups.
 
-### ⚠️ Minor Gaps (worth addressing, not blocking)
+### Resolved Gaps (2026-04-28)
 
-1. **CHK021 + CHK022 — TV off/on states.** The CRT's powered-off state and power-up transition animation aren't specified. These define the first visual impression. Recommend adding brief notes to spec §Visual Presentation.
-2. **CHK024 — Session-end visual state.** What the CRT shows AFTER the sign-off (dark? static? "end of broadcast"?) isn't specified. Recommend adding a note.
-3. **CHK032 — Color contrast.** Text within the CRT frame against the animated backdrop needs WCAG 2.1 AA contrast (4.5:1). Recommend adding an accessibility note.
-4. **CHK033 — Reduced motion.** `prefers-reduced-motion` handling for glitch effects isn't specified. Recommend adding to spec §Visual Presentation or §Clarifications for accessibility compliance.
+1. **CHK021 + CHK022 — TV off/on states.** ✅ Fixed. Added powered-off state and CRT power-up transition (≤1s) to spec §Visual Presentation.
+2. **CHK024 — Session-end visual state.** ✅ Fixed. Added "end of broadcast" state with knob re-enabled to spec §Visual Presentation.
+3. **CHK032 — Color contrast.** ✅ Fixed. Added WCAG 2.1 AA contrast ratio (4.5:1) requirement to spec §Visual Presentation.
+4. **CHK033 — Reduced motion.** ✅ Fixed. Added `prefers-reduced-motion` handling requirement to spec §Visual Presentation.

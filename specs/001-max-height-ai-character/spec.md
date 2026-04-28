@@ -189,6 +189,11 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **Constant low-level glitching.** Frame skips, brief image tears, subtle scanline artifacts, and occasional abrupt backdrop changes. Glitching is continuous (at low intensity) even when Max is idle, so the screen never looks "off." Intensity is reduced on mobile.
 - **2D placeholder at MVP is allowed**, but must still honor the head-and-shoulders-inside-a-CRT-with-wireframe-backdrop framing. The 3D upgrade in V1 is a fidelity improvement, not a re-conception.
 - **Anti-goal:** do NOT render Max as a full-body 3D character, as a chat bubble next to a photorealistic portrait, or as a free-floating head on the site's page background. Any of those is a drift from the reference and should be rejected in review.
+- **TV off state.** Before the visitor interacts, the page displays the CRT frame in a powered-off state (dark screen, visible bezel) with the knob visible as the primary affordance.
+- **TV power-up transition.** The TV-on gesture SHOULD trigger a brief CRT power-up transition (≤1 second) — e.g., static → signal → Max appears — before the greeting begins.
+- **Session-end visual state.** After the session cap sign-off, the CRT transitions to an in-character "end of broadcast" state (e.g., static, test pattern, or sign-off card) with the knob re-enabled for a new session.
+- **Text contrast.** Text displayed within the CRT frame MUST maintain WCAG 2.1 AA contrast ratio (4.5:1) against the backdrop, using a semi-transparent background behind text or sufficient color separation.
+- **Reduced motion.** When the visitor's browser reports `prefers-reduced-motion: reduce`, glitch effects (frame skips, image tears, backdrop changes) MUST be minimized or disabled. Static scanlines and the wireframe backdrop at rest are acceptable.
 
 ---
 

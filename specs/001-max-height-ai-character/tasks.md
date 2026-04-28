@@ -40,15 +40,15 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 **Purpose**: Initialize the TypeScript monorepo, tooling, and per-package scaffolding.
 
-- [ ] T001 Initialize npm workspaces monorepo with root package.json (workspaces: packages/*), .npmrc, Zod override (overrides: { "zod": "^4.3.6" }), and .nvmrc (Node 24 LTS)
-- [ ] T002 Create full directory structure per plan.md §Project Structure (packages/frontend/src/{components,hooks,stores,services,audio,effects,types}, packages/frontend/public/greetings/{audio}, packages/agent/src/{personality,tools,memory,handlers,types}, packages/agent/tests, packages/infra/lib/{handlers}, packages/infra/tests)
-- [ ] T003 [P] Configure TypeScript with root tsconfig.json (strict, ESNext module, NodeNext resolution) and per-package tsconfig.json files extending root in packages/frontend/, packages/agent/, packages/infra/
-- [ ] T004 [P] Configure ESLint + Prettier for TypeScript monorepo with shared flat config in eslint.config.js and .prettierrc at repo root
-- [ ] T005 [P] Initialize React 19 + Vite 8 SPA in packages/frontend/ (package.json with react 19.x, vite 8.x, zustand 5.x, three.js, @react-three/fiber 9.x — R3F is an MVP dependency for CRT effects and wireframe backdrop per research.md R3b/R3e; vite.config.ts with React plugin; index.html entry point; src/main.tsx bootstrap)
-- [ ] T006 [P] Scaffold Strands agent project in packages/agent/ (package.json with @strands-agents/sdk, @aws-sdk/client-bedrock-runtime; AgentCore-compatible entry point with /invocations POST and /ping GET endpoints; Dockerfile targeting LINUX_ARM64, port 8080, non-root user, <200MB image)
-- [ ] T007 [P] Initialize CDK app in packages/infra/ (package.json with aws-cdk-lib 2.250+, @aws-cdk/aws-bedrock-agentcore-alpha; cdk.json; empty bin/app.ts shell)
-- [ ] T008 [P] Configure Vitest workspace for packages/frontend and packages/agent (vitest.workspace.ts at root, per-package vitest.config.ts, shared setup with @testing-library/jest-dom matchers, jsdom environment for frontend)
-- [ ] T009 [P] Configure Jest for packages/infra with CDK assertions (jest.config.ts with ts-jest transform, aws-cdk-lib/assertions import)
+- [x] T001 Initialize npm workspaces monorepo with root package.json (workspaces: packages/*), .npmrc, Zod override (overrides: { "zod": "^4.3.6" }), and .nvmrc (Node 24 LTS)
+- [x] T002 Create full directory structure per plan.md §Project Structure (packages/frontend/src/{components,hooks,stores,services,audio,effects,types}, packages/frontend/public/greetings/{audio}, packages/agent/src/{personality,tools,memory,handlers,types}, packages/agent/tests, packages/infra/lib/{handlers}, packages/infra/tests)
+- [x] T003 [P] Configure TypeScript with root tsconfig.json (strict, ESNext module, NodeNext resolution) and per-package tsconfig.json files extending root in packages/frontend/, packages/agent/, packages/infra/
+- [x] T004 [P] Configure ESLint + Prettier for TypeScript monorepo with shared flat config in eslint.config.js and .prettierrc at repo root
+- [x] T005 [P] Initialize React 19 + Vite 8 SPA in packages/frontend/ (package.json with react 19.x, vite 8.x, zustand 5.x, three.js, @react-three/fiber 9.x — R3F is an MVP dependency for CRT effects and wireframe backdrop per research.md R3b/R3e; vite.config.ts with React plugin; index.html entry point; src/main.tsx bootstrap)
+- [x] T006 [P] Scaffold Strands agent project in packages/agent/ (package.json with @strands-agents/sdk, @aws-sdk/client-bedrock-runtime; AgentCore-compatible entry point with /invocations POST and /ping GET endpoints; Dockerfile targeting LINUX_ARM64, port 8080, non-root user, <200MB image)
+- [x] T007 [P] Initialize CDK app in packages/infra/ (package.json with aws-cdk-lib 2.250+, @aws-cdk/aws-bedrock-agentcore-alpha; cdk.json; empty bin/app.ts shell)
+- [x] T008 [P] Configure Vitest workspace for packages/frontend and packages/agent (vitest.workspace.ts at root, per-package vitest.config.ts, shared setup with @testing-library/jest-dom matchers, jsdom environment for frontend)
+- [x] T009 [P] Configure Jest for packages/infra with CDK assertions (jest.config.ts with ts-jest transform, aws-cdk-lib/assertions import)
 
 ---
 
@@ -60,16 +60,16 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ### Types
 
-- [ ] T010 [P] Define WebSocket message types in packages/frontend/src/types/messages.ts (all client→server and server→client message interfaces per websocket-api.md: SessionStartPayload, UserMessagePayload, InterruptPayload, SessionResumePayload, SessionEndPayload, ConnectionAckPayload, AgentTokenPayload, AgentTurnCompletePayload, SessionStateChangePayload, ErrorPayload; union discriminated by type field)
-- [ ] T011 [P] Define domain types in packages/frontend/src/types/domain.ts (SessionState enum with 8 values per data-model.md, Greeting interface with id/archetype/text/audioPath/audioDurationMs/weight/tags, GreetingArchetype enum with 8 archetypes, Visitor interface, RateLimitState interface with hourly/daily counters and windows)
-- [ ] T012 [P] Define agent types in packages/agent/src/types/index.ts (AgentConfig interface, PersonalityConfig, StutterMarker, Memory interface with memoryId/actorId/type/content/sourceSessionId/extractedAt/expiresAt per data-model.md, MemoryType enum: FACT/PREFERENCE/SUMMARY/TOPIC, SessionMetadata interface)
+- [x] T010 [P] Define WebSocket message types in packages/frontend/src/types/messages.ts (all client→server and server→client message interfaces per websocket-api.md: SessionStartPayload, UserMessagePayload, InterruptPayload, SessionResumePayload, SessionEndPayload, ConnectionAckPayload, AgentTokenPayload, AgentTurnCompletePayload, SessionStateChangePayload, ErrorPayload; union discriminated by type field)
+- [x] T011 [P] Define domain types in packages/frontend/src/types/domain.ts (SessionState enum with 8 values per data-model.md, Greeting interface with id/archetype/text/audioPath/audioDurationMs/weight/tags, GreetingArchetype enum with 8 archetypes, Visitor interface, RateLimitState interface with hourly/daily counters and windows)
+- [x] T012 [P] Define agent types in packages/agent/src/types/index.ts (AgentConfig interface, PersonalityConfig, StutterMarker, Memory interface with memoryId/actorId/type/content/sourceSessionId/extractedAt/expiresAt per data-model.md, MemoryType enum: FACT/PREFERENCE/SUMMARY/TOPIC, SessionMetadata interface)
 
 ### Zustand Stores
 
-- [ ] T013 [P] Create Zustand connection store in packages/frontend/src/stores/connectionStore.ts (state: SessionState, sessionId, agentCoreSessionId, WebSocket ready flag, actions: setConnected, setSessionState, reset)
-- [ ] T014 [P] Create Zustand conversation store in packages/frontend/src/stores/conversationStore.ts (turnCount, tokenCount, currentResponseText, isStreaming, currentTurnIndex, actions: appendToken, setFullText, incrementTurn, updateCounters, reset)
-- [ ] T015 [P] Create Zustand voice store in packages/frontend/src/stores/voiceStore.ts (isSpeaking, audioContextState, isMicActive, isMouthOpen, actions: setSpeaking, setMouthOpen, setMicActive)
-- [ ] T016 [P] Create Zustand visitor store in packages/frontend/src/stores/visitorStore.ts (actorId loaded from localStorage or generated UUID, displayAlias, greetingHistory array, rateLimitCounters: RateLimitState, actions: setDisplayAlias, pushGreeting, updateRateLimits, clearAll)
+- [x] T013 [P] Create Zustand connection store in packages/frontend/src/stores/connectionStore.ts (state: SessionState, sessionId, agentCoreSessionId, WebSocket ready flag, actions: setConnected, setSessionState, reset)
+- [x] T014 [P] Create Zustand conversation store in packages/frontend/src/stores/conversationStore.ts (turnCount, tokenCount, currentResponseText, isStreaming, currentTurnIndex, actions: appendToken, setFullText, incrementTurn, updateCounters, reset)
+- [x] T015 [P] Create Zustand voice store in packages/frontend/src/stores/voiceStore.ts (isSpeaking, audioContextState, isMicActive, isMouthOpen, actions: setSpeaking, setMouthOpen, setMicActive)
+- [x] T016 [P] Create Zustand visitor store in packages/frontend/src/stores/visitorStore.ts (actorId loaded from localStorage or generated UUID, displayAlias, greetingHistory array, rateLimitCounters: RateLimitState, actions: setDisplayAlias, pushGreeting, updateRateLimits, clearAll)
 
 ### Observability (Constitution P9)
 
@@ -93,7 +93,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ### Phase 2 Tests (P10 Compliance)
 
-- [ ] T025 [P] Write Vitest unit tests for Zustand stores in packages/frontend/tests/stores/ (connectionStore: state transitions for all 8 SessionState values + reset; conversationStore: appendToken + setFullText + counter updates; voiceStore: speaking/mouth/mic toggles; visitorStore: actorId generation + localStorage persistence + rate limit reset logic)
+- [x] T025 [P] Write Vitest unit tests for Zustand stores in packages/frontend/tests/stores/ (connectionStore: state transitions for all 8 SessionState values + reset; conversationStore: appendToken + setFullText + counter updates; voiceStore: speaking/mouth/mic toggles; visitorStore: actorId generation + localStorage persistence + rate limit reset logic)
 - [ ] T026 [P] Write Vitest unit tests for WebSocket manager in packages/frontend/tests/services/websocketManager.test.ts (message serialization/deserialization, reconnection backoff timing, session_resume payload construction, close code handling, max retries exceeded → SIGNAL_LOST)
 - [ ] T027 [P] Write Jest CDK snapshot tests in packages/infra/tests/ (Template.fromStack() assertions for CognitoStack: identity pool + IAM roles, BudgetStack: budget resource + SNS + Lambda, AgentStack: API Gateway WebSocket + Lambda integration + Memory, FrontendStack: S3 + CloudFront + OAI)
 
