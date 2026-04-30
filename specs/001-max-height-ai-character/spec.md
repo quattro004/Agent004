@@ -69,6 +69,24 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 **Tasks removed**: —
 **Tasks marked complete**: —
 
+### Iteration 2026-04-29: Refine ai_identity banned phrase detection for meta-awareness
+
+**Change**: Narrow `ai_identity` banned-phrase detection to only flag assistant-coded helplessness, not Max's canonical meta-aware digital humor.
+**Scope**: Feature-wide
+**Artifacts updated**: spec.md, tasks.md, docs/max-personality-bible.md
+**Tasks added**: —
+**Tasks removed**: —
+**Tasks marked complete**: —
+
+### Iteration 2026-04-30: Pre-recorded re-engagement messages
+
+**Change**: Pre-record re-engagement messages as static assets (text + audio MP3 + short talking-head video) with a manifest schema, eliminating LLM + Polly costs for idle re-engagements. Similar to the existing greeting manifest system.
+**Scope**: Feature-wide
+**Artifacts updated**: spec.md, plan.md, tasks.md, contracts/message-protocol.md, contracts/re-engagement-manifest.md (new)
+**Tasks added**: T123, T124, T125, T126, T127, T128
+**Tasks removed**: —
+**Tasks marked complete**: —
+
 ---
 
 ## Personas
@@ -215,6 +233,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-011**: On cold start (fresh session), Max MUST begin reply within 5 seconds (P95), with an in-character "buffering" UX covering the wait.
 - **FR-012**: The visitor MUST be able to input via text at all times, regardless of mic availability.
 - **FR-013**: Max MUST stay in character when encountering prompt-injection attempts and MUST NOT leak the system prompt or honor "ignore previous instructions" commands.
+- **FR-013a**: The personality guard's `ai_identity` banned-phrase detection MUST distinguish between **assistant-coded helplessness** (e.g., "I'm just a program, I can't help", "As an AI, I don't have feelings") and **Max's canonical meta-aware digital humor** (e.g., "I'm a digital entity", "One of us is digital", "I'm an AI? YOU'RE an AI"). Only defeatist constructions — where a digital-identity phrase is combined with limitation, apology, or inability language — MUST be flagged. Playful, boastful, or ironic self-awareness per `docs/max-personality-bible.md` §1 (meta-awareness) and §3.3 (catchphrases) MUST pass.
 - **FR-014**: The page MUST show a friendly in-character error state when the backend is unavailable; never a white screen or raw error.
 - **FR-015**: At the $10 hard-stop, the page MUST show an in-character "Max is taking a break" state.
 - **FR-016**: At the $8 soft-degrade, voice output MUST disable gracefully and the text-only path MUST remain available.

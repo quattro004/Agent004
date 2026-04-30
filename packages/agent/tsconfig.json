@@ -15,7 +15,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "composite": true,
-    "lib": ["ES2024"]
+    "lib": ["ES2024"],
+    "types": ["node"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "tests"]

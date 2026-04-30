@@ -8,7 +8,7 @@
 
 ## Overview
 
-Greetings are pre-generated static assets deployed with the frontend. The manifest file at `/public/greetings/manifest.json` describes the pool. Audio files are pre-synthesized MP3s stored alongside the manifest.
+Greetings are pre-generated static assets deployed with the frontend. The manifest file at `/public/greetings/manifest.json` describes the pool. Each greeting includes text, a pre-synthesized MP3 audio file, and a short talking-head video clip of Max animating (per FR-002).
 
 ---
 
@@ -21,6 +21,10 @@ public/
     audio/
       greeting-001.mp3
       greeting-002.mp3
+      ...
+    video/
+      greeting-001.mp4
+      greeting-002.mp4
       ...
 ```
 
@@ -66,7 +70,7 @@ public/
   "definitions": {
     "Greeting": {
       "type": "object",
-      "required": ["id", "archetype", "text", "audioPath", "audioDurationMs"],
+      "required": ["id", "archetype", "text", "audioPath", "audioDurationMs", "videoPath"],
       "properties": {
         "id": {
           "type": "string",
@@ -103,6 +107,11 @@ public/
           "minimum": 1000,
           "maximum": 15000,
           "description": "Audio playback duration in milliseconds"
+        },
+        "videoPath": {
+          "type": "string",
+          "pattern": "^video/greeting-\\d{3}\\.mp4$",
+          "description": "Relative path to short talking-head video clip"
         },
         "weight": {
           "type": "number",
@@ -150,6 +159,7 @@ If all greetings are filtered out (small pool + frequent visits), reset the no-r
 | No repeat within 3 sessions | Filter by visitor's `greetingHistory` | FR-002 |
 | Text length | 40–100 words | data-model.md |
 | Audio exists | `audioPath` must resolve to valid MP3 | Build-time validation |
+| Video exists | `videoPath` must resolve to valid MP4 | Build-time validation |
 | Each archetype represented | At least 2 greetings per archetype value | Pool completeness + spec clarification |
 
 ---
@@ -159,6 +169,7 @@ If all greetings are filtered out (small pool + frequent visits), reset the no-r
 A CI step should validate:
 1. `manifest.json` passes the JSON Schema above.
 2. Every `audioPath` resolves to an existing `.mp3` file.
-3. All 8 archetypes have at least 2 greetings each (16 total minimum).
-4. No duplicate `id` values.
-5. All `audioDurationMs` values are within ±500ms of actual MP3 duration.
+3. Every `videoPath` resolves to an existing `.mp4` file.
+4. All 8 archetypes have at least 2 greetings each (16 total minimum).
+5. No duplicate `id` values.
+6. All `audioDurationMs` values are within ±500ms of actual MP3 duration.

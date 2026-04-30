@@ -76,7 +76,8 @@ specs/001-max-height-ai-character/
 │   ├── websocket-api.md
 │   ├── message-protocol.md
 │   ├── polly-tts.md
-│   └── greeting-manifest.md
+│   ├── greeting-manifest.md
+│   └── re-engagement-manifest.md
 ├── tasks.md             # Phase 2 — task breakdown (via /speckit.tasks)
 └── checklists/          # Quality checklists
 ```
@@ -96,6 +97,7 @@ packages/
   │   └── types/         # Shared TypeScript types
   ├── public/
   │   └── greetings/     # manifest.json + audio/*.mp3 (pre-generated)
+  │       └── re-engagements/  # re-engagement-manifest.json + audio/*.mp3 (pre-generated)
   └── tests/             # Vitest + React Testing Library
 
   agent/                 # Strands agent for AgentCore Runtime

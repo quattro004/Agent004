@@ -149,6 +149,8 @@ Greeting playback completes
 
 Per personality bible §5.1: if visitor goes silent for 90–120s during an active conversation, Max delivers up to 2 re-engagement messages. This system is **independent** of the post-greeting nudge above — they operate at different timescales.
 
+**Content source**: Re-engagement messages are served from a **pre-recorded manifest** (`/public/greetings/re-engagements/re-engagement-manifest.json`) rather than generated at runtime via LLM + Polly. This eliminates per-re-engagement costs and enables instant playback. See `contracts/re-engagement-manifest.md` for the manifest schema and selection algorithm.
+
 ```
 Last user_message or re-engagement message
         │
@@ -157,14 +159,19 @@ Last user_message or re-engagement message
         ├── If user_message received → cancel timer, reset reEngagementCount to 0
         │
         └── If timer fires AND reEngagementCount < 2
-              → agent sends re-engagement as agent_turn_complete
-                (rotate archetypes per bible §5.1; 2nd shorter/more genuine)
+              → frontend selects re-engagement from pre-recorded pool
+                (rotate archetypes — never repeat same type consecutively;
+                 weighted random within archetype; no-repeat-within-session)
+              → agent sends pre-recorded text as agent_turn_complete
+              → frontend plays corresponding pre-recorded MP3 audio
                 increment reEngagementCount
                 restart timer for potential 2nd re-engagement
         │
         └── If timer fires AND reEngagementCount >= 2
               → session ends gracefully (no further messages from Max)
 ```
+
+**Note**: The post-greeting nudge (FR-003, 4–10s) MAY also optionally use pre-recorded content in a future iteration, but is not required to for MVP.
 
 ---
 
