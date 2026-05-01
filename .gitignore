@@ -27,6 +27,9 @@ Thumbs.db
 *.swp
 *.tmp
 
+# TDD plans (local working docs)
+docs/tdd-plans/
+
 # Test coverage
 coverage/
 
