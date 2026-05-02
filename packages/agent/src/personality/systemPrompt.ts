@@ -1,5 +1,12 @@
+export interface MemoryContext {
+  content: string;
+  type: 'FACT' | 'PREFERENCE' | 'SUMMARY' | 'TOPIC';
+}
+
 export interface SystemPromptOptions {
   displayAlias?: string;
+  displayAliasFromMemory?: string;
+  memories?: MemoryContext[];
 }
 
 function buildBasePrompt(currentYear: number): string {
@@ -125,16 +132,58 @@ Plain prose. No markdown headers. Code blocks are OK when giving technical answe
 Now — the show starts. Every response is for the viewer at home. Max Height, live and in stutter.`;
 }
 
+const MEMORY_SECTION_MAX_CHARS = 2000;
+
+function buildMemorySection(memories: MemoryContext[]): string {
+  if (memories.length === 0) return '';
+
+  const facts = memories.filter((m) => m.type === 'FACT');
+  const preferences = memories.filter((m) => m.type === 'PREFERENCE');
+  const topics = memories.filter((m) => m.type === 'TOPIC');
+  const summaries = memories.filter((m) => m.type === 'SUMMARY');
+
+  const lines: string[] = [];
+
+  if (facts.length > 0) {
+    lines.push('Facts about this viewer:');
+    for (const f of facts) lines.push(`- ${f.content}`);
+  }
+  if (preferences.length > 0) {
+    lines.push('Their preferences:');
+    for (const p of preferences) lines.push(`- ${p.content}`);
+  }
+  if (topics.length > 0) {
+    lines.push('Topics previously discussed:');
+    for (const t of topics) lines.push(`- ${t.content}`);
+  }
+  if (summaries.length > 0) {
+    lines.push('Prior conversation summaries:');
+    for (const s of summaries) lines.push(`- ${s.content}`);
+  }
+
+  let section = lines.join('\n');
+  if (section.length > MEMORY_SECTION_MAX_CHARS) {
+    section = section.substring(0, MEMORY_SECTION_MAX_CHARS - 3) + '...';
+  }
+
+  return `\n\n# Prior-session context\nYou remember these things about the viewer from previous conversations. Use them naturally — callbacks, running gags, familiar references. Don't recite them like a list.\n${section}`;
+}
+
 /**
  * Build the system prompt for the Max Height agent.
- * Injects the current year and the visitor's display alias if provided.
+ * Injects the current year, visitor's display alias, and memory context.
  */
 export function buildSystemPrompt(options?: SystemPromptOptions): string {
   const currentYear = new Date().getFullYear();
   let prompt = buildBasePrompt(currentYear);
 
-  if (options?.displayAlias) {
-    prompt += `\n\n# Current viewer\nThe viewer's name is "${options.displayAlias}". Use it as a running gag — but don't overdo it. First-name basis, like an old pal.`;
+  const alias = options?.displayAlias ?? options?.displayAliasFromMemory;
+  if (alias) {
+    prompt += `\n\n# Current viewer\nThe viewer's name is "${alias}". Use it as a running gag — but don't overdo it. First-name basis, like an old pal.`;
+  }
+
+  if (options?.memories && options.memories.length > 0) {
+    prompt += buildMemorySection(options.memories);
   }
 
   return prompt;

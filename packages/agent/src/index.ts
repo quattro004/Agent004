@@ -6,6 +6,7 @@ import type { JSONValue } from '@strands-agents/sdk';
 import { buildSystemPrompt } from './personality/systemPrompt.js';
 import { newsToolSchema, fetchNews } from './tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
+import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
 import { startSpan, endSpan } from './handlers/observability.js';
 
 const PORT = 8080;
@@ -34,6 +35,17 @@ const weatherTool = tool({
   },
 });
 
+const webSearchTool = tool({
+  name: 'web_search',
+  description:
+    'Search the web for current information. Use when the user asks about recent events, facts you are unsure about, or anything requiring up-to-date information beyond your training data. Returns real search results — never fabricate URLs or content.',
+  inputSchema: webSearchToolSchema,
+  callback: async (input) => {
+    const result = await fetchWebSearch(input);
+    return result as unknown as JSONValue;
+  },
+});
+
 // --- Agent Factory ---
 
 export function createMaxHeightAgent(options?: { displayAlias?: string }) {
@@ -48,7 +60,7 @@ export function createMaxHeightAgent(options?: { displayAlias?: string }) {
 
   const agent = new Agent({
     model,
-    tools: [newsTool, weatherTool],
+    tools: [newsTool, weatherTool, webSearchTool],
     systemPrompt,
     printer: false,
   });

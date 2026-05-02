@@ -68,11 +68,11 @@ describe('createMaxHeightAgent', () => {
     );
   });
 
-  it('registers news and weather tools', async () => {
+  it('registers news, weather, and web search tools', async () => {
     const { Agent } = await import('@strands-agents/sdk');
     createMaxHeightAgent();
     const call = (Agent as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
-    expect(call.tools).toHaveLength(2);
+    expect(call.tools).toHaveLength(3);
   });
 
   it('passes displayAlias to buildSystemPrompt', async () => {
