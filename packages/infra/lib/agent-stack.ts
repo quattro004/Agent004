@@ -9,7 +9,7 @@ export class AgentStack extends cdk.Stack {
     super(scope, id, props);
 
     const wsHandler = new lambda.Function(this, 'WebSocketHandler', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'websocket-handler.handler',
       code: lambda.Code.fromAsset('lib/handlers'),
       timeout: cdk.Duration.seconds(30),
