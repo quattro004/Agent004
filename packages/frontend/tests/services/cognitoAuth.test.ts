@@ -4,7 +4,7 @@ import {
   getGuestCredentials,
   isCredentialExpired,
   PRESIGNED_URL_TTL_MS,
-} from '../../src/services/cognitoAuth.js';
+} from '../../src/services/cognitoAuth';
 
 // Mock the AWS SDK
 vi.mock('@aws-sdk/client-cognito-identity', () => ({

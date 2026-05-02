@@ -7,8 +7,8 @@ import {
   mapCloseCodeToState,
   MAX_MESSAGE_SIZE,
   MAX_RETRIES,
-} from '../../src/services/websocketManager.js';
-import type { ClientMessage } from '../../src/types/messages.js';
+} from '../../src/services/websocketManager';
+import type { ClientMessage } from '../../src/types/messages';
 
 describe('WebSocket Manager', () => {
   describe('serialize', () => {

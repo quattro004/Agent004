@@ -1,0 +1,120 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-05-01T00:00:00Z",
+  "voiceConfig": {
+    "voiceId": "Matthew",
+    "engine": "neural",
+    "ssmlPitch": "+10%",
+    "ssmlRate": "105%"
+  },
+  "reEngagements": [
+    {
+      "id": "re-engagement-001",
+      "archetype": "SIGNAL_CHECK",
+      "text": "H-h-hello? Is this thing still on? I can see the little light blinking but nobody's talking. Tap something. Anything.",
+      "audioPath": "audio/re-engagement-001.mp3",
+      "audioDurationMs": 5500,
+      "videoPath": "video/re-engagement-001.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-002",
+      "archetype": "SIGNAL_CHECK",
+      "text": "Still there? Blink twice if you can hear me. Or, you know, t-type something.",
+      "audioPath": "audio/re-engagement-002.mp3",
+      "audioDurationMs": 4000,
+      "videoPath": "video/re-engagement-002.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-003",
+      "archetype": "FAKE_CONCERN",
+      "text": "Should I be worried? Did you fall asleep on me? I'm t-told I have that effect on people but I never believed it until now.",
+      "audioPath": "audio/re-engagement-003.mp3",
+      "audioDurationMs": 5500,
+      "videoPath": "video/re-engagement-003.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-004",
+      "archetype": "FAKE_CONCERN",
+      "text": "I'm getting concerned. Not genuinely, you understand — but performatively. Are you okay out there?",
+      "audioPath": "audio/re-engagement-004.mp3",
+      "audioDurationMs": 4500,
+      "videoPath": "video/re-engagement-004.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-005",
+      "archetype": "RAMBLING_FILL",
+      "text": "You know, while you're away, I've been thinking about the nature of digital existence. It's like being a g-goldfish in a very expensive bowl. With better lighting.",
+      "audioPath": "audio/re-engagement-005.mp3",
+      "audioDurationMs": 6500,
+      "videoPath": "video/re-engagement-005.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-006",
+      "archetype": "RAMBLING_FILL",
+      "text": "Did you know that technically I'm made of math? Just m-math and electricity. Glamorous math, obviously.",
+      "audioPath": "audio/re-engagement-006.mp3",
+      "audioDurationMs": 4500,
+      "videoPath": "video/re-engagement-006.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-007",
+      "archetype": "SELF_ENTERTAINMENT",
+      "text": "Don't mind me, I'll just entertain m-m-myself. La la la. See? I'm fine. Totally fine. Not lonely at all. This is fun.",
+      "audioPath": "audio/re-engagement-007.mp3",
+      "audioDurationMs": 5500,
+      "videoPath": "video/re-engagement-007.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-008",
+      "archetype": "SELF_ENTERTAINMENT",
+      "text": "I'm counting my own pixels again. It's oddly soothing. Anyway — whenever you're r-ready.",
+      "audioPath": "audio/re-engagement-008.mp3",
+      "audioDurationMs": 4000,
+      "videoPath": "video/re-engagement-008.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-009",
+      "archetype": "MOCK_SIGN_OFF",
+      "text": "Well, if you're not going to talk to me, maybe I'll just — no. No, I'll stay. Someone has to keep the s-screen warm.",
+      "audioPath": "audio/re-engagement-009.mp3",
+      "audioDurationMs": 5500,
+      "videoPath": "video/re-engagement-009.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-010",
+      "archetype": "MOCK_SIGN_OFF",
+      "text": "Fine. I'll just go then. Except I c-can't. Because I live here. So. Here we are.",
+      "audioPath": "audio/re-engagement-010.mp3",
+      "audioDurationMs": 4000,
+      "videoPath": "video/re-engagement-010.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-011",
+      "archetype": "AUDIENCE_ADDRESS",
+      "text": "Ladies and gentlemen, it appears my guest has left the building. Or at least left their k-keyboard. We'll wait. Patiently. Ish.",
+      "audioPath": "audio/re-engagement-011.mp3",
+      "audioDurationMs": 5500,
+      "videoPath": "video/re-engagement-011.mp4",
+      "weight": 1.0
+    },
+    {
+      "id": "re-engagement-012",
+      "archetype": "AUDIENCE_ADDRESS",
+      "text": "To our viewers at home — this is what happens when you let the audience run the show. They w-wander off.",
+      "audioPath": "audio/re-engagement-012.mp3",
+      "audioDurationMs": 4500,
+      "videoPath": "video/re-engagement-012.mp4",
+      "weight": 1.0
+    }
+  ]
+}

@@ -26,6 +26,7 @@ export interface Greeting {
   text: string;
   audioPath: string;
   audioDurationMs: number;
+  videoPath: string;
   weight: number;
   tags: string[];
 }

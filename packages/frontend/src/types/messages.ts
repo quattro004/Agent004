@@ -1,6 +1,8 @@
 // WebSocket message types per websocket-api.md contract
 // All client→server and server→client message interfaces
 
+import type { SessionState } from './domain';
+
 // --- Client → Server ---
 
 export interface SessionStartPayload {
@@ -80,4 +82,4 @@ export type ServerMessage =
   | { type: 'error'; payload: ErrorPayload };
 
 // Re-export SessionState for convenience
-export { type SessionState } from './domain.js';
+export type { SessionState } from './domain';

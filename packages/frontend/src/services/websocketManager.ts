@@ -2,8 +2,8 @@ import type {
   ClientMessage,
   ServerMessage,
   SessionResumePayload,
-} from '../types/messages.js';
-import type { SessionState } from '../types/domain.js';
+} from '../types/messages';
+import type { SessionState } from '../types/domain';
 
 // --- Constants ---
 
