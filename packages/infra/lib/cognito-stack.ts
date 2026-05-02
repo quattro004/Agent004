@@ -32,7 +32,7 @@ export class CognitoStack extends cdk.Stack {
             'cognito-identity.amazonaws.com:amr': 'unauthenticated',
           },
         },
-        'sts:AssumeRoleWithWebIdentity'
+        'sts:AssumeRoleWithWebIdentity',
       ),
     });
 
@@ -42,7 +42,7 @@ export class CognitoStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['bedrock-agentcore:InvokeAgentRuntime'],
         resources: [props.agentRuntimeArn],
-      })
+      }),
     );
 
     unauthRole.addToPolicy(
@@ -56,7 +56,7 @@ export class CognitoStack extends cdk.Stack {
             'polly:VoiceId': 'Matthew',
           },
         },
-      })
+      }),
     );
 
     new cognito.CfnIdentityPoolRoleAttachment(this, 'RoleAttachment', {

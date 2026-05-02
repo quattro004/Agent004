@@ -29,8 +29,14 @@ export function createErrorRecovery(options?: ErrorRecoveryOptions): ErrorRecove
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clearTimers() {
-    if (warningTimer) { clearTimeout(warningTimer); warningTimer = null; }
-    if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = null; }
+    if (warningTimer) {
+      clearTimeout(warningTimer);
+      warningTimer = null;
+    }
+    if (timeoutTimer) {
+      clearTimeout(timeoutTimer);
+      timeoutTimer = null;
+    }
   }
 
   return {

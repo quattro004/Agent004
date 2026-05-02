@@ -7,9 +7,7 @@ interface CrtFrameProps {
 export function CrtFrame({ children }: CrtFrameProps) {
   return (
     <div data-testid="crt-bezel" className="crt-bezel">
-      <div className="crt-screen">
-        {children}
-      </div>
+      <div className="crt-screen">{children}</div>
     </div>
   );
 }

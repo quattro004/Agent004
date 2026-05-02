@@ -6,3 +6,13 @@ cdk.out
 package-lock.json
 pnpm-lock.yaml
 *.mp3
+
+# Speckit-generated files (managed by Spec Kit, not hand-edited)
+.specify/
+.github/agents/
+.github/prompts/
+.github/skills/
+
+# Specs and docs (prose — formatting is author-controlled)
+specs/
+docs/

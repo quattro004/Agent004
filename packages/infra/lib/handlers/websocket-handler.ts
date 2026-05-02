@@ -1,7 +1,4 @@
-import {
-  APIGatewayProxyWebsocketHandlerV2,
-  APIGatewayProxyResultV2,
-} from 'aws-lambda';
+import { APIGatewayProxyWebsocketHandlerV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import {
   ApiGatewayManagementApiClient,
   PostToConnectionCommand,
@@ -10,7 +7,7 @@ import {
 const MAX_MESSAGE_LENGTH = 500;
 
 export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
-  event
+  event,
 ): Promise<APIGatewayProxyResultV2> => {
   const { requestContext } = event;
   const connectionId = requestContext.connectionId;
@@ -43,7 +40,7 @@ async function handleDisconnect(connectionId: string): Promise<APIGatewayProxyRe
 async function handleDefault(
   connectionId: string,
   body: string,
-  requestContext: { domainName?: string; stage?: string }
+  requestContext: { domainName?: string; stage?: string },
 ): Promise<APIGatewayProxyResultV2> {
   if (!body) {
     return { statusCode: 400 };
@@ -90,14 +87,20 @@ async function handleDefault(
     if (!payload || typeof payload.text !== 'string' || payload.text.length === 0) {
       await sendToConnection(connectionId, requestContext, {
         type: 'error',
-        payload: { code: 'INVALID_PAYLOAD', message: 'user_message requires a non-empty text field' },
+        payload: {
+          code: 'INVALID_PAYLOAD',
+          message: 'user_message requires a non-empty text field',
+        },
       });
       return { statusCode: 400 };
     }
     if (payload.text.length > MAX_MESSAGE_LENGTH) {
       await sendToConnection(connectionId, requestContext, {
         type: 'error',
-        payload: { code: 'MESSAGE_TOO_LONG', message: `Message exceeds ${MAX_MESSAGE_LENGTH} character limit` },
+        payload: {
+          code: 'MESSAGE_TOO_LONG',
+          message: `Message exceeds ${MAX_MESSAGE_LENGTH} character limit`,
+        },
       });
       return { statusCode: 400 };
     }
@@ -133,7 +136,7 @@ async function handleDefault(
 async function sendToConnection(
   connectionId: string,
   requestContext: { domainName?: string; stage?: string },
-  data: unknown
+  data: unknown,
 ): Promise<void> {
   const endpoint = `https://${requestContext.domainName}/${requestContext.stage}`;
   const client = new ApiGatewayManagementApiClient({ endpoint });

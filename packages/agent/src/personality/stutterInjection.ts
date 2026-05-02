@@ -103,10 +103,7 @@ function isInNoStutterZone(text: string, position: number): boolean {
  * Inject stutters into text if below minimum threshold.
  * Returns the modified text with stutter markers.
  */
-export function injectStutters(
-  text: string,
-  options: StutterOptions,
-): StutterResult {
+export function injectStutters(text: string, options: StutterOptions): StutterResult {
   const existingCount = countStutters(text);
 
   // Already at or above minimum — don't modify
@@ -114,18 +111,13 @@ export function injectStutters(
     return { text, stutterCount: existingCount, markers: [] };
   }
 
-  const needed = Math.min(
-    options.maxStutters - existingCount,
-    options.maxStutters,
-  );
+  const needed = Math.min(options.maxStutters - existingCount, options.maxStutters);
   let result = text;
   const markers: StutterMarker[] = [];
   let injected = 0;
 
   // Sort targets by priority (highest first)
-  const sortedTargets = [...STUTTER_TARGETS].sort(
-    (a, b) => b.priority - a.priority,
-  );
+  const sortedTargets = [...STUTTER_TARGETS].sort((a, b) => b.priority - a.priority);
 
   for (const target of sortedTargets) {
     if (injected >= needed) break;
@@ -140,8 +132,7 @@ export function injectStutters(
 
       // Match case of original word
       if (original[0] === original[0].toUpperCase()) {
-        stuttered =
-          stuttered.charAt(0).toUpperCase() + stuttered.slice(1);
+        stuttered = stuttered.charAt(0).toUpperCase() + stuttered.slice(1);
       }
 
       // Replace first occurrence only

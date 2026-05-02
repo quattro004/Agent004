@@ -52,7 +52,13 @@ describe('CognitoStack', () => {
   test('does not use wildcard resource for AgentCore', () => {
     const policies = template.findResources('AWS::IAM::Policy');
     for (const [, policy] of Object.entries(policies)) {
-      const statements = (policy as { Properties: { PolicyDocument: { Statement: Array<{ Action: string; Resource: string }> } } }).Properties.PolicyDocument.Statement;
+      const statements = (
+        policy as {
+          Properties: {
+            PolicyDocument: { Statement: Array<{ Action: string; Resource: string }> };
+          };
+        }
+      ).Properties.PolicyDocument.Statement;
       for (const stmt of statements) {
         if (stmt.Action === 'bedrock-agentcore:InvokeAgentRuntime') {
           expect(stmt.Resource).not.toBe('*');

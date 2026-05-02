@@ -35,7 +35,7 @@ export async function fetchWeather(
       };
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       main: { temp: number };
       weather: Array<{ description: string }>;
       name: string;

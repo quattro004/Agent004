@@ -11,11 +11,13 @@ export class AgentStack extends cdk.Stack {
 
     // Secrets stored in SSM Parameter Store (SecureString)
     const weatherApiKey = ssm.StringParameter.fromSecureStringParameterAttributes(
-      this, 'WeatherApiKey', { parameterName: '/max-height/weather-api-key' },
+      this,
+      'WeatherApiKey',
+      { parameterName: '/max-height/weather-api-key' },
     );
-    const newsApiKey = ssm.StringParameter.fromSecureStringParameterAttributes(
-      this, 'NewsApiKey', { parameterName: '/max-height/news-api-key' },
-    );
+    const newsApiKey = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'NewsApiKey', {
+      parameterName: '/max-height/news-api-key',
+    });
 
     const wsHandler = new lambda.Function(this, 'WebSocketHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
@@ -86,7 +88,7 @@ export class AgentStack extends cdk.Stack {
       new iam.PolicyStatement({
         actions: ['execute-api:ManageConnections'],
         resources: [`arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/*`],
-      })
+      }),
     );
 
     new cdk.CfnOutput(this, 'WebSocketEndpoint', {

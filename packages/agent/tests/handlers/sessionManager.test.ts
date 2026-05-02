@@ -153,5 +153,4 @@ describe('sessionManager', () => {
       expect(getSessionState(session)).toBe('ACTIVE');
     });
   });
-
 });

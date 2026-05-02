@@ -92,10 +92,7 @@ export function loadManifest(raw: string): GreetingManifest {
  * @param greetingHistory - Array of recently used greeting IDs (last 20, most recent last)
  * @returns The selected greeting
  */
-export function selectGreeting(
-  manifest: GreetingManifest,
-  greetingHistory: string[],
-): Greeting {
+export function selectGreeting(manifest: GreetingManifest, greetingHistory: string[]): Greeting {
   const { greetings } = manifest;
   const timeOfDay = getCurrentTimeOfDay();
 

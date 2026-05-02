@@ -98,10 +98,11 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     const result = await agent.invoke(parsed.message ?? 'Hello');
 
     // Extract text from the result
-    const text = result?.lastMessage?.content
-      ?.filter((block) => block.type === 'textBlock')
-      ?.map((block) => ('text' in block ? (block as { text: string }).text : ''))
-      ?.join('') ?? '';
+    const text =
+      result?.lastMessage?.content
+        ?.filter((block) => block.type === 'textBlock')
+        ?.map((block) => ('text' in block ? (block as { text: string }).text : ''))
+        ?.join('') ?? '';
 
     if (!firstTokenEmitted) {
       endSpan('reply.first_token');

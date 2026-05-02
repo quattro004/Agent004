@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  synthesizeTurn,
-  wrapInSsml,
-  truncateText,
-} from '../../src/services/pollyTts';
+import { synthesizeTurn, wrapInSsml, truncateText } from '../../src/services/pollyTts';
 
 // Mock the @aws-sdk/client-polly module
 const mockSend = vi.fn();
@@ -62,8 +58,7 @@ describe('pollyTts', () => {
         })
         .mockResolvedValueOnce({
           AudioStream: {
-            transformToByteArray: () =>
-              Promise.resolve(new TextEncoder().encode(visemeData)),
+            transformToByteArray: () => Promise.resolve(new TextEncoder().encode(visemeData)),
           },
         });
 
@@ -88,8 +83,7 @@ describe('pollyTts', () => {
         .mockRejectedValueOnce(throttleError) // Audio first try - throttled
         .mockResolvedValueOnce({
           AudioStream: {
-            transformToByteArray: () =>
-              Promise.resolve(new TextEncoder().encode(visemeData)),
+            transformToByteArray: () => Promise.resolve(new TextEncoder().encode(visemeData)),
           },
         }) // Viseme succeeds
         .mockResolvedValueOnce({
@@ -117,8 +111,7 @@ describe('pollyTts', () => {
         .mockRejectedValueOnce(throttleError) // Audio first try
         .mockResolvedValueOnce({
           AudioStream: {
-            transformToByteArray: () =>
-              Promise.resolve(new TextEncoder().encode(visemeData)),
+            transformToByteArray: () => Promise.resolve(new TextEncoder().encode(visemeData)),
           },
         }) // Viseme
         .mockRejectedValueOnce(throttleError); // Audio retry
@@ -144,8 +137,7 @@ describe('pollyTts', () => {
         })
         .mockResolvedValueOnce({
           AudioStream: {
-            transformToByteArray: () =>
-              Promise.resolve(new TextEncoder().encode(visemeData)),
+            transformToByteArray: () => Promise.resolve(new TextEncoder().encode(visemeData)),
           },
         });
 

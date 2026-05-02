@@ -43,16 +43,42 @@ Source-of-truth order (highest authority first):
 
 ---
 
-## 5. When in doubt
+## 5. After making changes — always validate
+
+Run the full validation pipeline before considering any task complete:
+
+```sh
+npm run validate
+```
+
+This chains: **lint → format:check → typecheck → build → test**. All five must pass. If any step fails, fix it before committing. When fixing bugs or adding features, use the **TDD skill** to write a failing test first, then implement the fix.
+
+Individual scripts (for targeted fixes):
+
+| Command                | Purpose                |
+| ---------------------- | ---------------------- |
+| `npm run lint`         | ESLint errors/warnings |
+| `npm run lint:fix`     | Auto-fix lint issues   |
+| `npm run format:check` | Prettier formatting    |
+| `npm run format`       | Auto-fix formatting    |
+| `npm run typecheck`    | TypeScript type errors |
+| `npm run build`        | Workspace builds       |
+| `npm run test`         | Unit/integration tests |
+
+---
+
+## 6. When in doubt
 
 - Prefer asking the user a focused question over guessing.
 - Prefer linking to the relevant spec file and section over restating it.
 - If no spec covers the topic, suggest creating or updating one.
 
 <!-- SPECKIT START -->
+
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
 at `specs/001-max-height-ai-character/plan.md` and its companion artifacts:
+
 - `specs/001-max-height-ai-character/research.md` — resolved technical decisions
 - `specs/001-max-height-ai-character/data-model.md` — entity definitions
 - `specs/001-max-height-ai-character/contracts/` — API and integration contracts

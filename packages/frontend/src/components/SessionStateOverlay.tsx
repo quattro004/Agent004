@@ -14,10 +14,10 @@ export interface SessionStateOverlayProps {
 
 const MESSAGES: Record<Exclude<OverlayState, null>, string> = {
   ENDED: "That's a wrap, folks. Max Height, signing off.",
-  BUDGET_CAPPED: "Max is taking a break — even digital stars need downtime.",
+  BUDGET_CAPPED: 'Max is taking a break — even digital stars need downtime.',
   RATE_LIMITED: "Slow d-down, speed demon! Even I can't talk that fast.",
   SIGNAL_LOST: "We're experiencing t-technical difficulties. Please stand by.",
-  ERROR: "Something went wrong behind the scenes. Try again shortly.",
+  ERROR: 'Something went wrong behind the scenes. Try again shortly.',
 };
 
 export function SessionStateOverlay({ state }: SessionStateOverlayProps) {

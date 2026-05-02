@@ -138,9 +138,9 @@ describe('Cognito Auth Service', () => {
         .mockResolvedValueOnce({ IdentityId: 'us-east-1:identity-abc' })
         .mockResolvedValueOnce({ Credentials: null });
 
-      await expect(
-        getGuestCredentials(mockIdentityPoolId, mockClient),
-      ).rejects.toThrow(/credentials/i);
+      await expect(getGuestCredentials(mockIdentityPoolId, mockClient)).rejects.toThrow(
+        /credentials/i,
+      );
     });
   });
 });

@@ -22,7 +22,8 @@ export function checkRateLimit(counters: RateLimitState): RateLimitResult {
 
   // Check daily window (UTC midnight)
   const dailyStart = counters.dailyWindowStart ? new Date(counters.dailyWindowStart) : null;
-  const dailyExpired = !dailyStart || now.toISOString().slice(0, 10) !== dailyStart.toISOString().slice(0, 10);
+  const dailyExpired =
+    !dailyStart || now.toISOString().slice(0, 10) !== dailyStart.toISOString().slice(0, 10);
   const dailyCount = dailyExpired ? 0 : counters.dailyCount;
 
   if (dailyCount >= DAILY_LIMIT) {

@@ -42,10 +42,7 @@ describe('visitorStore', () => {
     store.pushGreeting('greeting-001');
     store.pushGreeting('greeting-005');
 
-    expect(useVisitorStore.getState().greetingHistory).toEqual([
-      'greeting-001',
-      'greeting-005',
-    ]);
+    expect(useVisitorStore.getState().greetingHistory).toEqual(['greeting-001', 'greeting-005']);
   });
 
   it('should trim greeting history to 20 entries', () => {

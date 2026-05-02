@@ -7,10 +7,42 @@ import {
 const SAMPLE_MANIFEST = JSON.stringify({
   version: '1.0.0',
   reEngagements: [
-    { id: 're-engagement-001', archetype: 'SIGNAL_CHECK', text: 'Hello?', audioPath: 'audio/re-engagement-001.mp3', audioDurationMs: 3000, videoPath: 'video/re-engagement-001.mp4', weight: 1.0 },
-    { id: 're-engagement-002', archetype: 'FAKE_CONCERN', text: 'Worried.', audioPath: 'audio/re-engagement-002.mp3', audioDurationMs: 3000, videoPath: 'video/re-engagement-002.mp4', weight: 1.0 },
-    { id: 're-engagement-003', archetype: 'RAMBLING_FILL', text: 'Ramble.', audioPath: 'audio/re-engagement-003.mp3', audioDurationMs: 3000, videoPath: 'video/re-engagement-003.mp4', weight: 1.0 },
-    { id: 're-engagement-004', archetype: 'SIGNAL_CHECK', text: 'Still there?', audioPath: 'audio/re-engagement-004.mp3', audioDurationMs: 3000, videoPath: 'video/re-engagement-004.mp4', weight: 1.0 },
+    {
+      id: 're-engagement-001',
+      archetype: 'SIGNAL_CHECK',
+      text: 'Hello?',
+      audioPath: 'audio/re-engagement-001.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/re-engagement-001.mp4',
+      weight: 1.0,
+    },
+    {
+      id: 're-engagement-002',
+      archetype: 'FAKE_CONCERN',
+      text: 'Worried.',
+      audioPath: 'audio/re-engagement-002.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/re-engagement-002.mp4',
+      weight: 1.0,
+    },
+    {
+      id: 're-engagement-003',
+      archetype: 'RAMBLING_FILL',
+      text: 'Ramble.',
+      audioPath: 'audio/re-engagement-003.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/re-engagement-003.mp4',
+      weight: 1.0,
+    },
+    {
+      id: 're-engagement-004',
+      archetype: 'SIGNAL_CHECK',
+      text: 'Still there?',
+      audioPath: 'audio/re-engagement-004.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/re-engagement-004.mp4',
+      weight: 1.0,
+    },
   ],
 });
 
@@ -53,7 +85,15 @@ describe('reEngagementSelector', () => {
     const tiny = JSON.stringify({
       version: '1.0.0',
       reEngagements: [
-        { id: 're-engagement-001', archetype: 'SIGNAL_CHECK', text: 'A', audioPath: 'a.mp3', audioDurationMs: 1000, videoPath: 'v.mp4', weight: 1.0 },
+        {
+          id: 're-engagement-001',
+          archetype: 'SIGNAL_CHECK',
+          text: 'A',
+          audioPath: 'a.mp3',
+          audioDurationMs: 1000,
+          videoPath: 'v.mp4',
+          weight: 1.0,
+        },
       ],
     });
     const manifest = loadReEngagementManifest(tiny);

@@ -182,8 +182,9 @@ describe('greetingSelector', () => {
 
     it('should trim greetingHistory to 20 entries when tracked externally', () => {
       // This tests the contract that the caller trims to 20
-      const longHistory = Array.from({ length: 25 }, (_, i) =>
-        `greeting-${String(i + 1).padStart(3, '0')}`,
+      const longHistory = Array.from(
+        { length: 25 },
+        (_, i) => `greeting-${String(i + 1).padStart(3, '0')}`,
       );
 
       // Only the last 20 should be considered for filtering

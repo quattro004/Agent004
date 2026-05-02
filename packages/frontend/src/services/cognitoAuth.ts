@@ -37,14 +37,14 @@ export async function getGuestCredentials(
   identityPoolId: string,
   client?: CognitoIdentityClient,
 ): Promise<GuestCredentials> {
-  const cognitoClient = client ?? new CognitoIdentityClient({
-    region: identityPoolId.split(':')[0],
-  });
+  const cognitoClient =
+    client ??
+    new CognitoIdentityClient({
+      region: identityPoolId.split(':')[0],
+    });
 
   // Step 1: Get an identity ID
-  const idResponse = await cognitoClient.send(
-    new GetIdCommand({ IdentityPoolId: identityPoolId }),
-  );
+  const idResponse = await cognitoClient.send(new GetIdCommand({ IdentityPoolId: identityPoolId }));
 
   const identityId = idResponse.IdentityId;
   if (!identityId) {
@@ -81,7 +81,10 @@ export async function generatePresignedWsUrl(
 ): Promise<string> {
   const now = new Date();
   const dateStamp = now.toISOString().replace(/[-:]/g, '').slice(0, 8);
-  const amzDate = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const amzDate = now
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}/, '');
 
   const service = 'execute-api';
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
@@ -114,12 +117,9 @@ export async function generatePresignedWsUrl(
 
   // String to sign
   const canonicalRequestHash = await sha256Hex(canonicalRequest);
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    amzDate,
-    credentialScope,
-    canonicalRequestHash,
-  ].join('\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, canonicalRequestHash].join(
+    '\n',
+  );
 
   // Derive signing key
   const signingKey = await deriveSigningKey(
@@ -157,10 +157,7 @@ async function hmacHex(key: ArrayBuffer, data: string): Promise<string> {
 }
 
 async function sha256Hex(data: string): Promise<string> {
-  const hash = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(data),
-  );
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
   return bufferToHex(hash);
 }
 

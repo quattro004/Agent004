@@ -27,8 +27,8 @@ describe('FrontendStack', () => {
     });
   });
 
-  test('creates an Origin Access Identity', () => {
-    template.hasResource('AWS::CloudFront::CloudFrontOriginAccessIdentity', {});
+  test('creates an Origin Access Control for S3', () => {
+    template.hasResource('AWS::CloudFront::OriginAccessControl', {});
   });
 
   test('outputs the distribution URL', () => {

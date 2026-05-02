@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  createReEngagementHandler,
-  ReEngagementHandler,
-} from '../../src/handlers/reEngagement.js';
+import { createReEngagementHandler, ReEngagementHandler } from '../../src/handlers/reEngagement.js';
 
 describe('reEngagement handler', () => {
   let handler: ReEngagementHandler;
@@ -25,9 +22,7 @@ describe('reEngagement handler', () => {
     vi.advanceTimersByTime(100);
 
     expect(onReEngage).toHaveBeenCalledTimes(1);
-    expect(onReEngage).toHaveBeenCalledWith(
-      expect.objectContaining({ reEngagementCount: 1 }),
-    );
+    expect(onReEngage).toHaveBeenCalledWith(expect.objectContaining({ reEngagementCount: 1 }));
   });
 
   it('fires a second re-engagement after another idle period', () => {
@@ -39,9 +34,7 @@ describe('reEngagement handler', () => {
     vi.advanceTimersByTime(100); // 2nd
 
     expect(onReEngage).toHaveBeenCalledTimes(2);
-    expect(onReEngage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ reEngagementCount: 2 }),
-    );
+    expect(onReEngage).toHaveBeenLastCalledWith(expect.objectContaining({ reEngagementCount: 2 }));
   });
 
   it('does not fire more than 2 re-engagements (max limit)', () => {
@@ -81,9 +74,7 @@ describe('reEngagement handler', () => {
 
     vi.advanceTimersByTime(100); // fires again as count 1
     expect(onReEngage).toHaveBeenCalledTimes(2);
-    expect(onReEngage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ reEngagementCount: 1 }),
-    );
+    expect(onReEngage).toHaveBeenLastCalledWith(expect.objectContaining({ reEngagementCount: 1 }));
   });
 
   it('stops firing after dispose', () => {

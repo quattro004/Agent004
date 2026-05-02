@@ -65,12 +65,10 @@ exports.handler = async (event) => {
         effect: iam.Effect.ALLOW,
         actions: ['iam:DeleteRolePolicy'],
         resources: [props.unauthRole.roleArn],
-      })
+      }),
     );
 
-    alertTopic.addSubscription(
-      new snsSubscriptions.LambdaSubscription(hardStopFn)
-    );
+    alertTopic.addSubscription(new snsSubscriptions.LambdaSubscription(hardStopFn));
 
     new budgets.CfnBudget(this, 'MonthlyBudget', {
       budget: {
@@ -90,9 +88,7 @@ exports.handler = async (event) => {
             threshold: 50,
             thresholdType: 'PERCENTAGE',
           },
-          subscribers: [
-            { subscriptionType: 'SNS', address: alertTopic.topicArn },
-          ],
+          subscribers: [{ subscriptionType: 'SNS', address: alertTopic.topicArn }],
         },
         {
           notification: {
@@ -101,9 +97,7 @@ exports.handler = async (event) => {
             threshold: 80,
             thresholdType: 'PERCENTAGE',
           },
-          subscribers: [
-            { subscriptionType: 'SNS', address: alertTopic.topicArn },
-          ],
+          subscribers: [{ subscriptionType: 'SNS', address: alertTopic.topicArn }],
         },
       ],
     });

@@ -40,7 +40,7 @@ export async function fetchNews(
       };
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       articles: Array<{
         title: string;
         description: string;

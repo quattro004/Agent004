@@ -9,8 +9,8 @@ import { FrontendStack } from '../lib/frontend-stack.js';
 const app = new cdk.App();
 
 // Runtime ARN provided at deploy time: cdk deploy -c agentRuntimeArn=arn:aws:...
-const agentRuntimeArn = app.node.tryGetContext('agentRuntimeArn')
-  ?? 'arn:aws:bedrock-agentcore:*:*:runtime/*';
+const agentRuntimeArn =
+  app.node.tryGetContext('agentRuntimeArn') ?? 'arn:aws:bedrock-agentcore:*:*:runtime/*';
 
 const cognito = new CognitoStack(app, 'MaxHeight-Cognito', { agentRuntimeArn });
 

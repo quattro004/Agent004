@@ -22,9 +22,7 @@ export interface ReEngagementOptions {
   idleTimeoutMs?: number;
 }
 
-export function createReEngagementHandler(
-  options?: ReEngagementOptions,
-): ReEngagementHandler {
+export function createReEngagementHandler(options?: ReEngagementOptions): ReEngagementHandler {
   const idleTimeoutMs = options?.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
 
   let timer: ReturnType<typeof setTimeout> | null = null;

@@ -1,8 +1,4 @@
-import type {
-  ClientMessage,
-  ServerMessage,
-  SessionResumePayload,
-} from '../types/messages';
+import type { ClientMessage, ServerMessage, SessionResumePayload } from '../types/messages';
 import type { SessionState } from '../types/domain';
 
 // --- Constants ---

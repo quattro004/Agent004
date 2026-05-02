@@ -27,10 +27,7 @@ const MAX_TURNS = 50;
 const MAX_TOKENS = 20_000;
 const MAX_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 
-export function createSession(params: {
-  actorId: string;
-  greetingId: string;
-}): Session {
+export function createSession(params: { actorId: string; greetingId: string }): Session {
   return {
     sessionId: randomUUID(),
     actorId: params.actorId,

@@ -84,7 +84,9 @@ async function synthesizeAudio(ssml: string): Promise<Uint8Array> {
 
   const response = await client.send(command);
   const stream = response.AudioStream;
-  return await (stream as unknown as { transformToByteArray(): Promise<Uint8Array> }).transformToByteArray();
+  return await (
+    stream as unknown as { transformToByteArray(): Promise<Uint8Array> }
+  ).transformToByteArray();
 }
 
 async function synthesizeVisemes(ssml: string): Promise<VisemeMark[]> {
@@ -101,7 +103,9 @@ async function synthesizeVisemes(ssml: string): Promise<VisemeMark[]> {
 
   const response = await client.send(command);
   const stream = response.AudioStream;
-  const bytes = await (stream as unknown as { transformToByteArray(): Promise<Uint8Array> }).transformToByteArray();
+  const bytes = await (
+    stream as unknown as { transformToByteArray(): Promise<Uint8Array> }
+  ).transformToByteArray();
   const text = new TextDecoder().decode(bytes);
 
   return text

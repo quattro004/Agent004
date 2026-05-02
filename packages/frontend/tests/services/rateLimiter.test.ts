@@ -28,7 +28,12 @@ describe('rateLimiter', () => {
 
     it('resets hourly window when expired', () => {
       const expired = new Date(Date.now() - 4_000_000).toISOString();
-      const counters: RateLimitState = { hourlyCount: 60, hourlyWindowStart: expired, dailyCount: 0, dailyWindowStart: now };
+      const counters: RateLimitState = {
+        hourlyCount: 60,
+        hourlyWindowStart: expired,
+        dailyCount: 0,
+        dailyWindowStart: now,
+      };
       expect(checkRateLimit(counters)).toEqual({ allowed: true, reason: null });
     });
   });
@@ -42,7 +47,12 @@ describe('rateLimiter', () => {
 
     it('resets hourly if window expired', () => {
       const expired = new Date(Date.now() - 4_000_000).toISOString();
-      const counters: RateLimitState = { hourlyCount: 50, hourlyWindowStart: expired, dailyCount: 5, dailyWindowStart: now };
+      const counters: RateLimitState = {
+        hourlyCount: 50,
+        hourlyWindowStart: expired,
+        dailyCount: 5,
+        dailyWindowStart: now,
+      };
       const result = incrementCounters(counters);
       expect(result.hourlyCount).toBe(1);
       expect(result.dailyCount).toBe(6);

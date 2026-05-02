@@ -34,7 +34,13 @@ vi.mock('../src/personality/systemPrompt.js', () => ({
 }));
 
 vi.mock('../src/handlers/observability.js', () => ({
-  startSpan: vi.fn().mockReturnValue({ name: 'test', startTime: 0, endTime: null, durationMs: null, attributes: {} }),
+  startSpan: vi.fn().mockReturnValue({
+    name: 'test',
+    startTime: 0,
+    endTime: null,
+    durationMs: null,
+    attributes: {},
+  }),
   endSpan: vi.fn().mockReturnValue(null),
 }));
 

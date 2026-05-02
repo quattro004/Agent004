@@ -1,12 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  newsToolSchema,
-  fetchNews,
-} from '../../src/tools/newsTool.js';
-import {
-  weatherToolSchema,
-  fetchWeather,
-} from '../../src/tools/weatherTool.js';
+import { newsToolSchema, fetchNews } from '../../src/tools/newsTool.js';
+import { weatherToolSchema, fetchWeather } from '../../src/tools/weatherTool.js';
 
 describe('newsTool', () => {
   describe('schema validation', () => {
@@ -27,8 +21,12 @@ describe('newsTool', () => {
   });
 
   describe('fetchNews', () => {
-    beforeEach(() => { process.env.NEWS_API_KEY = 'test-key'; });
-    afterEach(() => { delete process.env.NEWS_API_KEY; });
+    beforeEach(() => {
+      process.env.NEWS_API_KEY = 'test-key';
+    });
+    afterEach(() => {
+      delete process.env.NEWS_API_KEY;
+    });
 
     it('should return structured news data on success', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
@@ -99,8 +97,12 @@ describe('weatherTool', () => {
   });
 
   describe('fetchWeather', () => {
-    beforeEach(() => { process.env.WEATHER_API_KEY = 'test-key'; });
-    afterEach(() => { delete process.env.WEATHER_API_KEY; });
+    beforeEach(() => {
+      process.env.WEATHER_API_KEY = 'test-key';
+    });
+    afterEach(() => {
+      delete process.env.WEATHER_API_KEY;
+    });
 
     it('should return structured weather data on success', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
@@ -133,9 +135,7 @@ describe('weatherTool', () => {
     });
 
     it('should return structured error on network failure', async () => {
-      const mockFetch = vi
-        .fn()
-        .mockRejectedValue(new Error('Network timeout'));
+      const mockFetch = vi.fn().mockRejectedValue(new Error('Network timeout'));
 
       const result = await fetchWeather({ location: 'Seattle' }, mockFetch);
       expect(result.success).toBe(false);

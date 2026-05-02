@@ -38,8 +38,7 @@ describe('stutterInjection', () => {
 
   describe('countStutters', () => {
     it('should count stutters in text with multiple stutters', () => {
-      const text =
-        'M-m-m-Max Height here! W-w-well, the weather is fan-fan-fantastic today.';
+      const text = 'M-m-m-Max Height here! W-w-well, the weather is fan-fan-fantastic today.';
       expect(countStutters(text)).toBe(3);
     });
 
@@ -49,8 +48,7 @@ describe('stutterInjection', () => {
     });
 
     it('should count echo tails', () => {
-      const text =
-        'Welcome to the labyrinth of television-vision-vision.';
+      const text = 'Welcome to the labyrinth of television-vision-vision.';
       expect(countStutters(text)).toBe(1);
     });
   });
@@ -74,9 +72,7 @@ describe('stutterInjection', () => {
       const text = 'Max says hello to the viewers at home.';
       const result = injectStutters(text, { minStutters: 1, maxStutters: 3 });
       // The word "Max" should be stuttered with a recognizable pattern
-      expect(result.text).toMatch(
-        /[A-Z]-[a-z]-[a-z]?-?[A-Za-z]+|[a-z]-[a-z]-[a-z]?-?[a-z]+/,
-      );
+      expect(result.text).toMatch(/[A-Z]-[a-z]-[a-z]?-?[A-Za-z]+|[a-z]-[a-z]-[a-z]?-?[a-z]+/);
     });
 
     it('should return stutter markers with position info', () => {
@@ -106,8 +102,7 @@ describe('stutterInjection', () => {
     });
 
     it('should not exceed maxStutters', () => {
-      const text =
-        'Hello there friend, welcome to the show, stay tuned for more.';
+      const text = 'Hello there friend, welcome to the show, stay tuned for more.';
       const result = injectStutters(text, { minStutters: 1, maxStutters: 2 });
       expect(result.stutterCount).toBeLessThanOrEqual(2);
     });

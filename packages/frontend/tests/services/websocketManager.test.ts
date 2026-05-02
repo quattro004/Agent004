@@ -207,11 +207,7 @@ describe('WebSocket Manager', () => {
 
   describe('buildSessionResumePayload', () => {
     it('should construct session_resume message with lastReceivedTurnIndex', () => {
-      const result = buildSessionResumePayload(
-        'session-123',
-        'actor-456',
-        7,
-      );
+      const result = buildSessionResumePayload('session-123', 'actor-456', 7);
 
       expect(result.type).toBe('session_resume');
       expect(result.payload.sessionId).toBe('session-123');

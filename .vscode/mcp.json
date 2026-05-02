@@ -1,76 +1,68 @@
 {
-	"servers": {
-		"context7": {
-			"type": "http",
-			"url": "https://mcp.context7.com/mcp"
-		},
-		"aws-knowledge-mcp-server": {
-			"type": "http",
-			"url": "https://knowledge-mcp.global.api.aws"
-		},
-		"awslabs.aws-documentation-mcp-server": {
-			"type": "stdio",
-			"command": "uvx",
-			"args": [
-				"--from",
-				"awslabs.aws-documentation-mcp-server@latest",
-				"awslabs.aws-documentation-mcp-server.exe"
-			],
-			"env": {
-				"FASTMCP_LOG_LEVEL": "ERROR",
-				"AWS_DOCUMENTATION_PARTITION": "aws"
-			}
-		},
-		"awslabs.aws-api-mcp-server": {
-			"type": "stdio",
-			"command": "uvx",
-			"args": [
-				"--from",
-				"awslabs.aws-api-mcp-server@latest",
-				"awslabs.aws-api-mcp-server.exe"
-			],
-			"env": {
-				"FASTMCP_LOG_LEVEL": "ERROR",
-				"AWS_REGION": "us-west-2"
-			}
-		},
-		"awslabs.aws-iac-mcp-server": {
-			"type": "stdio",
-			"command": "uvx",
-			"args": [
-				"--from",
-				"awslabs.aws-iac-mcp-server@latest",
-				"awslabs.aws-iac-mcp-server.exe"
-			],
-			"env": {
-				"FASTMCP_LOG_LEVEL": "ERROR",
-				"AWS_REGION": "us-west-2"
-			}
-		},
-		"awslabs.amazon-bedrock-agentcore-mcp-server": {
-			"type": "stdio",
-			"command": "uvx",
-			"args": [
-				"--from",
-				"awslabs.amazon-bedrock-agentcore-mcp-server@latest",
-				"awslabs.amazon-bedrock-agentcore-mcp-server.exe"
-			],
-			"env": {
-				"FASTMCP_LOG_LEVEL": "ERROR"
-			}
-		},
-		"awslabs.billing-cost-management-mcp-server": {
-			"type": "stdio",
-			"command": "uvx",
-			"args": [
-				"--from",
-				"awslabs.billing-cost-management-mcp-server@latest",
-				"awslabs.billing-cost-management-mcp-server.exe"
-			],
-			"env": {
-				"FASTMCP_LOG_LEVEL": "ERROR",
-				"AWS_REGION": "us-west-2"
-			}
-		}
-	}
+  "servers": {
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "aws-knowledge-mcp-server": {
+      "type": "http",
+      "url": "https://knowledge-mcp.global.api.aws"
+    },
+    "awslabs.aws-documentation-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "awslabs.aws-documentation-mcp-server@latest",
+        "awslabs.aws-documentation-mcp-server.exe"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_DOCUMENTATION_PARTITION": "aws"
+      }
+    },
+    "awslabs.aws-api-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "awslabs.aws-api-mcp-server@latest", "awslabs.aws-api-mcp-server.exe"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_REGION": "us-west-2"
+      }
+    },
+    "awslabs.aws-iac-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "awslabs.aws-iac-mcp-server@latest", "awslabs.aws-iac-mcp-server.exe"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_REGION": "us-west-2"
+      }
+    },
+    "awslabs.amazon-bedrock-agentcore-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "awslabs.amazon-bedrock-agentcore-mcp-server@latest",
+        "awslabs.amazon-bedrock-agentcore-mcp-server.exe"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "awslabs.billing-cost-management-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "awslabs.billing-cost-management-mcp-server@latest",
+        "awslabs.billing-cost-management-mcp-server.exe"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_REGION": "us-west-2"
+      }
+    }
+  }
 }
