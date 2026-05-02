@@ -28,10 +28,14 @@ export function createAudioChain(): AudioChain {
   let staticNode: AudioWorkletNode | null = null;
   let currentSource: AudioBufferSourceNode | null = null;
   let frequencyData: Uint8Array<ArrayBuffer> | null = null;
+  let visibilityHandler: (() => void) | null = null;
 
   return {
     async init() {
       ctx = new AudioContext();
+
+      // iOS Safari autoplay unlock — resume suspended context
+      await ctx.resume();
 
       await ctx.audioWorklet.addModule(new URL('./stutterProcessor.ts', import.meta.url).href);
       await ctx.audioWorklet.addModule(new URL('./pitchProcessor.ts', import.meta.url).href);
@@ -53,6 +57,14 @@ export function createAudioChain(): AudioChain {
       eqNode.connect(staticNode);
       staticNode.connect(analyser);
       analyser.connect(ctx.destination);
+
+      // iOS Safari 16–16.3 audio routing fix: resume on visibility return
+      visibilityHandler = () => {
+        if (document.visibilityState === 'visible' && ctx?.state === 'suspended') {
+          ctx.resume();
+        }
+      };
+      document.addEventListener('visibilitychange', visibilityHandler);
     },
 
     play(audioBuffer: AudioBuffer) {
@@ -104,6 +116,10 @@ export function createAudioChain(): AudioChain {
 
     dispose() {
       currentSource?.stop();
+      if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+        visibilityHandler = null;
+      }
       ctx?.close();
       ctx = null;
       analyser = null;
