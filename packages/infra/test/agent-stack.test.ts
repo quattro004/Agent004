@@ -19,9 +19,10 @@ describe('AgentStack', () => {
     });
   });
 
-  test('creates $connect route', () => {
+  test('creates $connect route with IAM authorization', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
       RouteKey: '$connect',
+      AuthorizationType: 'AWS_IAM',
     });
   });
 
@@ -41,8 +42,13 @@ describe('AgentStack', () => {
     template.hasResource('AWS::Lambda::Function', {});
   });
 
-  test('creates a stage deployment', () => {
-    template.hasResource('AWS::ApiGatewayV2::Stage', {});
+  test('configures stage with throttling limits', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+      DefaultRouteSettings: {
+        ThrottlingBurstLimit: 10,
+        ThrottlingRateLimit: 5,
+      },
+    });
   });
 
   test('outputs the WebSocket endpoint URL', () => {

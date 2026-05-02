@@ -59,7 +59,7 @@ describe('reEngagementSelector', () => {
     const manifest = loadReEngagementManifest(tiny);
     const selector = createReEngagementSelector(manifest);
     selector.select(); // uses the only entry
-    const second = selector.select(); // should relax or return null
+    selector.select(); // should relax or return null
     // With relaxed constraints it may return the same entry, that's fine
     // The key is it doesn't crash
     expect(true).toBe(true);

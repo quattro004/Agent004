@@ -7,7 +7,9 @@ describe('CognitoStack', () => {
 
   beforeAll(() => {
     const app = new cdk.App();
-    const stack = new CognitoStack(app, 'TestCognitoStack');
+    const stack = new CognitoStack(app, 'TestCognitoStack', {
+      agentRuntimeArn: 'arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/test-agent',
+    });
     template = Template.fromStack(stack);
   });
 
@@ -33,17 +35,30 @@ describe('CognitoStack', () => {
     });
   });
 
-  test('grants bedrock-agentcore:InvokeAgentRuntime permission', () => {
+  test('scopes bedrock-agentcore:InvokeAgentRuntime to specific ARN', () => {
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
           Match.objectLike({
             Action: 'bedrock-agentcore:InvokeAgentRuntime',
             Effect: 'Allow',
+            Resource: 'arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/test-agent',
           }),
         ]),
       },
     });
+  });
+
+  test('does not use wildcard resource for AgentCore', () => {
+    const policies = template.findResources('AWS::IAM::Policy');
+    for (const [, policy] of Object.entries(policies)) {
+      const statements = (policy as { Properties: { PolicyDocument: { Statement: Array<{ Action: string; Resource: string }> } } }).Properties.PolicyDocument.Statement;
+      for (const stmt of statements) {
+        if (stmt.Action === 'bedrock-agentcore:InvokeAgentRuntime') {
+          expect(stmt.Resource).not.toBe('*');
+        }
+      }
+    }
   });
 
   test('grants polly:SynthesizeSpeech permission', () => {

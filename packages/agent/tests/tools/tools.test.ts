@@ -1,13 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   newsToolSchema,
   fetchNews,
-  type NewsResult,
 } from '../../src/tools/newsTool.js';
 import {
   weatherToolSchema,
   fetchWeather,
-  type WeatherResult,
 } from '../../src/tools/weatherTool.js';
 
 describe('newsTool', () => {
@@ -29,6 +27,9 @@ describe('newsTool', () => {
   });
 
   describe('fetchNews', () => {
+    beforeEach(() => { process.env.NEWS_API_KEY = 'test-key'; });
+    afterEach(() => { delete process.env.NEWS_API_KEY; });
+
     it('should return structured news data on success', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -74,6 +75,13 @@ describe('newsTool', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
     });
+
+    it('should return error when NEWS_API_KEY is not configured', async () => {
+      delete process.env.NEWS_API_KEY;
+      const result = await fetchNews({ topic: 'tech' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('NEWS_API_KEY');
+    });
   });
 });
 
@@ -91,6 +99,9 @@ describe('weatherTool', () => {
   });
 
   describe('fetchWeather', () => {
+    beforeEach(() => { process.env.WEATHER_API_KEY = 'test-key'; });
+    afterEach(() => { delete process.env.WEATHER_API_KEY; });
+
     it('should return structured weather data on success', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -129,6 +140,13 @@ describe('weatherTool', () => {
       const result = await fetchWeather({ location: 'Seattle' }, mockFetch);
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
+    });
+
+    it('should return error when WEATHER_API_KEY is not configured', async () => {
+      delete process.env.WEATHER_API_KEY;
+      const result = await fetchWeather({ location: 'Seattle' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('WEATHER_API_KEY');
     });
   });
 });

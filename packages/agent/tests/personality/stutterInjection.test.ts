@@ -3,7 +3,6 @@ import {
   injectStutters,
   countStutters,
   isStutter,
-  type StutterResult,
 } from '../../src/personality/stutterInjection.js';
 
 describe('stutterInjection', () => {

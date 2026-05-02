@@ -26,7 +26,10 @@ export async function fetchNews(
 ): Promise<NewsResult> {
   const topic = input.topic ?? 'general';
   const apiKey = process.env.NEWS_API_KEY;
-  const url = `https://newsapi.org/v2/top-headlines?category=${encodeURIComponent(topic)}&country=us&pageSize=5&apiKey=${apiKey ?? ''}`;
+  if (!apiKey) {
+    return { success: false, error: 'NEWS_API_KEY is not configured' };
+  }
+  const url = `https://newsapi.org/v2/top-headlines?category=${encodeURIComponent(topic)}&country=us&pageSize=5&apiKey=${apiKey}`;
 
   try {
     const response = await fetchFn(url);

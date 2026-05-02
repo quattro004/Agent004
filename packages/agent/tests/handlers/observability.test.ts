@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   startSpan,
   endSpan,
   getActiveSpans,
   TRACE_SPANS,
-  type TraceSpan,
 } from '../../src/handlers/observability.js';
 
 describe('Observability', () => {
@@ -76,7 +75,7 @@ describe('Observability', () => {
     });
 
     it('should calculate duration in milliseconds', () => {
-      const span = startSpan('voice.audio_start');
+      startSpan('voice.audio_start');
       // Small delay to ensure non-zero duration
       const result = endSpan('voice.audio_start');
 

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   checkPersonality,
-  type PersonalityCheckResult,
 } from '../../src/handlers/personalityCheck.js';
 
 describe('personalityCheck', () => {

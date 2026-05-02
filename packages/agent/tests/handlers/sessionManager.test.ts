@@ -4,7 +4,6 @@ import {
   endSession,
   checkSessionCaps,
   getSessionState,
-  type Session,
 } from '../../src/handlers/sessionManager.js';
 
 describe('sessionManager', () => {

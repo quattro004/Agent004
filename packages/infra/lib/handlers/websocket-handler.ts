@@ -7,8 +7,7 @@ import {
   PostToConnectionCommand,
 } from '@aws-sdk/client-apigatewaymanagementapi';
 
-const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE ?? '';
-const AGENT_RUNTIME_ARN = process.env.AGENT_RUNTIME_ARN ?? '';
+const MAX_MESSAGE_LENGTH = 500;
 
 export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
   event
@@ -30,8 +29,7 @@ export const handler: APIGatewayProxyWebsocketHandlerV2 = async (
 };
 
 async function handleConnect(connectionId: string): Promise<APIGatewayProxyResultV2> {
-  // Connection validated by API Gateway authorizer (SigV4/IAM)
-  // In production: store connectionId in DynamoDB connections table
+  // Connection authenticated by API Gateway IAM authorizer (SigV4)
   console.log(`Connected: ${connectionId}`);
   return { statusCode: 200 };
 }
@@ -62,7 +60,7 @@ async function handleDefault(
     return { statusCode: 400 };
   }
 
-  if (!message.type) {
+  if (!message.type || typeof message.type !== 'string') {
     await sendToConnection(connectionId, requestContext, {
       type: 'error',
       payload: { code: 'MISSING_TYPE', message: 'Message must include a type field' },
@@ -84,6 +82,25 @@ async function handleDefault(
       payload: { code: 'UNKNOWN_TYPE', message: `Unknown message type: ${message.type}` },
     });
     return { statusCode: 400 };
+  }
+
+  // Validate payload structure and enforce text length limits
+  if (message.type === 'user_message') {
+    const payload = message.payload as { text?: unknown } | undefined;
+    if (!payload || typeof payload.text !== 'string' || payload.text.length === 0) {
+      await sendToConnection(connectionId, requestContext, {
+        type: 'error',
+        payload: { code: 'INVALID_PAYLOAD', message: 'user_message requires a non-empty text field' },
+      });
+      return { statusCode: 400 };
+    }
+    if (payload.text.length > MAX_MESSAGE_LENGTH) {
+      await sendToConnection(connectionId, requestContext, {
+        type: 'error',
+        payload: { code: 'MESSAGE_TOO_LONG', message: `Message exceeds ${MAX_MESSAGE_LENGTH} character limit` },
+      });
+      return { statusCode: 400 };
+    }
   }
 
   // Route to AgentCore InvokeAgentRuntime

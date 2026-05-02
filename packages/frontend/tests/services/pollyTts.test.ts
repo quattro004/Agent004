@@ -3,7 +3,6 @@ import {
   synthesizeTurn,
   wrapInSsml,
   truncateText,
-  type TtsResult,
 } from '../../src/services/pollyTts';
 
 // Mock the @aws-sdk/client-polly module
@@ -80,9 +79,10 @@ describe('pollyTts', () => {
       const visemeData = '{"time":0,"type":"viseme","value":"p"}\n';
 
       // First call: throttle error
-      const throttleError = new Error('Throttling');
-      (throttleError as any).name = 'ThrottlingException';
-      (throttleError as any).$metadata = { httpStatusCode: 429 };
+      const throttleError = Object.assign(new Error('Throttling'), {
+        name: 'ThrottlingException',
+        $metadata: { httpStatusCode: 429 },
+      });
 
       mockSend
         .mockRejectedValueOnce(throttleError) // Audio first try - throttled
@@ -106,9 +106,10 @@ describe('pollyTts', () => {
     });
 
     it('should fallback to text-only on second failure', async () => {
-      const throttleError = new Error('Throttling');
-      (throttleError as any).name = 'ThrottlingException';
-      (throttleError as any).$metadata = { httpStatusCode: 429 };
+      const throttleError = Object.assign(new Error('Throttling'), {
+        name: 'ThrottlingException',
+        $metadata: { httpStatusCode: 429 },
+      });
 
       const visemeData = '{"time":0,"type":"viseme","value":"p"}\n';
 

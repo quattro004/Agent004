@@ -1,4 +1,4 @@
-import type { Greeting, GreetingArchetype } from '../types/domain';
+import type { Greeting } from '../types/domain';
 
 // --- Types ---
 
@@ -19,7 +19,7 @@ export interface GreetingManifest {
 const NO_REPEAT_SESSIONS = 3;
 
 /** Maximum greeting history entries to track */
-const MAX_HISTORY_LENGTH = 20;
+const _MAX_HISTORY_LENGTH = 20;
 
 /** Fallback no-repeat window when pool is exhausted */
 const EXHAUSTION_FALLBACK_SESSIONS = 1;

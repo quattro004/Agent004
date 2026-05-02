@@ -21,7 +21,10 @@ export async function fetchWeather(
   fetchFn: FetchFn = globalThis.fetch,
 ): Promise<WeatherResult> {
   const apiKey = process.env.WEATHER_API_KEY;
-  const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(input.location)}&units=imperial&appid=${apiKey ?? ''}`;
+  if (!apiKey) {
+    return { success: false, error: 'WEATHER_API_KEY is not configured' };
+  }
+  const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(input.location)}&units=imperial&appid=${apiKey}`;
 
   try {
     const response = await fetchFn(url);
