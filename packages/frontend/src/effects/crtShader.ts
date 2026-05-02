@@ -83,3 +83,11 @@ export function createCrtUniforms(): CrtUniforms {
     resolution: { value: [1920, 1080] },
   };
 }
+
+/**
+ * On mobile, reduce glitch intensity to avoid visual noise on small screens.
+ * Desktop: full intensity passed through. Mobile: capped at 30%.
+ */
+export function getMobileGlitchIntensity(baseIntensity: number, isMobile: boolean): number {
+  return isMobile ? Math.min(baseIntensity, 0.3) : baseIntensity;
+}

@@ -6,11 +6,16 @@ import { TextInput } from './components/TextInput';
 import { BroadcastText } from './components/BroadcastText';
 import { BufferingOverlay } from './components/BufferingOverlay';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
+import { MicButton } from './components/MicButton';
+import { SpeechDisclosure } from './components/SpeechDisclosure';
 import { WireframeBackdrop } from './effects/WireframeBackdrop';
 import { useWebSocket } from './hooks/useWebSocket';
 import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
+import { useIsMobile } from './hooks/useIsMobile';
+import { useSpeech, getSpeechProvider } from './hooks/useSpeech';
 import { createAudioChain } from './audio/audioChain';
+import { probeMic } from './services/micDetection';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
 import { useVoiceStore } from './stores/voiceStore';
@@ -35,9 +40,13 @@ function toOverlayState(state: SessionState): OverlayState {
 
 export function App() {
   const [isTvOn, setIsTvOn] = useState(false);
+  const [hasMic, setHasMic] = useState(false);
+  const [showDisclosure, setShowDisclosure] = useState(false);
   const audioChainRef = useRef(createAudioChain());
   const audioRef = useRef(createUseAudio(audioChainRef.current));
   const greetingRef = useRef(createUseGreeting(audioChainRef.current));
+  const isMobile = useIsMobile();
+  const speech = useSpeech();
 
   const sessionId = useConnectionStore((s) => s.sessionId) ?? 'pending';
   const { sendMessage } = useWebSocket({ url: WS_URL, sessionId });
@@ -54,6 +63,7 @@ export function App() {
     sessionState === 'ENDED' || sessionState === 'BUDGET_CAPPED' || sessionState === 'SIGNAL_LOST';
 
   useEffect(() => {
+    probeMic().then(setHasMic);
     return () => {
       audioRef.current.dispose();
       audioChainRef.current.dispose();
@@ -84,19 +94,52 @@ export function App() {
     [isActive, sendMessage, currentTurnIndex],
   );
 
+  const handleMicStart = useCallback(() => {
+    if (!localStorage.getItem('speech-disclosure-dismissed')) {
+      setShowDisclosure(true);
+      localStorage.setItem('speech-disclosure-dismissed', 'true');
+    }
+    speech.start();
+  }, [speech]);
+
+  const handleMicStop = useCallback(() => {
+    const transcript = speech.stop();
+    if (transcript.trim() && isActive) {
+      sendMessage({
+        type: 'user_message',
+        payload: { text: transcript, turnIndex: currentTurnIndex, inputMethod: 'voice' },
+      });
+    }
+  }, [speech, isActive, sendMessage, currentTurnIndex]);
+
   return (
     <div id="max-height-app" className="crt-fallback">
       <CrtFrame>
         {isTvOn && <Avatar2D isMouthOpen={isMouthOpen} />}
         {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
-        <WireframeBackdrop isMobile={false} />
+        <WireframeBackdrop isMobile={isMobile} />
         <BufferingOverlay isConnecting={!isConnected && isTvOn} isThinking={isStreaming} />
         <SessionStateOverlay state={toOverlayState(sessionState)} />
       </CrtFrame>
 
       <TvKnob onTurnOn={handleTvOn} disabled={isTvOn && isTerminal} />
 
-      <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />
+      <div className="controls-area">
+        <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />
+        {hasMic && (
+          <MicButton
+            onStart={handleMicStart}
+            onStop={handleMicStop}
+            disabled={!isTvOn || !isActive}
+          />
+        )}
+      </div>
+
+      <SpeechDisclosure
+        provider={getSpeechProvider()}
+        visible={showDisclosure}
+        onDismiss={() => setShowDisclosure(false)}
+      />
     </div>
   );
 }

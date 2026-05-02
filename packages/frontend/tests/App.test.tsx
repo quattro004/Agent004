@@ -59,6 +59,26 @@ vi.mock('../src/effects/WireframeBackdrop', () => ({
   WireframeBackdrop: () => <div data-testid="wireframe-backdrop" />,
 }));
 
+vi.mock('../src/components/MicButton', () => ({
+  MicButton: ({
+    onStart,
+    onStop,
+    disabled,
+  }: {
+    onStart: () => void;
+    onStop: () => void;
+    disabled: boolean;
+  }) => (
+    <button data-testid="mic-button" onClick={onStart} onDoubleClick={onStop} disabled={disabled}>
+      Mic
+    </button>
+  ),
+}));
+
+vi.mock('../src/components/SpeechDisclosure', () => ({
+  SpeechDisclosure: () => null,
+}));
+
 // Mock hooks
 const mockSendMessage = vi.fn();
 const mockStartSession = vi.fn();
@@ -69,6 +89,26 @@ vi.mock('../src/hooks/useWebSocket', () => ({
     endSession: vi.fn(),
     sendInterrupt: vi.fn(),
   }),
+}));
+
+vi.mock('../src/hooks/useIsMobile', () => ({
+  useIsMobile: () => false,
+  isMobileQuery: () => false,
+}));
+
+vi.mock('../src/hooks/useSpeech', () => ({
+  useSpeech: () => ({
+    isListening: false,
+    transcript: '',
+    error: null,
+    start: vi.fn(),
+    stop: vi.fn().mockReturnValue(''),
+  }),
+  getSpeechProvider: () => 'Google',
+}));
+
+vi.mock('../src/services/micDetection', () => ({
+  probeMic: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({
