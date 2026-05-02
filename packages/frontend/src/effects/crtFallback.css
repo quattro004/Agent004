@@ -1,0 +1,112 @@
+/**
+ * CSS-only CRT fallback effects for non-WebGL browsers.
+ * Scanlines, flicker, vignette, glow, glitch tear bands.
+ * Includes prefers-reduced-motion support per spec §Visual Presentation.
+ */
+
+.crt-fallback {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Scanline overlay via repeating gradient */
+.crt-fallback::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Vignette overlay */
+.crt-fallback::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.6) 100%);
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* CRT glow */
+.crt-glow {
+  filter: brightness(1.05) contrast(1.1);
+  text-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+}
+
+/* Flicker animation */
+@keyframes crt-flicker {
+  0% {
+    opacity: 1;
+  }
+  5% {
+    opacity: 0.98;
+  }
+  10% {
+    opacity: 1;
+  }
+  15% {
+    opacity: 0.97;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.crt-flicker {
+  animation: crt-flicker 4s infinite;
+}
+
+/* Glitch tear bands */
+@keyframes crt-glitch {
+  0%,
+  95% {
+    clip-path: none;
+    transform: none;
+  }
+  96% {
+    clip-path: inset(30% 0 60% 0);
+    transform: translateX(3px);
+  }
+  97% {
+    clip-path: inset(50% 0 30% 0);
+    transform: translateX(-2px);
+  }
+  98% {
+    clip-path: inset(10% 0 80% 0);
+    transform: translateX(1px);
+  }
+  99% {
+    clip-path: none;
+    transform: none;
+  }
+}
+
+.crt-glitch {
+  animation: crt-glitch 8s infinite;
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .crt-flicker {
+    animation: none;
+  }
+
+  .crt-glitch {
+    animation: none;
+  }
+
+  .crt-fallback::before {
+    opacity: 0.5;
+  }
+}
