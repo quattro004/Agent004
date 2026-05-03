@@ -127,9 +127,21 @@ export function App() {
       <CrtFrame
         panel={
           <>
-            <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={!isTvOn} />
             <TvKnob onTurnOn={handleTvOn} disabled={isTvOn && isTerminal} />
+            <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={!isTvOn} />
           </>
+        }
+        footer={
+          <div className="controls-area">
+            <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />
+            {hasMic && (
+              <MicButton
+                onStart={handleMicStart}
+                onStop={handleMicStop}
+                disabled={!isTvOn || !isActive}
+              />
+            )}
+          </div>
         }
       >
         {isTvOn && <Avatar2D isMouthOpen={isMouthOpen} />}
@@ -138,17 +150,6 @@ export function App() {
         <BufferingOverlay isConnecting={!isConnected && isTvOn} isThinking={isStreaming} />
         <SessionStateOverlay state={toOverlayState(sessionState)} />
       </CrtFrame>
-
-      <div className="controls-area">
-        <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />
-        {hasMic && (
-          <MicButton
-            onStart={handleMicStart}
-            onStop={handleMicStop}
-            disabled={!isTvOn || !isActive}
-          />
-        )}
-      </div>
 
       <SpeechDisclosure
         provider={getSpeechProvider()}

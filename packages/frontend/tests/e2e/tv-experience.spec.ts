@@ -30,21 +30,25 @@ test.describe('TV Experience', () => {
     await expect(powerBtn).toHaveClass(/rotate/);
   });
 
-  test('input is visible below the TV in controls-area', async ({ page }) => {
-    // Input should be in the controls-area below the TV
-    const controlsArea = page.locator('.controls-area');
-    await expect(controlsArea).toBeVisible();
+  test('input is visible on TV cabinet base as overlay', async ({ page }) => {
+    // Input should be inside the CRT bezel footer overlay
+    const footerOverlay = page.locator('.crt-footer-overlay');
+    await expect(footerOverlay).toBeVisible();
 
     const input = page.getByTestId('text-input');
     await expect(input).toBeVisible();
 
-    // Verify controls-area is below the TV bezel
+    // Verify footer overlay is within the TV bezel (overlaid on cabinet)
     const bezel = page.getByTestId('crt-bezel');
     const bezelBox = await bezel.boundingBox();
-    const controlsBox = await controlsArea.boundingBox();
+    const footerBox = await footerOverlay.boundingBox();
     expect(bezelBox).not.toBeNull();
-    expect(controlsBox).not.toBeNull();
-    expect(controlsBox!.y).toBeGreaterThan(bezelBox!.y + bezelBox!.height - 5);
+    expect(footerBox).not.toBeNull();
+    // Footer should be near the bottom of the bezel
+    expect(footerBox!.y + footerBox!.height).toBeLessThanOrEqual(
+      bezelBox!.y + bezelBox!.height + 2,
+    );
+    expect(footerBox!.y).toBeGreaterThan(bezelBox!.y + bezelBox!.height * 0.8);
   });
 
   test('input becomes enabled and usable when session is active', async ({ page }) => {
@@ -77,10 +81,9 @@ test.describe('TV Experience', () => {
     expect(borderColor).not.toBe('rgb(0, 0, 0)');
   });
 
-  test('CRT screen overlay covers the green chroma-key area', async ({ page }) => {
-    // The .crt-screen overlay must be positioned to fully cover the green area.
-    // Green bounds in the image: L=17.3% T=20.3% R=67.5% B=77.1%
-    // Screen overlay should extend BEYOND these bounds.
+  test('CRT screen overlay aligns with TV screen area', async ({ page }) => {
+    // With TV.png (black screen), the screen overlay should align with the visible glass area.
+    // Screen glass bounds: L≈8% T≈13% R≈74% B≈90%
     const screen = page.locator('.crt-screen');
     await expect(screen).toBeVisible();
 
@@ -96,11 +99,11 @@ test.describe('TV Experience', () => {
     const screenRight = screenLeft + (screenBox!.width / bezelBox!.width) * 100;
     const screenBottom = screenTop + (screenBox!.height / bezelBox!.height) * 100;
 
-    // Screen must start BEFORE the green area and end AFTER it
-    expect(screenLeft).toBeLessThan(17.3); // Green starts at 17.3%
-    expect(screenTop).toBeLessThan(20.3); // Green starts at 20.3%
-    expect(screenRight).toBeGreaterThan(67.5); // Green ends at 67.5%
-    expect(screenBottom).toBeGreaterThan(77.1); // Green ends at 77.1%
+    // Screen overlay should roughly match the glass area (within 5% tolerance)
+    expect(screenLeft).toBeLessThan(12);
+    expect(screenTop).toBeLessThan(17);
+    expect(screenRight).toBeGreaterThan(68);
+    expect(screenBottom).toBeGreaterThan(82);
   });
 
   test('input is disabled before TV is turned on', async ({ page }) => {

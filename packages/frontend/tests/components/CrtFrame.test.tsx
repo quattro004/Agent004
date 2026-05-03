@@ -48,7 +48,7 @@ describe('CrtFrame', () => {
     expect(screen.getByTestId('panel-child')).toBeInTheDocument();
   });
 
-  it('should render the TV frame image using the wider landscape variant', () => {
+  it('should render the TV frame image using the black-screen TV variant', () => {
     render(
       <CrtFrame>
         <div>Screen</div>
@@ -58,7 +58,7 @@ describe('CrtFrame', () => {
     const img = screen.getByTestId('crt-frame-image');
     expect(img).toBeInTheDocument();
     expect(img.tagName).toBe('IMG');
-    expect(img).toHaveAttribute('src', '/TV-wider.png');
+    expect(img).toHaveAttribute('src', '/TV.png');
     expect(img).toHaveAttribute('alt', 'Retro CRT Television');
   });
 
@@ -82,7 +82,7 @@ describe('CrtFrame', () => {
     expect(screen.queryByTestId('crt-panel')).not.toBeInTheDocument();
   });
 
-  it('should render footer content inside the screen when footer prop is provided', () => {
+  it('should render footer as overlay on TV cabinet base, outside the screen', () => {
     render(
       <CrtFrame footer={<div data-testid="footer-content">Input Overlay</div>}>
         <div>Screen</div>
@@ -92,18 +92,23 @@ describe('CrtFrame', () => {
     const footer = screen.getByTestId('footer-content');
     expect(footer).toBeInTheDocument();
     expect(footer.textContent).toBe('Input Overlay');
-    // Footer should be inside the screen area
+    // Footer should be inside the bezel but NOT inside the screen
+    const bezel = footer.closest('.crt-bezel');
+    expect(bezel).not.toBeNull();
     const screenEl = footer.closest('.crt-screen');
-    expect(screenEl).not.toBeNull();
+    expect(screenEl).toBeNull();
+    // Footer wrapper should have the overlay class
+    const wrapper = screen.getByTestId('crt-footer-overlay');
+    expect(wrapper.className).toContain('crt-footer-overlay');
   });
 
-  it('should not render footer when footer prop is omitted', () => {
+  it('should not render footer overlay when footer prop is omitted', () => {
     render(
       <CrtFrame>
         <div>Screen</div>
       </CrtFrame>,
     );
 
-    expect(screen.queryByTestId('crt-screen-footer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('crt-footer-overlay')).not.toBeInTheDocument();
   });
 });

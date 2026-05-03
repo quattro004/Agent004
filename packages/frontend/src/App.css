@@ -22,7 +22,7 @@
 
 .crt-bezel {
   position: relative;
-  height: calc(100vh - 56px);
+  height: 100vh;
   width: auto;
   max-width: 100vw;
   flex-shrink: 0;
@@ -42,14 +42,13 @@
 
 .crt-screen {
   position: absolute;
-  /* Coordinates derived from green-screen pixel analysis of TV-wider.png (1536x1024)
-     Measured green bounds: L=17.3% T=20.3% R=67.5% B=77.1%
-     Screen overlay MUST be LARGER than green to fully cover chroma-key bleed.
-     ~2% margin beyond green edge on each side. */
-  left: 15.5%;
-  top: 18.5%;
-  width: 54%;
-  height: 60.5%;
+  /* Coordinates from edge-detection analysis of TV.png (1536x1024).
+     Screen glass: L=8.2% T=13.1% R=74.2% B=90.2%.
+     Overlay positioned to match visible CRT glass area. */
+  left: 7%;
+  top: 12%;
+  width: 66%;
+  height: 77%;
   background: #0a0a0a;
   border-radius: 16px;
   overflow: hidden;
@@ -71,18 +70,17 @@
 
 .crt-panel {
   position: absolute;
-  /* Position over the image's knob/switch area on TV-wider.png.
-     Panel area spans ~68-97% horizontally, knobs at ~85-92% from left.
-     Volume knob upper half, power knob lower half. */
-  right: 3%;
-  top: 30%;
-  bottom: 18%;
-  width: 12%;
+  /* Position over TV.png knob/switch area.
+     CRT switch at ~y=36%, volume knob at ~y=42%, x=82-90%. */
+  right: 4%;
+  top: 28%;
+  bottom: 48%;
+  width: 15%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: space-evenly;
+  gap: 8px;
   pointer-events: auto;
 }
 
@@ -229,33 +227,48 @@
   }
 }
 
-/* ===== Controls Area (below TV) ===== */
+/* ===== Footer Overlay (input bar on TV cabinet base) ===== */
 
-.controls-area {
-  flex-shrink: 0;
+.crt-footer-overlay {
+  position: absolute;
+  /* Positioned over the wooden base of the TV cabinet (y≈91-97%).
+     Spans below the screen, stopping before the panel area. */
+  left: 5%;
+  right: 22%;
+  bottom: 2%;
+  top: 91%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
+  z-index: 4;
+  pointer-events: auto;
+}
+
+/* ===== Controls Area (inside footer overlay) ===== */
+
+.controls-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  max-width: 800px;
-  justify-content: center;
+  padding: 0 4px;
 }
 
 /* ===== Text Input ===== */
 
 .text-input {
   flex: 1;
-  height: 40px;
-  padding: 0 14px;
-  background: #0a0a0a;
-  border: 2px solid rgba(0, 255, 255, 0.5);
-  border-radius: 6px;
+  height: 100%;
+  min-height: 28px;
+  max-height: 40px;
+  padding: 0 10px;
+  background: rgba(10, 10, 10, 0.85);
+  border: 1px solid rgba(0, 255, 255, 0.5);
+  border-radius: 4px;
   color: #00ffff;
   font-family: 'Courier New', Courier, monospace;
-  font-size: 15px;
+  font-size: clamp(11px, 1.5vw, 15px);
   caret-color: #00ffff;
-  box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
+  box-shadow: 0 0 6px rgba(0, 255, 255, 0.2);
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
@@ -541,7 +554,7 @@
   }
 
   .crt-panel {
-    gap: 8px;
+    gap: 4px;
   }
 
   .tv-knob {
@@ -554,17 +567,12 @@
     height: 30px;
   }
 
-  .controls-area {
-    padding: 6px 12px;
-  }
-
   .text-input {
-    height: 36px;
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .mic-button {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
   }
 }

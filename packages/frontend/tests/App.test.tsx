@@ -6,6 +6,7 @@ vi.mock('../src/components/CrtFrame', () => ({
   CrtFrame: ({
     children,
     panel,
+    footer,
   }: {
     children: React.ReactNode;
     panel?: React.ReactNode;
@@ -14,6 +15,7 @@ vi.mock('../src/components/CrtFrame', () => ({
     <div data-testid="crt-frame">
       <div data-testid="crt-screen-mock">{children}</div>
       {panel}
+      {footer && <div data-testid="crt-footer-overlay">{footer}</div>}
     </div>
   ),
 }));
@@ -295,16 +297,16 @@ describe('App', () => {
     expect(screen.getByTestId('volume-knob')).toBeInTheDocument();
   });
 
-  it('should render input in controls-area below the TV, not inside CRT', async () => {
+  it('should render input in footer overlay on TV cabinet, inside CrtFrame', async () => {
     const { App } = await import('../src/App');
-    const { container } = render(<App />);
-    const controlsArea = container.querySelector('.controls-area');
-    expect(controlsArea).not.toBeNull();
+    render(<App />);
     const input = screen.getByTestId('text-input');
-    expect(controlsArea!.contains(input)).toBe(true);
-    // Input should NOT be inside the CRT frame
+    // Input should be inside the CRT frame's footer overlay
+    const footerOverlay = screen.getByTestId('crt-footer-overlay');
+    expect(footerOverlay.contains(input)).toBe(true);
+    // Input should be inside the CRT frame overall
     const crtFrame = screen.getByTestId('crt-frame');
-    expect(crtFrame.contains(input)).toBe(false);
+    expect(crtFrame.contains(input)).toBe(true);
   });
 
   it('should call playGreeting when TV knob is clicked', async () => {
