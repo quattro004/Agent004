@@ -38,11 +38,13 @@
 
 .crt-screen {
   position: absolute;
-  /* Coordinates derived from green-screen analysis of TV.png */
-  left: 13.7%;
-  top: 24.4%;
-  width: 57.3%;
-  height: 46.8%;
+  /* Coordinates derived from green-screen analysis of TV-wider.png (1536x1024)
+     Raw bounds: L=17.3% T=20.3% W=50.2% H=56.7%
+     Inset ~0.5% to prevent green bleed at edges */
+  left: 17.8%;
+  top: 20.8%;
+  width: 49.2%;
+  height: 55.7%;
   background: #0a0a0a;
   border-radius: 12px;
   overflow: hidden;
@@ -60,31 +62,29 @@
   z-index: 10;
 }
 
-/* ===== CRT Control Panel (overlay on image controls) ===== */
+/* ===== CRT Control Panel (invisible overlay on image controls) ===== */
 
 .crt-panel {
   position: absolute;
-  /* Position over the image's knob/switch area (right panel) */
-  right: 6%;
-  top: 38%;
+  /* Position over the image's knob/switch area on TV-wider.png */
+  right: 4%;
+  top: 35%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
   pointer-events: auto;
 }
 
-/* ===== TV Power Knob (small switch in panel) ===== */
+/* ===== TV Power Knob (invisible hit area over image's power button) ===== */
 
 .tv-knob {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #666, #2a2a2a 70%);
-  border: 2px solid #555;
-  box-shadow:
-    0 3px 6px rgba(0, 0, 0, 0.6),
-    inset 0 1px 2px rgba(255, 255, 255, 0.15);
+  background: transparent;
+  border: none;
+  box-shadow: none;
   cursor: pointer;
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   appearance: none;
@@ -94,15 +94,7 @@
 }
 
 .tv-knob::after {
-  content: '';
-  position: absolute;
-  top: 5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 10px;
-  background: #999;
-  border-radius: 2px;
+  content: none;
 }
 
 .tv-knob.rotate {
@@ -110,11 +102,8 @@
 }
 
 .tv-knob:hover:not(:disabled):not(.rotate) {
-  background: radial-gradient(circle at 35% 35%, #777, #333 70%);
-  box-shadow:
-    0 3px 8px rgba(0, 0, 0, 0.6),
-    inset 0 1px 2px rgba(255, 255, 255, 0.2),
-    0 0 12px rgba(0, 255, 255, 0.15);
+  background: rgba(0, 255, 255, 0.1);
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
 }
 
 .tv-knob:disabled {
@@ -122,17 +111,15 @@
   cursor: not-allowed;
 }
 
-/* ===== Volume Knob ===== */
+/* ===== Volume Knob (invisible hit area over image's volume knob) ===== */
 
 .volume-knob {
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #777, #333 70%);
-  border: 2px solid #555;
-  box-shadow:
-    0 3px 6px rgba(0, 0, 0, 0.6),
-    inset 0 1px 2px rgba(255, 255, 255, 0.15);
+  background: transparent;
+  border: none;
+  box-shadow: none;
   cursor: pointer;
   transition: transform 0.15s ease-out;
   appearance: none;
@@ -142,22 +129,12 @@
 }
 
 .volume-knob::after {
-  content: '';
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 12px;
-  background: #bbb;
-  border-radius: 2px;
+  content: none;
 }
 
 .volume-knob:hover:not(:disabled) {
-  box-shadow:
-    0 3px 8px rgba(0, 0, 0, 0.6),
-    inset 0 1px 2px rgba(255, 255, 255, 0.2),
-    0 0 10px rgba(0, 255, 255, 0.15);
+  background: rgba(0, 255, 255, 0.08);
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.15);
 }
 
 .volume-knob:disabled {

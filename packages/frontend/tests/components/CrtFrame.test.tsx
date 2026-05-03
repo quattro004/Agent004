@@ -48,7 +48,7 @@ describe('CrtFrame', () => {
     expect(screen.getByTestId('panel-child')).toBeInTheDocument();
   });
 
-  it('should render the TV frame image', () => {
+  it('should render the TV frame image using the wider landscape variant', () => {
     render(
       <CrtFrame>
         <div>Screen</div>
@@ -58,6 +58,7 @@ describe('CrtFrame', () => {
     const img = screen.getByTestId('crt-frame-image');
     expect(img).toBeInTheDocument();
     expect(img.tagName).toBe('IMG');
+    expect(img).toHaveAttribute('src', '/TV-wider.png');
     expect(img).toHaveAttribute('alt', 'Retro CRT Television');
   });
 

@@ -9,7 +9,7 @@ export function CrtFrame({ children, panel }: CrtFrameProps) {
   return (
     <div data-testid="crt-bezel" className="crt-bezel">
       <img
-        src="/TV.png"
+        src="/TV-wider.png"
         alt="Retro CRT Television"
         className="crt-frame-image"
         data-testid="crt-frame-image"
