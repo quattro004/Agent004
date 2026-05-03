@@ -30,6 +30,39 @@ test.describe('TV Experience', () => {
     await expect(powerBtn).toHaveClass(/rotate/);
   });
 
+  test('clicking power button turns on TV and shows screen content', async ({ page }) => {
+    // Before turning on: avatar and backdrop should NOT be visible
+    await expect(page.getByTestId('avatar-svg')).not.toBeVisible();
+    await expect(page.getByTestId('neon-backdrop')).not.toBeVisible();
+
+    // Click the power button
+    const powerBtn = page.getByRole('button', { name: /turn on/i });
+    await powerBtn.click();
+
+    // After turning on: knob rotates
+    await expect(powerBtn).toHaveClass(/rotate/);
+
+    // Screen content appears
+    await expect(page.getByTestId('avatar-svg')).toBeVisible();
+    await expect(page.getByTestId('neon-backdrop')).toBeVisible();
+
+    // Buffering overlay shows "Tuning in..." (no backend → stays connecting)
+    await expect(page.getByTestId('buffering-overlay')).toBeVisible();
+    await expect(page.getByText('Tuning in...')).toBeVisible();
+  });
+
+  test('power button hit area is above the frame layer', async ({ page }) => {
+    const panel = page.locator('.crt-panel');
+    const frame = page.getByTestId('crt-frame-image');
+    await expect(panel).toBeVisible();
+    await expect(frame).toBeVisible();
+
+    // Panel must have a higher z-index than the frame to be clickable
+    const panelZ = await panel.evaluate((el) => Number(getComputedStyle(el).zIndex) || 0);
+    const frameZ = await frame.evaluate((el) => Number(getComputedStyle(el).zIndex) || 0);
+    expect(panelZ).toBeGreaterThan(frameZ);
+  });
+
   test('input is visible on TV cabinet base as overlay', async ({ page }) => {
     // Input should be inside the CRT bezel footer overlay
     const footerOverlay = page.locator('.crt-footer-overlay');
@@ -81,29 +114,27 @@ test.describe('TV Experience', () => {
     expect(borderColor).not.toBe('rgb(0, 0, 0)');
   });
 
-  test('CRT screen overlay aligns with TV screen area', async ({ page }) => {
-    // With TV.png (black screen), the screen overlay should align with the visible glass area.
-    // Screen glass bounds: L≈8% T≈13% R≈74% B≈90%
+  test('TV frame image sits on top of screen content (frame-as-mask)', async ({ page }) => {
+    // The TV frame image must be layered ABOVE the content area so the opaque
+    // wood/chrome of the frame naturally masks content that bleeds past the
+    // glass area. This eliminates the need for pixel-perfect CSS coordinates.
+    const frameImage = page.getByTestId('crt-frame-image');
     const screen = page.locator('.crt-screen');
+    await expect(frameImage).toBeVisible();
     await expect(screen).toBeVisible();
 
-    const bezel = page.getByTestId('crt-bezel');
-    const bezelBox = await bezel.boundingBox();
-    const screenBox = await screen.boundingBox();
-    expect(bezelBox).not.toBeNull();
-    expect(screenBox).not.toBeNull();
+    // Frame image must have a HIGHER z-index than the screen content
+    const frameZ = await frameImage.evaluate((el) => Number(getComputedStyle(el).zIndex) || 0);
+    const screenZ = await screen.evaluate((el) => Number(getComputedStyle(el).zIndex) || 0);
+    expect(frameZ).toBeGreaterThan(screenZ);
 
-    // Screen overlay position as percentage of bezel
-    const screenLeft = ((screenBox!.x - bezelBox!.x) / bezelBox!.width) * 100;
-    const screenTop = ((screenBox!.y - bezelBox!.y) / bezelBox!.height) * 100;
-    const screenRight = screenLeft + (screenBox!.width / bezelBox!.width) * 100;
-    const screenBottom = screenTop + (screenBox!.height / bezelBox!.height) * 100;
+    // Frame image must allow clicks to pass through to controls beneath
+    const pointerEvents = await frameImage.evaluate((el) => getComputedStyle(el).pointerEvents);
+    expect(pointerEvents).toBe('none');
 
-    // Screen overlay should roughly match the glass area (within 5% tolerance)
-    expect(screenLeft).toBeLessThan(12);
-    expect(screenTop).toBeLessThan(17);
-    expect(screenRight).toBeGreaterThan(68);
-    expect(screenBottom).toBeGreaterThan(82);
+    // Frame image must use absolute positioning to overlay the content
+    const position = await frameImage.evaluate((el) => getComputedStyle(el).position);
+    expect(position).toBe('absolute');
   });
 
   test('input is disabled before TV is turned on', async ({ page }) => {

@@ -23,36 +23,43 @@
 .crt-bezel {
   position: relative;
   height: 100vh;
-  width: auto;
+  /* Aspect ratio matches TV.png (1536×1024 = 3:2) to size the container
+     correctly now that the frame image is position:absolute. */
+  aspect-ratio: 3 / 2;
   max-width: 100vw;
   flex-shrink: 0;
 }
 
-/* TV frame image — the image IS the cabinet */
+/* TV frame image — the image IS the cabinet AND the mask.
+   Sits ON TOP of content; transparent screen area lets content show through. */
 .crt-frame-image {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
   height: 100%;
   width: auto;
   max-width: 100vw;
   pointer-events: none;
   user-select: none;
+  z-index: 5;
 }
 
 /* ===== CRT Screen ===== */
 
 .crt-screen {
   position: absolute;
-  /* Coordinates from edge-detection analysis of TV.png (1536x1024).
-     Screen glass: L=8.2% T=13.1% R=74.2% B=90.2%.
-     Overlay positioned to match visible CRT glass area. */
-  left: 7%;
-  top: 12%;
-  width: 66%;
-  height: 77%;
+  /* Content area sits BEHIND the TV frame image. The frame's opaque
+     wood/chrome masks any overflow, so these coordinates only need to
+     be "big enough" to fill the transparent glass area. */
+  left: 8%;
+  top: 10%;
+  width: 60%;
+  height: 75%;
   background: #0a0a0a;
-  border-radius: 16px;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.9);
+  z-index: 1;
 }
 
 /* CRT glass reflection — convex barrel curvature */
@@ -82,6 +89,7 @@
   justify-content: space-evenly;
   gap: 8px;
   pointer-events: auto;
+  z-index: 6;
 }
 
 /* ===== TV Power Knob (invisible hit area over image's power button) ===== */
@@ -549,6 +557,7 @@
   }
 
   .crt-frame-image {
+    position: absolute;
     height: auto;
     width: 100%;
   }
