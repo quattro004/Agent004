@@ -19,6 +19,16 @@ test.describe('TV Experience', () => {
     expect(heightRatio).toBeGreaterThanOrEqual(0.75);
   });
 
+  test('power button has a visible idle glow so users can find it', async ({ page }) => {
+    const powerBtn = page.getByRole('button', { name: /turn on/i });
+    await expect(powerBtn).toBeVisible();
+
+    // The knob should have a visible box-shadow glow even before hover
+    const boxShadow = await powerBtn.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(boxShadow).not.toBe('none');
+    expect(boxShadow).toContain('rgb');
+  });
+
   test('power button is clickable and turns TV on', async ({ page }) => {
     const powerBtn = page.getByRole('button', { name: /turn on/i });
     await expect(powerBtn).toBeVisible();
