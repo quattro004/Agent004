@@ -67,4 +67,24 @@ describe('conversationStore', () => {
     expect(state.currentResponseText).toBe('');
     expect(state.isStreaming).toBe(false);
   });
+
+  it('should advance currentTurnIndex when advanceTurn is called', () => {
+    const store = useConversationStore.getState();
+    store.advanceTurn();
+
+    expect(useConversationStore.getState().currentTurnIndex).toBe(1);
+
+    store.advanceTurn();
+    expect(useConversationStore.getState().currentTurnIndex).toBe(2);
+  });
+
+  it('should reset currentTurnIndex to zero on reset', () => {
+    const store = useConversationStore.getState();
+    store.advanceTurn();
+    store.advanceTurn();
+    expect(useConversationStore.getState().currentTurnIndex).toBe(2);
+
+    store.reset();
+    expect(useConversationStore.getState().currentTurnIndex).toBe(0);
+  });
 });

@@ -8,6 +8,7 @@ interface ConversationState {
   currentTurnIndex: number;
   appendToken: (token: string) => void;
   setFullText: (text: string) => void;
+  advanceTurn: () => void;
   incrementTurn: () => void;
   updateCounters: (counters: { sessionTokenTotal: number; sessionTurnTotal: number }) => void;
   reset: () => void;
@@ -29,6 +30,7 @@ export const useConversationStore = create<ConversationState>()((set) => ({
       isStreaming: true,
     })),
   setFullText: (text) => set({ currentResponseText: text, isStreaming: false }),
+  advanceTurn: () => set((state) => ({ currentTurnIndex: state.currentTurnIndex + 1 })),
   incrementTurn: () => set((state) => ({ turnCount: state.turnCount + 1 })),
   updateCounters: ({ sessionTokenTotal, sessionTurnTotal }) =>
     set({ tokenCount: sessionTokenTotal, turnCount: sessionTurnTotal }),

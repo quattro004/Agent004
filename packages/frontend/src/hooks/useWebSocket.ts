@@ -24,6 +24,7 @@ export function useWebSocket({ url, sessionId }: UseWebSocketOptions) {
   const appendToken = useConversationStore((s) => s.appendToken);
   const setFullText = useConversationStore((s) => s.setFullText);
   const updateCounters = useConversationStore((s) => s.updateCounters);
+  const advanceTurn = useConversationStore((s) => s.advanceTurn);
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -48,6 +49,7 @@ export function useWebSocket({ url, sessionId }: UseWebSocketOptions) {
             sessionTokenTotal: msg.payload.sessionTokenTotal,
             sessionTurnTotal: msg.payload.sessionTurnTotal,
           });
+          advanceTurn();
           break;
         case 'session_state_change':
           setSessionState(msg.payload.newState);
@@ -57,7 +59,15 @@ export function useWebSocket({ url, sessionId }: UseWebSocketOptions) {
           break;
       }
     },
-    [sessionId, setConnected, setSessionState, appendToken, setFullText, updateCounters],
+    [
+      sessionId,
+      setConnected,
+      setSessionState,
+      appendToken,
+      setFullText,
+      updateCounters,
+      advanceTurn,
+    ],
   );
 
   const connect = useCallback(() => {

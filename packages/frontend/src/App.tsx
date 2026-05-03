@@ -62,6 +62,8 @@ export function App() {
   const isTerminal =
     sessionState === 'ENDED' || sessionState === 'BUDGET_CAPPED' || sessionState === 'SIGNAL_LOST';
 
+  const turnIndexAtMicStartRef = useRef(currentTurnIndex);
+
   useEffect(() => {
     probeMic().then(setHasMic);
     return () => {
@@ -99,18 +101,23 @@ export function App() {
       setShowDisclosure(true);
       localStorage.setItem('speech-disclosure-dismissed', 'true');
     }
+    turnIndexAtMicStartRef.current = currentTurnIndex;
     speech.start();
-  }, [speech]);
+  }, [speech, currentTurnIndex]);
 
   const handleMicStop = useCallback(() => {
     const transcript = speech.stop();
     if (transcript.trim() && isActive) {
       sendMessage({
         type: 'user_message',
-        payload: { text: transcript, turnIndex: currentTurnIndex, inputMethod: 'voice' },
+        payload: {
+          text: transcript,
+          turnIndex: turnIndexAtMicStartRef.current,
+          inputMethod: 'voice',
+        },
       });
     }
-  }, [speech, isActive, sendMessage, currentTurnIndex]);
+  }, [speech, isActive, sendMessage]);
 
   return (
     <div id="max-height-app" className="crt-fallback">

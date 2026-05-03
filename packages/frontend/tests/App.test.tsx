@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // Mock all child components
 vi.mock('../src/components/CrtFrame', () => ({
@@ -82,6 +82,8 @@ vi.mock('../src/components/SpeechDisclosure', () => ({
 // Mock hooks
 const mockSendMessage = vi.fn();
 const mockStartSession = vi.fn();
+const mockSpeechStop = vi.fn().mockReturnValue('');
+const mockSpeechStart = vi.fn();
 vi.mock('../src/hooks/useWebSocket', () => ({
   useWebSocket: () => ({
     sendMessage: mockSendMessage,
@@ -101,8 +103,8 @@ vi.mock('../src/hooks/useSpeech', () => ({
     isListening: false,
     transcript: '',
     error: null,
-    start: vi.fn(),
-    stop: vi.fn().mockReturnValue(''),
+    start: mockSpeechStart,
+    stop: mockSpeechStop,
   }),
   getSpeechProvider: () => 'Google',
 }));
@@ -145,18 +147,29 @@ vi.mock('../src/stores/connectionStore', () => {
   };
 });
 
-vi.mock('../src/stores/conversationStore', () => ({
-  useConversationStore: Object.assign(
-    (selector?: (s: Record<string, unknown>) => unknown) => {
-      const state = { currentResponseText: '', isStreaming: false, currentTurnIndex: 0 };
-      return selector ? selector(state) : state;
-    },
-    {
-      getState: () => ({ currentResponseText: '', isStreaming: false }),
-      subscribe: vi.fn().mockReturnValue(vi.fn()),
-    },
-  ),
-}));
+vi.mock('../src/stores/conversationStore', () => {
+  let state = { currentResponseText: '', isStreaming: false, currentTurnIndex: 0 };
+  const listeners = new Set<() => void>();
+  return {
+    useConversationStore: Object.assign(
+      (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state),
+      {
+        getState: () => state,
+        subscribe: (fn: () => void) => {
+          listeners.add(fn);
+          return () => listeners.delete(fn);
+        },
+        _setState: (s: Partial<typeof state>) => {
+          state = { ...state, ...s };
+          listeners.forEach((fn) => fn());
+        },
+        _reset: () => {
+          state = { currentResponseText: '', isStreaming: false, currentTurnIndex: 0 };
+        },
+      },
+    ),
+  };
+});
 
 vi.mock('../src/stores/voiceStore', () => ({
   useVoiceStore: Object.assign(
@@ -251,6 +264,121 @@ describe('App', () => {
     // handleTvOn is async — wait for microtask to flush
     await vi.waitFor(() => {
       expect(mockPlayGreeting).toHaveBeenCalled();
+    });
+  });
+});
+
+describe('App – voice turn-index race condition', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should send voice message with the turn index captured at mic-start, not mic-stop', async () => {
+    // Use the REAL conversationStore so Zustand triggers React re-renders
+    vi.doUnmock('../src/stores/conversationStore');
+    vi.resetModules();
+
+    // Set connection to ACTIVE and mic available
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({
+      sessionState: 'ACTIVE',
+      sessionId: 'test-session',
+      isWebSocketReady: true,
+    });
+
+    // Enable mic
+    const micDetection = await import('../src/services/micDetection');
+    vi.mocked(micDetection.probeMic).mockResolvedValue(true);
+
+    // Speech stop returns a transcript
+    mockSpeechStop.mockReturnValue('hello from voice');
+
+    // Get the real store so we can call advanceTurn
+    const { useConversationStore } = await import('../src/stores/conversationStore');
+    useConversationStore.getState().reset();
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    // Turn on the TV first (required for mic button to be enabled)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('tv-knob'));
+    });
+
+    // Wait for mic button to appear (probeMic resolves)
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('mic-button')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mic-button')).not.toBeDisabled();
+
+    // Act: start mic — captures currentTurnIndex (0) in ref
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('mic-button'));
+    });
+
+    // Simulate agent_turn_complete arriving: advance turn index via real Zustand
+    // This triggers a React re-render with currentTurnIndex = 1
+    await act(async () => {
+      useConversationStore.getState().advanceTurn();
+    });
+    expect(useConversationStore.getState().currentTurnIndex).toBe(1);
+
+    // Stop mic — should use the ref value (0) captured at mic-start, NOT the live value (1)
+    await act(async () => {
+      fireEvent.doubleClick(screen.getByTestId('mic-button'));
+    });
+
+    // Assert: turnIndex should be 0 (captured at start), not 1 (current)
+    expect(mockSendMessage).toHaveBeenCalledWith({
+      type: 'user_message',
+      payload: {
+        text: 'hello from voice',
+        turnIndex: 0,
+        inputMethod: 'voice',
+      },
+    });
+  });
+
+  it('should send text message with the current turn index at submission time', async () => {
+    // Use the REAL conversationStore
+    vi.doUnmock('../src/stores/conversationStore');
+    vi.resetModules();
+
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({
+      sessionState: 'ACTIVE',
+      sessionId: 'test-session',
+      isWebSocketReady: true,
+    });
+
+    // Advance turnIndex to 3 via real store
+    const { useConversationStore } = await import('../src/stores/conversationStore');
+    useConversationStore.getState().reset();
+    useConversationStore.getState().advanceTurn(); // 1
+    useConversationStore.getState().advanceTurn(); // 2
+    useConversationStore.getState().advanceTurn(); // 3
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    const input = screen.getByTestId('text-input');
+    fireEvent.change(input, { target: { value: 'hello from text' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    // Text input should use the live currentTurnIndex (3)
+    expect(mockSendMessage).toHaveBeenCalledWith({
+      type: 'user_message',
+      payload: {
+        text: 'hello from text',
+        turnIndex: 3,
+        inputMethod: 'text',
+      },
     });
   });
 });
