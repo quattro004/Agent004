@@ -2,13 +2,12 @@
 /**
  * generate-tv-frame.mjs
  *
- * One-time script to produce TV-frame.png from TV.png.
- * Makes the CRT screen area transparent so the TV frame image
- * can be layered ON TOP of content — the opaque wood/chrome
- * naturally masks anything outside the glass.
+ * Produces TV-frame.png from TV.png by making the dark CRT screen
+ * area transparent. The frame image is layered ON TOP of content —
+ * opaque wood/chrome naturally masks anything outside the glass.
  *
  * Usage: node scripts/generate-tv-frame.mjs
- * Requires: npm install --no-save sharp
+ * Requires: sharp (already in devDependencies)
  */
 import sharp from 'sharp';
 import { join, dirname } from 'path';
@@ -26,29 +25,21 @@ async function main() {
 
   console.log(`Input: ${width}x${height}`);
 
-  // Read raw RGBA pixel data
   const { data } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
-  // Define the screen region where pixels should become transparent.
-  // These are conservative bounds that cover the dark glass area
-  // but stop INSIDE the chrome bezel trim.
-  //
-  // We use brightness thresholding within this region: any pixel
-  // darker than the threshold becomes transparent, preserving the
-  // glass reflections and chrome edges as opaque parts of the frame.
+  // Screen region covering the dark CRT glass.
+  // Right bound at 67% is conservative — chrome bezel starts ~70%.
   const SCREEN_BOUNDS = {
     left: Math.round(width * 0.12),
     top: Math.round(height * 0.16),
-    right: Math.round(width * 0.64),
+    right: Math.round(width * 0.67),
     bottom: Math.round(height * 0.84),
   };
 
-  // Brightness threshold: pixels darker than this become transparent.
-  // Chrome bezel is ~60 brightness, so 30 safely keeps chrome opaque
-  // while making the near-black screen transparent.
-  const BRIGHTNESS_THRESHOLD = 30;
+  // Dark glass is <25 brightness; chrome bezel is ~55+.
+  const BRIGHTNESS_THRESHOLD = 35;
 
-  // Feather radius in pixels for smooth edge transitions
+  // Feather radius for smooth edge transitions
   const FEATHER = Math.round(width * 0.02);
 
   let transparentCount = 0;
@@ -56,30 +47,23 @@ async function main() {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const brightness = (r + g + b) / 3;
+      const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
 
-      // Only process pixels within the screen region
       if (
         x >= SCREEN_BOUNDS.left &&
         x <= SCREEN_BOUNDS.right &&
         y >= SCREEN_BOUNDS.top &&
         y <= SCREEN_BOUNDS.bottom
       ) {
-        // Distance from the edge of the screen bounds (for feathering)
         const distFromLeft = x - SCREEN_BOUNDS.left;
         const distFromRight = SCREEN_BOUNDS.right - x;
         const distFromTop = y - SCREEN_BOUNDS.top;
         const distFromBottom = SCREEN_BOUNDS.bottom - y;
         const edgeDist = Math.min(distFromLeft, distFromRight, distFromTop, distFromBottom);
 
-        // Feather factor: 0 at edge, 1 when fully inside
         const feather = Math.min(1, edgeDist / FEATHER);
 
         if (brightness < BRIGHTNESS_THRESHOLD) {
-          // Scale alpha by feather (smooth transition at edges)
           data[i + 3] = Math.round(255 * (1 - feather));
           if (feather >= 1) transparentCount++;
         }
