@@ -48,14 +48,27 @@ describe('CrtFrame', () => {
     expect(screen.getByTestId('panel-child')).toBeInTheDocument();
   });
 
-  it('should render a speaker grille in the panel', () => {
+  it('should render the TV frame image', () => {
+    render(
+      <CrtFrame>
+        <div>Screen</div>
+      </CrtFrame>,
+    );
+
+    const img = screen.getByTestId('crt-frame-image');
+    expect(img).toBeInTheDocument();
+    expect(img.tagName).toBe('IMG');
+    expect(img).toHaveAttribute('alt', 'Retro CRT Television');
+  });
+
+  it('should NOT render a speaker grille element (image provides it)', () => {
     render(
       <CrtFrame panel={<button>Power</button>}>
         <div>Screen</div>
       </CrtFrame>,
     );
 
-    expect(screen.getByTestId('speaker-grille')).toBeInTheDocument();
+    expect(screen.queryByTestId('speaker-grille')).not.toBeInTheDocument();
   });
 
   it('should not render panel when panel prop is omitted', () => {
