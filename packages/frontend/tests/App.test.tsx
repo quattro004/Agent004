@@ -3,9 +3,16 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // Mock all child components
 vi.mock('../src/components/CrtFrame', () => ({
-  CrtFrame: ({ children, panel }: { children: React.ReactNode; panel?: React.ReactNode }) => (
+  CrtFrame: ({
+    children,
+    panel,
+  }: {
+    children: React.ReactNode;
+    panel?: React.ReactNode;
+    footer?: React.ReactNode;
+  }) => (
     <div data-testid="crt-frame">
-      {children}
+      <div data-testid="crt-screen-mock">{children}</div>
       {panel}
     </div>
   ),
@@ -286,6 +293,18 @@ describe('App', () => {
     const { App } = await import('../src/App');
     render(<App />);
     expect(screen.getByTestId('volume-knob')).toBeInTheDocument();
+  });
+
+  it('should render input in controls-area below the TV, not inside CRT', async () => {
+    const { App } = await import('../src/App');
+    const { container } = render(<App />);
+    const controlsArea = container.querySelector('.controls-area');
+    expect(controlsArea).not.toBeNull();
+    const input = screen.getByTestId('text-input');
+    expect(controlsArea!.contains(input)).toBe(true);
+    // Input should NOT be inside the CRT frame
+    const crtFrame = screen.getByTestId('crt-frame');
+    expect(crtFrame.contains(input)).toBe(false);
   });
 
   it('should call playGreeting when TV knob is clicked', async () => {

@@ -33,5 +33,9 @@ docs/tdd-plans/
 # Test coverage
 coverage/
 
+# Playwright
+test-results/
+playwright-report/
+
 # Docker
 *.secret.yaml

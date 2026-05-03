@@ -81,4 +81,29 @@ describe('CrtFrame', () => {
 
     expect(screen.queryByTestId('crt-panel')).not.toBeInTheDocument();
   });
+
+  it('should render footer content inside the screen when footer prop is provided', () => {
+    render(
+      <CrtFrame footer={<div data-testid="footer-content">Input Overlay</div>}>
+        <div>Screen</div>
+      </CrtFrame>,
+    );
+
+    const footer = screen.getByTestId('footer-content');
+    expect(footer).toBeInTheDocument();
+    expect(footer.textContent).toBe('Input Overlay');
+    // Footer should be inside the screen area
+    const screenEl = footer.closest('.crt-screen');
+    expect(screenEl).not.toBeNull();
+  });
+
+  it('should not render footer when footer prop is omitted', () => {
+    render(
+      <CrtFrame>
+        <div>Screen</div>
+      </CrtFrame>,
+    );
+
+    expect(screen.queryByTestId('crt-screen-footer')).not.toBeInTheDocument();
+  });
 });

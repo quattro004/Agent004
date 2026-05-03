@@ -12,24 +12,28 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
-  gap: 12px;
+  height: 100vh;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
 /* ===== CRT Console TV Cabinet ===== */
 
 .crt-bezel {
   position: relative;
-  width: min(95vw, 1000px);
+  height: calc(100vh - 56px);
+  width: auto;
+  max-width: 100vw;
   flex-shrink: 0;
 }
 
 /* TV frame image — the image IS the cabinet */
 .crt-frame-image {
   display: block;
-  width: 100%;
-  height: auto;
+  height: 100%;
+  width: auto;
+  max-width: 100vw;
   pointer-events: none;
   user-select: none;
 }
@@ -38,15 +42,16 @@
 
 .crt-screen {
   position: absolute;
-  /* Coordinates derived from green-screen analysis of TV-wider.png (1536x1024)
-     Raw bounds: L=17.3% T=20.3% W=50.2% H=56.7%
-     Inset ~0.5% to prevent green bleed at edges */
-  left: 17.8%;
-  top: 20.8%;
-  width: 49.2%;
-  height: 55.7%;
+  /* Coordinates derived from green-screen pixel analysis of TV-wider.png (1536x1024)
+     Measured green bounds: L=17.3% T=20.3% R=67.5% B=77.1%
+     Screen overlay MUST be LARGER than green to fully cover chroma-key bleed.
+     ~2% margin beyond green edge on each side. */
+  left: 15.5%;
+  top: 18.5%;
+  width: 54%;
+  height: 60.5%;
   background: #0a0a0a;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.9);
 }
@@ -66,21 +71,26 @@
 
 .crt-panel {
   position: absolute;
-  /* Position over the image's knob/switch area on TV-wider.png */
-  right: 4%;
-  top: 35%;
+  /* Position over the image's knob/switch area on TV-wider.png.
+     Panel area spans ~68-97% horizontally, knobs at ~85-92% from left.
+     Volume knob upper half, power knob lower half. */
+  right: 3%;
+  top: 30%;
+  bottom: 18%;
+  width: 12%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  justify-content: space-between;
+  gap: 16px;
   pointer-events: auto;
 }
 
 /* ===== TV Power Knob (invisible hit area over image's power button) ===== */
 
 .tv-knob {
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -219,48 +229,53 @@
   }
 }
 
-/* ===== Controls Area ===== */
+/* ===== Controls Area (below TV) ===== */
 
 .controls-area {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(95vw, 1000px);
+  padding: 8px 16px;
+  width: 100%;
+  max-width: 800px;
+  justify-content: center;
 }
 
 /* ===== Text Input ===== */
 
 .text-input {
   flex: 1;
-  height: 42px;
+  height: 40px;
   padding: 0 14px;
-  background: #111;
-  border: 1px solid #555;
-  border-radius: 4px;
+  background: #0a0a0a;
+  border: 2px solid rgba(0, 255, 255, 0.5);
+  border-radius: 6px;
   color: #00ffff;
   font-family: 'Courier New', Courier, monospace;
   font-size: 15px;
   caret-color: #00ffff;
-  box-shadow: 0 0 4px rgba(0, 255, 255, 0.08);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
 }
 
 .text-input::placeholder {
-  color: #558888;
+  color: rgba(0, 255, 255, 0.5);
   font-style: italic;
 }
 
 .text-input:focus {
   border-color: #00ffff;
-  box-shadow: 0 0 8px rgba(0, 255, 255, 0.25);
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
   outline: none;
 }
 
 .text-input:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
+  border-color: rgba(0, 255, 255, 0.15);
 }
 
 /* ===== Mic Button ===== */
@@ -510,26 +525,23 @@
 
 @media (max-width: 600px) {
   #max-height-app {
-    padding: 10px;
-    gap: 8px;
+    padding: 0;
+    gap: 4px;
+    justify-content: flex-start;
   }
 
   .crt-bezel {
-    border-radius: 8px;
-    padding: 10px;
-    aspect-ratio: auto;
-    min-height: 300px;
+    height: auto;
+    width: 100vw;
+  }
+
+  .crt-frame-image {
+    height: auto;
+    width: 100%;
   }
 
   .crt-panel {
-    width: 60px;
-    padding: 8px 4px 10px;
-    gap: 10px;
-  }
-
-  .speaker-grille {
-    width: 46px;
-    height: 40px;
+    gap: 8px;
   }
 
   .tv-knob {
@@ -538,21 +550,21 @@
   }
 
   .volume-knob {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
   }
 
   .controls-area {
-    width: 100%;
+    padding: 6px 12px;
   }
 
   .text-input {
-    height: 38px;
+    height: 36px;
     font-size: 14px;
   }
 
   .mic-button {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
   }
 }
