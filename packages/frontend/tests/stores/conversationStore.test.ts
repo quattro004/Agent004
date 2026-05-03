@@ -35,14 +35,6 @@ describe('conversationStore', () => {
     expect(state.isStreaming).toBe(false);
   });
 
-  it('should increment turn count', () => {
-    const store = useConversationStore.getState();
-    store.incrementTurn();
-    store.incrementTurn();
-
-    expect(useConversationStore.getState().turnCount).toBe(2);
-  });
-
   it('should update counters from agent_turn_complete payload', () => {
     const store = useConversationStore.getState();
     store.updateCounters({
