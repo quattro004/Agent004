@@ -1,20 +1,23 @@
 ---
 name: tdd
-description: 'Test-Driven Development using Red-Green-Refactor. Use when: fixing bugs, adding features, implementing new behavior, or when the user says "TDD", "write tests first", "red-green-refactor", "prove the bug", "test-driven", "failing test", or "test the spec". Proactively suggest TDD when the user asks to fix a bug or add a feature — always write a failing test that describes the desired behavior before writing the implementation. Works with GitHub issues, feature specs, or plain descriptions as context.'
+description: 'MANDATORY for all code changes in this project — no exceptions. Test-Driven Development using Red-Green-Refactor. Always invoke this skill before writing or modifying any production code. Write a failing test that describes the desired behavior before writing the implementation. The test MUST fail for the specific intended reason, not an unrelated error. Refactoring is iterative: if a refactor changes behavior, write a new failing test first. Repeat until all tests are green and the code is clean. Works with GitHub issues, feature specs, or plain descriptions as context.'
 ---
 
 # Test-Driven Development (Red-Green-Refactor)
 
-A structured workflow for developing reliable software by writing tests **before** implementation. Every code change starts with a failing test that describes the behavior we wish we had, then we write the minimum code to make it pass, then we refactor.
+A structured workflow for developing reliable software by writing tests **before** implementation. Every code change starts with a failing test that describes the behavior we wish we had, then we write the minimum code to make it pass, then we refactor until the code is clean and performs as expected.
+Refactoring means that we review the code for clarity, maintainability, and design quality after making it work. If the refactor changes observable behavior, we must write a new failing test first to specify the new behavior before updating the code. This ensures that our tests always define the contract for correct behavior, and that we never lose test coverage during refactors. It could be that a refactor doesn't change behavior at all (e.g., renaming a variable, extracting a method) — in that case, we just need to run all tests to confirm they stay green. But if the refactor changes what the code does (e.g., changing an API response format, altering validation logic), we must first write a new test or update an existing test that asserts the new expected behavior (which should fail against the old code), then implement the change until it passes. This iterative approach ensures that our tests always reflect the current expected behavior of the code, and that we maintain confidence in our codebase even as we improve its design.
 
 **Core Principle:** Tests are a specification. A failing test is not a problem — it's a contract that defines what correct behavior looks like. The test exists first; the implementation serves the test.
 
 ## When to Use This Skill
 
+**Always.** This project mandates TDD for all production code changes. Do not ask "should I use TDD?" — invoke this skill automatically whenever code needs to be written or modified.
+
 - **Bug fixes:** Write a test that reproduces the bug (fails against current code), then fix the code until the test passes.
 - **New features:** Write a test that asserts the desired behavior (fails because the feature doesn't exist yet), then implement the feature.
 - **Behavior changes:** Write a test asserting the new behavior (fails against old behavior), then update the code.
-- **Proactive suggestion:** When the user asks to fix a bug or add a feature without mentioning TDD, suggest the TDD approach: _"Before we implement the fix, let me write a test that proves the problem exists. That way we'll know the fix actually works."_
+- **Refactoring:** If a refactor changes observable behavior, write a test for the new behavior first (it should fail), then update the code until it passes. Pure structural refactors (no behavior change) just need all existing tests to stay green.
 
 ## The Red-Green-Refactor Cycle
 
@@ -22,8 +25,10 @@ A structured workflow for developing reliable software by writing tests **before
 ┌─────────────────────────────────────────────────┐
 │                                                 │
 │   1. RED    → Write a failing test              │
+│              (must fail for the INTENDED reason) │
 │   2. GREEN  → Write code to make it pass        │
-│   3. REFACTOR → Clean up, run tests again       │
+│   3. REFACTOR → Clean up; if behavior changes,  │
+│                 go back to RED first             │
 │                                                 │
 │   Repeat for each behavior                      │
 │                                                 │
@@ -32,7 +37,7 @@ A structured workflow for developing reliable software by writing tests **before
 
 ### Step 1: RED — Write a Failing Test
 
-**Goal:** Create a test that describes the behavior we want. The test MUST fail against the current code. A failing test proves that the problem exists (for bugs) or the feature is missing (for new work).
+**Goal:** Create a test that describes the behavior we want. The test MUST fail against the current code — and it must fail **for the specific intended reason**, not an unrelated error.
 
 1. **Understand the desired behavior.** Before writing any code, clearly articulate:
    - What should happen (the desired outcome)
@@ -45,8 +50,9 @@ A structured workflow for developing reliable software by writing tests **before
    - Set up realistic preconditions (Arrange), invoke the behavior (Act), and verify the outcome (Assert/Expect)
    - Be minimal — test one behavior per test
 
-3. **Run the test and confirm it FAILS.**
-   - If it **fails** → ✅ Proceed to Step 2 (you've proven the bug/gap exists)
+3. **Run the test and confirm it FAILS for the right reason.**
+   - If it **fails with the expected assertion error** (e.g., "expected X but received Y") → ✅ Proceed to Step 2
+   - If it **fails for an unrelated reason** (import error, type error, missing mock, wrong setup) → ❌ Fix the test infrastructure until the failure is the behavioral gap you're targeting. The RED failure message should read like a spec violation, not a setup bug.
    - If it **passes** → ❌ Stop and investigate:
      - Is the test actually asserting the right thing?
      - Is the bug already fixed by other code?
@@ -66,13 +72,15 @@ A structured workflow for developing reliable software by writing tests **before
 3. **Run ALL related tests** (not just the new one) to ensure you haven't broken existing behavior.
    - If existing tests break → your fix has a side effect. Adjust the implementation to satisfy both the new test and existing tests.
 
-### Step 3: REFACTOR — Clean Up
+### Step 3: REFACTOR — Clean Up (Iterative)
 
-**Goal:** Improve the code without changing behavior. All tests must stay green.
+**Goal:** Improve the code's design without breaking tests. If the refactor changes observable behavior, go back to RED first.
 
 1. **Review the implementation** for clarity, naming, duplication, and code style.
-2. **Run all related tests again** after refactoring to confirm nothing regressed.
-3. **Commit** with a message that references the test and the fix.
+2. **If the refactor is purely structural** (no behavior change): make the change, run all tests, confirm green.
+3. **If the refactor changes behavior** (different output, different side effects, different API): write a new test asserting the new behavior first (RED — it should fail), then update the code (GREEN), then continue refactoring.
+4. **This step is iterative.** Repeat the review-refactor-test loop until the code is clean, well-named, and all tests are green.
+5. **Commit** with a message that references the test and the fix.
 
 ## Phase 0: Gather Context
 

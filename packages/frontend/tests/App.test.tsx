@@ -3,8 +3,11 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // Mock all child components
 vi.mock('../src/components/CrtFrame', () => ({
-  CrtFrame: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="crt-frame">{children}</div>
+  CrtFrame: ({ children, panel }: { children: React.ReactNode; panel?: React.ReactNode }) => (
+    <div data-testid="crt-frame">
+      {children}
+      {panel}
+    </div>
   ),
 }));
 
@@ -55,8 +58,23 @@ vi.mock('../src/components/SessionStateOverlay', () => ({
     state ? <div data-testid="session-state-overlay">{state}</div> : null,
 }));
 
-vi.mock('../src/effects/WireframeBackdrop', () => ({
-  WireframeBackdrop: () => <div data-testid="wireframe-backdrop" />,
+vi.mock('../src/effects/NeonBackdrop', () => ({
+  NeonBackdrop: () => <div data-testid="neon-backdrop" />,
+}));
+
+vi.mock('../src/components/VolumeKnob', () => ({
+  VolumeKnob: ({
+    onVolumeChange,
+    disabled,
+  }: {
+    volume: number;
+    onVolumeChange: (v: number) => void;
+    disabled: boolean;
+  }) => (
+    <button data-testid="volume-knob" onClick={() => onVolumeChange(0.5)} disabled={disabled}>
+      Volume
+    </button>
+  ),
 }));
 
 vi.mock('../src/components/MicButton', () => ({
@@ -248,10 +266,16 @@ describe('App', () => {
     expect(screen.queryByTestId('avatar-2d')).not.toBeInTheDocument();
   });
 
-  it('should render wireframe backdrop', async () => {
+  it('should render neon backdrop', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    expect(screen.getByTestId('wireframe-backdrop')).toBeInTheDocument();
+    expect(screen.getByTestId('neon-backdrop')).toBeInTheDocument();
+  });
+
+  it('should render the volume knob', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+    expect(screen.getByTestId('volume-knob')).toBeInTheDocument();
   });
 
   it('should call playGreeting when TV knob is clicked', async () => {

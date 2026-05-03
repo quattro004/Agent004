@@ -13,9 +13,10 @@ import type { ClientMessage, ServerMessage } from '../types/messages';
 export interface UseWebSocketOptions {
   url: string;
   sessionId: string;
+  enabled?: boolean;
 }
 
-export function useWebSocket({ url, sessionId }: UseWebSocketOptions) {
+export function useWebSocket({ url, sessionId, enabled = true }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const retriesRef = useRef(0);
 
@@ -91,11 +92,12 @@ export function useWebSocket({ url, sessionId }: UseWebSocketOptions) {
   }, [url, handleMessage, setSessionState]);
 
   useEffect(() => {
+    if (!enabled) return;
     connect();
     return () => {
       wsRef.current?.close(1000);
     };
-  }, [connect]);
+  }, [connect, enabled]);
 
   const sendMessage = useCallback((message: ClientMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

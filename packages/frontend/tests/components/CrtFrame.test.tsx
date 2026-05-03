@@ -36,4 +36,35 @@ describe('CrtFrame', () => {
     const bezel = screen.getByTestId('crt-bezel');
     expect(bezel.className).toContain('crt');
   });
+
+  it('should render panel content when panel prop is provided', () => {
+    render(
+      <CrtFrame panel={<button data-testid="panel-child">Power</button>}>
+        <div>Screen</div>
+      </CrtFrame>,
+    );
+
+    expect(screen.getByTestId('crt-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('panel-child')).toBeInTheDocument();
+  });
+
+  it('should render a speaker grille in the panel', () => {
+    render(
+      <CrtFrame panel={<button>Power</button>}>
+        <div>Screen</div>
+      </CrtFrame>,
+    );
+
+    expect(screen.getByTestId('speaker-grille')).toBeInTheDocument();
+  });
+
+  it('should not render panel when panel prop is omitted', () => {
+    render(
+      <CrtFrame>
+        <div>Screen</div>
+      </CrtFrame>,
+    );
+
+    expect(screen.queryByTestId('crt-panel')).not.toBeInTheDocument();
+  });
 });

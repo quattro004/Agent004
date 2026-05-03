@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { CrtFrame } from './components/CrtFrame';
 import { Avatar2D } from './components/Avatar2D';
 import { TvKnob } from './components/TvKnob';
+import { VolumeKnob } from './components/VolumeKnob';
 import { TextInput } from './components/TextInput';
 import { BroadcastText } from './components/BroadcastText';
 import { BufferingOverlay } from './components/BufferingOverlay';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
 import { MicButton } from './components/MicButton';
 import { SpeechDisclosure } from './components/SpeechDisclosure';
-import { WireframeBackdrop } from './effects/WireframeBackdrop';
+import { NeonBackdrop } from './effects/NeonBackdrop';
 import { useWebSocket } from './hooks/useWebSocket';
 import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
@@ -21,6 +22,7 @@ import { useConversationStore } from './stores/conversationStore';
 import { useVoiceStore } from './stores/voiceStore';
 import type { SessionState } from './types/domain';
 import './effects/crtFallback.css';
+import './App.css';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080';
 
@@ -40,6 +42,7 @@ function toOverlayState(state: SessionState): OverlayState {
 
 export function App() {
   const [isTvOn, setIsTvOn] = useState(false);
+  const [volume, setVolume] = useState(0.5);
   const [hasMic, setHasMic] = useState(false);
   const [showDisclosure, setShowDisclosure] = useState(false);
   const audioChainRef = useRef(createAudioChain());
@@ -49,7 +52,7 @@ export function App() {
   const speech = useSpeech();
 
   const sessionId = useConnectionStore((s) => s.sessionId) ?? 'pending';
-  const { sendMessage } = useWebSocket({ url: WS_URL, sessionId });
+  const { sendMessage } = useWebSocket({ url: WS_URL, sessionId, enabled: isTvOn });
   const sessionState = useConnectionStore((s) => s.sessionState);
   const tokens = useConversationStore((s) => s.currentResponseText);
   const fullText = useConversationStore((s) => (s.isStreaming ? null : s.currentResponseText));
@@ -121,15 +124,20 @@ export function App() {
 
   return (
     <div id="max-height-app" className="crt-fallback">
-      <CrtFrame>
+      <CrtFrame
+        panel={
+          <>
+            <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={!isTvOn} />
+            <TvKnob onTurnOn={handleTvOn} disabled={isTvOn && isTerminal} />
+          </>
+        }
+      >
         {isTvOn && <Avatar2D isMouthOpen={isMouthOpen} />}
         {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
-        <WireframeBackdrop isMobile={isMobile} />
+        <NeonBackdrop isMobile={isMobile} />
         <BufferingOverlay isConnecting={!isConnected && isTvOn} isThinking={isStreaming} />
         <SessionStateOverlay state={toOverlayState(sessionState)} />
       </CrtFrame>
-
-      <TvKnob onTurnOn={handleTvOn} disabled={isTvOn && isTerminal} />
 
       <div className="controls-area">
         <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />

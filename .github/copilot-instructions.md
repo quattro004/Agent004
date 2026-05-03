@@ -26,7 +26,23 @@ Source-of-truth order (highest authority first):
 
 ---
 
-## 3. Project identity
+## 3. Test-Driven Development is mandatory
+
+This project uses **extreme programming (XP)** practices. Specs drive what we build; tests prove the code behaves as specified. **TDD is not optional — it is the development methodology.**
+
+**Always invoke the `tdd` skill before writing or modifying any production code.** Do not write implementation code first and add tests after. The cycle is:
+
+1. **RED** — Write a test that asserts the desired behavior. Run it. It **must fail for the specific intended reason** — not a random import error, not a type mismatch, not an unrelated assertion. If it fails for the wrong reason, fix the test setup until the failure message matches the behavioral gap you're targeting.
+2. **GREEN** — Write the minimum production code to make the test pass. Run the test. If it still fails, iterate on the implementation (not the test) until it passes.
+3. **REFACTOR** — Review the code for clarity, duplication, and design. If the refactor changes behavior, write a new test for that behavior first (it should fail), then update the code until it passes. Re-run all related tests. This step is iterative — repeat until the code is clean and all tests are green.
+
+**This cycle repeats for each behavior.** A single user request may require multiple Red-Green-Refactor cycles.
+
+When the user asks to fix a bug, add a feature, or change behavior — even without mentioning TDD — start by writing a failing test. Do not ask "should I use TDD?" — the answer is always yes.
+
+---
+
+## 4. Project identity
 
 - **Name: "Max Height"** — in code, copy, UI, and commits. Never "Max Headroom" in any user-facing or repo-visible string. ("Inspired by Max Headroom" is acceptable in the README/About only.)
 - Non-commercial fan project, friends-and-family audience.
@@ -34,7 +50,7 @@ Source-of-truth order (highest authority first):
 
 ---
 
-## 4. When generating code, verify
+## 5. When generating code, verify
 
 - Does this respect the constitutional principles? If not, stop.
 - Is there a hard number involved (limit, threshold, timeout, budget)? If yes, did it come from a spec, or did I invent it?
@@ -43,7 +59,7 @@ Source-of-truth order (highest authority first):
 
 ---
 
-## 5. After making changes — always validate
+## 6. After making changes — always validate
 
 Run the full validation pipeline before considering any task complete:
 
@@ -51,7 +67,7 @@ Run the full validation pipeline before considering any task complete:
 npm run validate
 ```
 
-This chains: **lint → format:check → typecheck → build → test**. All five must pass. If any step fails, fix it before committing. When fixing bugs or adding features, use the **TDD skill** to write a failing test first, then implement the fix.
+This chains: **lint → format:check → typecheck → build → test**. All five must pass. If any step fails, fix it before committing.
 
 Individual scripts (for targeted fixes):
 
@@ -67,7 +83,7 @@ Individual scripts (for targeted fixes):
 
 ---
 
-## 6. When in doubt
+## 7. When in doubt
 
 - Prefer asking the user a focused question over guessing.
 - Prefer linking to the relevant spec file and section over restating it.
