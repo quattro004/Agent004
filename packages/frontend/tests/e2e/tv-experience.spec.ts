@@ -29,6 +29,29 @@ test.describe('TV Experience', () => {
     expect(boxShadow).toContain('rgb');
   });
 
+  test('power button has an ON/OFF label so users know what it does', async ({ page }) => {
+    // There should be visible text near the power button indicating ON/OFF
+    const label = page.locator('.tv-knob-label');
+    await expect(label).toBeVisible();
+    await expect(label).toHaveText(/on\s*\/\s*off/i);
+  });
+
+  test('power button glows brighter on hover', async ({ page }) => {
+    const powerBtn = page.getByRole('button', { name: /turn on/i });
+    await expect(powerBtn).toBeVisible();
+
+    // Capture idle glow
+    const idleShadow = await powerBtn.evaluate((el) => getComputedStyle(el).boxShadow);
+
+    // Hover over the button
+    await powerBtn.hover();
+
+    // Capture hover glow — should be different (brighter/larger)
+    const hoverShadow = await powerBtn.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(hoverShadow).not.toBe('none');
+    expect(hoverShadow).not.toBe(idleShadow);
+  });
+
   test('power button is clickable and turns TV on', async ({ page }) => {
     const powerBtn = page.getByRole('button', { name: /turn on/i });
     await expect(powerBtn).toBeVisible();

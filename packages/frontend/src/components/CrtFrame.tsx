@@ -9,14 +9,16 @@ interface CrtFrameProps {
 export function CrtFrame({ children, panel, footer }: CrtFrameProps) {
   return (
     <div data-testid="crt-bezel" className="crt-bezel">
+      {/* Content layer — sits BEHIND the frame */}
+      <div className="crt-screen">{children}</div>
+      {/* TV frame overlay — sits ON TOP, transparent screen lets content show through */}
       <img
-        src="/TV.png"
+        src="/TV-frame.png"
         alt="Retro CRT Television"
         className="crt-frame-image"
         data-testid="crt-frame-image"
         draggable={false}
       />
-      <div className="crt-screen">{children}</div>
       {panel && (
         <div data-testid="crt-panel" className="crt-panel">
           {panel}

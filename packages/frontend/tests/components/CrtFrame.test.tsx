@@ -48,7 +48,7 @@ describe('CrtFrame', () => {
     expect(screen.getByTestId('panel-child')).toBeInTheDocument();
   });
 
-  it('should render the TV frame image using the black-screen TV variant', () => {
+  it('should render the TV frame image using the transparent-screen frame variant', () => {
     render(
       <CrtFrame>
         <div>Screen</div>
@@ -58,7 +58,7 @@ describe('CrtFrame', () => {
     const img = screen.getByTestId('crt-frame-image');
     expect(img).toBeInTheDocument();
     expect(img.tagName).toBe('IMG');
-    expect(img).toHaveAttribute('src', '/TV.png');
+    expect(img).toHaveAttribute('src', '/TV-frame.png');
     expect(img).toHaveAttribute('alt', 'Retro CRT Television');
   });
 
