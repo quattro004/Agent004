@@ -266,9 +266,19 @@ describe('App', () => {
     expect(screen.queryByTestId('avatar-2d')).not.toBeInTheDocument();
   });
 
-  it('should render neon backdrop', async () => {
+  it('should NOT render neon backdrop when TV is off', async () => {
     const { App } = await import('../src/App');
     render(<App />);
+    expect(screen.queryByTestId('neon-backdrop')).not.toBeInTheDocument();
+  });
+
+  it('should render neon backdrop after turning TV on', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+    const knob = screen.getByTestId('tv-knob');
+    await act(async () => {
+      fireEvent.click(knob);
+    });
     expect(screen.getByTestId('neon-backdrop')).toBeInTheDocument();
   });
 

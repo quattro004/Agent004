@@ -134,7 +134,7 @@ export function App() {
       >
         {isTvOn && <Avatar2D isMouthOpen={isMouthOpen} />}
         {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
-        <NeonBackdrop isMobile={isMobile} />
+        {isTvOn && <NeonBackdrop isMobile={isMobile} />}
         <BufferingOverlay isConnecting={!isConnected && isTvOn} isThinking={isStreaming} />
         <SessionStateOverlay state={toOverlayState(sessionState)} />
       </CrtFrame>
