@@ -80,7 +80,6 @@ Refactoring means that we review the code for clarity, maintainability, and desi
 2. **If the refactor is purely structural** (no behavior change): make the change, run all tests, confirm green.
 3. **If the refactor changes behavior** (different output, different side effects, different API): write a new test asserting the new behavior first (RED — it should fail), then update the code (GREEN), then continue refactoring.
 4. **This step is iterative.** Repeat the review-refactor-test loop until the code is clean, well-named, and all tests are green.
-5. **Commit** with a message that references the test and the fix.
 
 ## Phase 0: Gather Context
 
@@ -268,7 +267,6 @@ This is a critical signal. Investigate:
 
 1. **Review the code** — naming, clarity, duplication, comments.
 2. **Run the full related test suite** one final time.
-3. **Commit** with a descriptive message referencing the tests and the fix.
 
 ## Phase 5: Broader Validation
 
