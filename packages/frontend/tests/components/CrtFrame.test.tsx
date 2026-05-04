@@ -4,17 +4,14 @@ import { CrtFrame } from '../../src/components/CrtFrame';
 
 describe('CrtFrame', () => {
   it('should render the CRT bezel container', () => {
-    render(
-      <CrtFrame>
-        <div data-testid="screen-content">Test</div>
-      </CrtFrame>,
-    );
+    render(<CrtFrame />);
 
     const bezel = screen.getByTestId('crt-bezel');
     expect(bezel).toBeInTheDocument();
+    expect(bezel.className).toContain('crt-bezel');
   });
 
-  it('should render a screen slot for content', () => {
+  it('should render children inside crt-screen', () => {
     render(
       <CrtFrame>
         <div data-testid="screen-content">Test Content</div>
@@ -24,36 +21,13 @@ describe('CrtFrame', () => {
     const content = screen.getByTestId('screen-content');
     expect(content).toBeInTheDocument();
     expect(content).toHaveTextContent('Test Content');
+    // Children should be inside .crt-screen
+    const screenEl = content.closest('.crt-screen');
+    expect(screenEl).not.toBeNull();
   });
 
-  it('should apply CRT frame styling class', () => {
-    render(
-      <CrtFrame>
-        <div>Content</div>
-      </CrtFrame>,
-    );
-
-    const bezel = screen.getByTestId('crt-bezel');
-    expect(bezel.className).toContain('crt');
-  });
-
-  it('should render panel content when panel prop is provided', () => {
-    render(
-      <CrtFrame panel={<button data-testid="panel-child">Power</button>}>
-        <div>Screen</div>
-      </CrtFrame>,
-    );
-
-    expect(screen.getByTestId('crt-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('panel-child')).toBeInTheDocument();
-  });
-
-  it('should render the TV frame image using the transparent-screen frame variant', () => {
-    render(
-      <CrtFrame>
-        <div>Screen</div>
-      </CrtFrame>,
-    );
+  it('should render the TV frame image with correct src and alt', () => {
+    render(<CrtFrame />);
 
     const img = screen.getByTestId('crt-frame-image');
     expect(img).toBeInTheDocument();
@@ -62,53 +36,52 @@ describe('CrtFrame', () => {
     expect(img).toHaveAttribute('alt', 'Retro CRT Television');
   });
 
+  it('should render a video element when videoSrc is provided', () => {
+    render(<CrtFrame videoSrc="/max-height.mp4" />);
+
+    const video = document.querySelector('video');
+    expect(video).not.toBeNull();
+    expect(video).toHaveAttribute('src', '/max-height.mp4');
+    expect(video).toHaveAttribute('autoplay');
+    expect(video).toHaveClass('crt-video');
+  });
+
+  it('should NOT render a video element when videoSrc is omitted', () => {
+    render(<CrtFrame />);
+
+    const video = document.querySelector('video');
+    expect(video).toBeNull();
+  });
+
+  it('should render CRT effect layers (scan-lines, crt-glass)', () => {
+    render(<CrtFrame />);
+
+    expect(document.querySelector('.scan-lines')).not.toBeNull();
+    expect(document.querySelector('.crt-glass')).not.toBeNull();
+  });
+
   it('should NOT render a speaker grille element (image provides it)', () => {
-    render(
-      <CrtFrame panel={<button>Power</button>}>
-        <div>Screen</div>
-      </CrtFrame>,
-    );
+    render(<CrtFrame />);
 
     expect(screen.queryByTestId('speaker-grille')).not.toBeInTheDocument();
   });
 
-  it('should not render panel when panel prop is omitted', () => {
-    render(
-      <CrtFrame>
-        <div>Screen</div>
-      </CrtFrame>,
-    );
+  it('should render bezel as viewport-filling container (no aspect-ratio constraint)', () => {
+    render(<CrtFrame />);
 
-    expect(screen.queryByTestId('crt-panel')).not.toBeInTheDocument();
+    const bezel = screen.getByTestId('crt-bezel');
+    // The bezel should NOT have inline aspect-ratio — relies on CSS class for full viewport fill
+    expect(bezel.style.aspectRatio).toBe('');
+    // No inline width/height constraints — CSS class handles viewport sizing
+    expect(bezel.style.maxWidth).toBe('');
   });
 
-  it('should render footer as overlay on TV cabinet base, outside the screen', () => {
-    render(
-      <CrtFrame footer={<div data-testid="footer-content">Input Overlay</div>}>
-        <div>Screen</div>
-      </CrtFrame>,
-    );
+  it('should render frame image that covers viewport (no inline object-fit override)', () => {
+    render(<CrtFrame />);
 
-    const footer = screen.getByTestId('footer-content');
-    expect(footer).toBeInTheDocument();
-    expect(footer.textContent).toBe('Input Overlay');
-    // Footer should be inside the bezel but NOT inside the screen
-    const bezel = footer.closest('.crt-bezel');
-    expect(bezel).not.toBeNull();
-    const screenEl = footer.closest('.crt-screen');
-    expect(screenEl).toBeNull();
-    // Footer wrapper should have the overlay class
-    const wrapper = screen.getByTestId('crt-footer-overlay');
-    expect(wrapper.className).toContain('crt-footer-overlay');
-  });
-
-  it('should not render footer overlay when footer prop is omitted', () => {
-    render(
-      <CrtFrame>
-        <div>Screen</div>
-      </CrtFrame>,
-    );
-
-    expect(screen.queryByTestId('crt-footer-overlay')).not.toBeInTheDocument();
+    const img = screen.getByTestId('crt-frame-image');
+    // Uses CSS class for object-fit: cover; no inline style override
+    expect(img.style.objectFit).toBe('');
+    expect(img).toHaveClass('crt-frame-image');
   });
 });

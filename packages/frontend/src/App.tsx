@@ -1,22 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CrtFrame } from './components/CrtFrame';
 import { Avatar2D } from './components/Avatar2D';
-import { TvKnob } from './components/TvKnob';
-import { VolumeKnob } from './components/VolumeKnob';
-import { TextInput } from './components/TextInput';
 import { BroadcastText } from './components/BroadcastText';
 import { BufferingOverlay } from './components/BufferingOverlay';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
-import { MicButton } from './components/MicButton';
-import { SpeechDisclosure } from './components/SpeechDisclosure';
+import { TextInput } from './components/TextInput';
 import { NeonBackdrop } from './effects/NeonBackdrop';
 import { useWebSocket } from './hooks/useWebSocket';
 import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
 import { useIsMobile } from './hooks/useIsMobile';
-import { useSpeech, getSpeechProvider } from './hooks/useSpeech';
 import { createAudioChain } from './audio/audioChain';
-import { probeMic } from './services/micDetection';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
 import { useVoiceStore } from './stores/voiceStore';
@@ -41,15 +35,13 @@ function toOverlayState(state: SessionState): OverlayState {
 }
 
 export function App() {
-  const [isTvOn, setIsTvOn] = useState(false);
+  // TV is always on for now — power button will be wired in a follow-up task
+  const isTvOn = true;
   const [volume, setVolume] = useState(0.5);
-  const [hasMic, setHasMic] = useState(false);
-  const [showDisclosure, setShowDisclosure] = useState(false);
   const audioChainRef = useRef(createAudioChain());
   const audioRef = useRef(createUseAudio(audioChainRef.current));
   const greetingRef = useRef(createUseGreeting(audioChainRef.current));
   const isMobile = useIsMobile();
-  const speech = useSpeech();
 
   const sessionId = useConnectionStore((s) => s.sessionId) ?? 'pending';
   const { sendMessage } = useWebSocket({ url: WS_URL, sessionId, enabled: isTvOn });
@@ -62,31 +54,23 @@ export function App() {
   const currentTurnIndex = useConversationStore((s) => s.currentTurnIndex);
 
   const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
-  const isTerminal =
-    sessionState === 'ENDED' || sessionState === 'BUDGET_CAPPED' || sessionState === 'SIGNAL_LOST';
 
-  const turnIndexAtMicStartRef = useRef(currentTurnIndex);
+  // Suppress unused variable warnings — these will be used when controls are wired
+  void volume;
+  void setVolume;
+  void greetingRef;
 
   useEffect(() => {
-    probeMic().then(setHasMic);
+    try {
+      void audioChainRef.current.init();
+    } catch {
+      // AudioContext may fail; continue without audio
+    }
     return () => {
       audioRef.current.dispose();
       audioChainRef.current.dispose();
     };
   }, []);
-
-  const handleTvOn = useCallback(async () => {
-    if (isTvOn) return;
-    setIsTvOn(true);
-
-    try {
-      await audioChainRef.current.init();
-    } catch {
-      // AudioContext may fail; continue without audio
-    }
-
-    void greetingRef.current.playGreeting();
-  }, [isTvOn]);
 
   const handleSend = useCallback(
     (text: string) => {
@@ -99,63 +83,19 @@ export function App() {
     [isActive, sendMessage, currentTurnIndex],
   );
 
-  const handleMicStart = useCallback(() => {
-    if (!localStorage.getItem('speech-disclosure-dismissed')) {
-      setShowDisclosure(true);
-      localStorage.setItem('speech-disclosure-dismissed', 'true');
-    }
-    turnIndexAtMicStartRef.current = currentTurnIndex;
-    speech.start();
-  }, [speech, currentTurnIndex]);
-
-  const handleMicStop = useCallback(() => {
-    const transcript = speech.stop();
-    if (transcript.trim() && isActive) {
-      sendMessage({
-        type: 'user_message',
-        payload: {
-          text: transcript,
-          turnIndex: turnIndexAtMicStartRef.current,
-          inputMethod: 'voice',
-        },
-      });
-    }
-  }, [speech, isActive, sendMessage]);
-
   return (
     <div id="max-height-app" className="crt-fallback">
-      <CrtFrame
-        panel={
-          <>
-            <TvKnob onTurnOn={handleTvOn} disabled={isTvOn && isTerminal} />
-            <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={!isTvOn} />
-          </>
-        }
-        footer={
-          <div className="controls-area">
-            <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />
-            {hasMic && (
-              <MicButton
-                onStart={handleMicStart}
-                onStop={handleMicStop}
-                disabled={!isTvOn || !isActive}
-              />
-            )}
-          </div>
-        }
-      >
+      <CrtFrame>
+        {isTvOn && <NeonBackdrop isMobile={isMobile} />}
         {isTvOn && <Avatar2D isMouthOpen={isMouthOpen} />}
         {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
-        {isTvOn && <NeonBackdrop isMobile={isMobile} />}
         <BufferingOverlay isConnecting={!isConnected && isTvOn} isThinking={isStreaming} />
         <SessionStateOverlay state={toOverlayState(sessionState)} />
       </CrtFrame>
 
-      <SpeechDisclosure
-        provider={getSpeechProvider()}
-        visible={showDisclosure}
-        onDismiss={() => setShowDisclosure(false)}
-      />
+      <div className="chat-bar">
+        <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />
+      </div>
     </div>
   );
 }

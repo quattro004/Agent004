@@ -18,28 +18,46 @@
   overflow: hidden;
 }
 
+/* ===== Chat Bar (floating input at bottom) ===== */
+
+.chat-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 10;
+  padding: 1rem 2rem;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.9));
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.chat-bar > * {
+  pointer-events: auto;
+  width: 100%;
+}
+
 /* ===== CRT Console TV Cabinet ===== */
 
 .crt-bezel {
   position: relative;
+  /* Fill the viewport: use width as primary constraint and let
+     aspect-ratio determine height (TV is wider than most viewports) */
+  width: 100vw;
   height: 100vh;
-  /* Aspect ratio matches TV.png (1536×1024 = 3:2) to size the container
-     correctly now that the frame image is position:absolute. */
-  aspect-ratio: 3 / 2;
-  max-width: 100vw;
   flex-shrink: 0;
 }
 
 /* TV frame image — the image IS the cabinet AND the mask.
-   Sits ON TOP of content; transparent screen area lets content show through. */
+   Sits ON TOP of content; transparent screen area lets content show through.
+   Uses object-fit: cover to fill the entire viewport, cropping edges if needed. */
 .crt-frame-image {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   display: block;
+  width: 100%;
   height: 100%;
-  width: auto;
-  max-width: 100vw;
+  object-fit: cover;
   pointer-events: none;
   user-select: none;
   z-index: 5;
@@ -50,13 +68,12 @@
 .crt-screen {
   position: absolute;
   /* Content area sits BEHIND the TV frame image. The frame's opaque
-     wood/chrome masks any overflow, so these coordinates only need to
-     be "big enough" to fill the transparent glass area.
-     Glass transparency extends to ~68% from left. */
-  left: 8%;
-  top: 10%;
-  width: 62%;
-  height: 75%;
+     wood/chrome masks any overflow, so these coordinates fill the
+     transparent glass area of TV-frame.png (left ~68% of the image). */
+  left: 5%;
+  top: 8%;
+  width: 65%;
+  height: 80%;
   background: #0a0a0a;
   border-radius: 8px;
   overflow: hidden;
@@ -589,8 +606,8 @@
 @media (max-width: 600px) {
   #max-height-app {
     padding: 0;
-    gap: 4px;
-    justify-content: flex-start;
+    gap: 0;
+    justify-content: center;
   }
 
   .crt-bezel {
@@ -600,60 +617,30 @@
 
   .crt-frame-image {
     position: absolute;
-    height: auto;
     width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
-
-  .crt-panel {
-    gap: 4px;
-  }
-
-  .tv-knob {
-    width: 28px;
-    height: 28px;
-  }
-
-  .volume-knob {
-    width: 30px;
-    height: 30px;
-  }
-
-  .text-input {
-    font-size: 12px;
-  }
-
-  .mic-button {
-    width: 30px;
-    height: 30px;
-  }
-}
-
-.tv-root {
-  position: relative;
-  width: 800px;
-  aspect-ratio: 4 / 3;
-}
-
-.tv-frame {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
 }
 
 @keyframes glowPulse {
-  0%, 100% { filter: drop-shadow(0 0 8px rgba(255,180,80,0.25)); }
-  50% { filter: drop-shadow(0 0 12px rgba(255,180,80,0.4)); }
+  0%,
+  100% {
+    filter: drop-shadow(0 0 8px rgba(255, 180, 80, 0.25));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(255, 180, 80, 0.4));
+  }
 }
 
 .crt-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   transform: perspective(800px) scale(1.02);
   border-radius: 12px;
   animation: glowPulse 3s ease-in-out infinite;
-  filter:
-    contrast(1.15)
-    brightness(0.95)
-    saturate(1.2)
-    blur(0.4px); 
+  filter: contrast(1.15) brightness(0.95) saturate(1.2) blur(0.4px);
 }
 
 .crt-glass {
@@ -661,16 +648,8 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(
-      ellipse at top left,
-      rgba(255,255,255,0.08),
-      transparent 60%
-    ),
-    linear-gradient(
-      135deg,
-      rgba(255,255,255,0.05),
-      transparent 40%
-    );
+    radial-gradient(ellipse at top left, rgba(255, 255, 255, 0.08), transparent 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 40%);
   mix-blend-mode: screen;
 }
 
@@ -680,8 +659,8 @@
   pointer-events: none;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(255,255,255,0.03),
-    rgba(255,255,255,0.03) 1px,
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.03) 1px,
     transparent 1px,
     transparent 3px
   );
