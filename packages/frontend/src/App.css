@@ -627,3 +627,63 @@
     height: 30px;
   }
 }
+
+.tv-root {
+  position: relative;
+  width: 800px;
+  aspect-ratio: 4 / 3;
+}
+
+.tv-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+@keyframes glowPulse {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(255,180,80,0.25)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255,180,80,0.4)); }
+}
+
+.crt-video {
+  transform: perspective(800px) scale(1.02);
+  border-radius: 12px;
+  animation: glowPulse 3s ease-in-out infinite;
+  filter:
+    contrast(1.15)
+    brightness(0.95)
+    saturate(1.2)
+    blur(0.4px); 
+}
+
+.crt-glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse at top left,
+      rgba(255,255,255,0.08),
+      transparent 60%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255,255,255,0.05),
+      transparent 40%
+    );
+  mix-blend-mode: screen;
+}
+
+.scan-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.03),
+    rgba(255,255,255,0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.35;
+}
