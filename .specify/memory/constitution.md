@@ -87,8 +87,8 @@ the judge influences what it judges.
 
 - Pin exact SDK versions; no `^` / `~` on pre-1.0
   dependencies.
-- `package-lock.json` MUST be committed, never deleted.
-- `npm audit` MUST be clean before merging dependency changes.
+- `pnpm-lock.yaml` MUST be committed, never deleted.
+- `pnpm audit` MUST be clean before merging dependency changes.
 - New dependencies MUST be reviewed (maintainer, publish date,
   downloads) before adding.
 

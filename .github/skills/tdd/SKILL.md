@@ -190,12 +190,12 @@ Follow existing test patterns in the project:
   ```
 - **Run all tests from root:**
   ```bash
-  npm test
+  pnpm test
   ```
 - **Run by package:**
   ```bash
-  cd packages/frontend && npm test    # Vitest + RTL
-  cd packages/agent && npm test       # Vitest
+  cd packages/frontend && pnpm test    # Vitest + RTL
+  cd packages/agent && pnpm test       # Vitest
   ```
 - **Run a specific test:**
   ```bash
@@ -210,7 +210,7 @@ Follow existing test patterns in the project:
 - **Naming convention:** Use descriptive `describe`/`test` blocks
 - **Run tests:**
   ```bash
-  cd packages/infra && npm test
+  cd packages/infra && pnpm test
   ```
 - **Run a specific test:**
   ```bash
@@ -223,7 +223,7 @@ Follow existing test patterns in the project:
 - **Test framework:** Playwright
 - **Run tests (requires deployed stack):**
   ```bash
-  cd packages/frontend && npm run test:e2e
+  cd packages/frontend && pnpm run test:e2e
   ```
 
 ### Writing Effective Red Tests
@@ -274,19 +274,19 @@ After the focused TDD cycle, validate more broadly:
 
 1. **Run the full test suite** from the workspace root:
    ```bash
-   npm test
+   pnpm test
    ```
 2. **Type-check the project** to catch compile errors across all packages:
    ```bash
-   npm run typecheck
+   pnpm run typecheck
    ```
 3. **Lint the project** to catch style and quality issues:
    ```bash
-   npm run lint
+   pnpm run lint
    ```
 4. **Build all packages** to verify everything compiles cleanly:
    ```bash
-   npm run build
+   pnpm run build
    ```
 
 ## Common Pitfalls

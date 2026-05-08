@@ -15,7 +15,7 @@
 
 ## Path Conventions
 
-- **Monorepo** (npm workspaces): `packages/frontend/`, `packages/agent/`, `packages/infra/`
+- **Monorepo** (pnpm workspaces): `packages/frontend/`, `packages/agent/`, `packages/infra/`
 - Paths follow `plan.md` §Project Structure
 
 ## Coverage Gap Fixes Applied
@@ -40,7 +40,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 **Purpose**: Initialize the TypeScript monorepo, tooling, and per-package scaffolding.
 
-- [x] T001 Initialize npm workspaces monorepo with root package.json (workspaces: packages/*), .npmrc, Zod override (overrides: { "zod": "^4.3.6" }), and .nvmrc (Node 24 LTS)
+- [x] T001 Initialize pnpm workspaces monorepo with root package.json (pnpm-workspace.yaml: packages/*), .npmrc, Zod override (overrides: { "zod": "^4.3.6" }), and .nvmrc (Node 24 LTS)
 - [x] T002 Create full directory structure per plan.md §Project Structure (packages/frontend/src/{components,hooks,stores,services,audio,effects,types}, packages/frontend/public/greetings/{audio}, packages/agent/src/{personality,tools,memory,handlers,types}, packages/agent/tests, packages/infra/lib/{handlers}, packages/infra/tests)
 - [x] T003 [P] Configure TypeScript with root tsconfig.json (strict, ESNext module, NodeNext resolution) and per-package tsconfig.json files extending root in packages/frontend/, packages/agent/, packages/infra/
 - [x] T004 [P] Configure ESLint + Prettier for TypeScript monorepo with shared flat config in eslint.config.js and .prettierrc at repo root
@@ -322,14 +322,14 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 - [ ] T102 [P] Implement Content Security Policy headers in packages/infra/lib/frontend-stack.ts (CloudFront response headers policy: script-src self, connect-src for WebSocket endpoint + Polly + Cognito, img-src self + data:, style-src self unsafe-inline for CRT effects, media-src self for greeting audio)
 - [ ] T103 [P] Add robots.txt and meta noindex in packages/frontend/public/robots.txt (Disallow: /) and packages/frontend/index.html (<meta name="robots" content="noindex, nofollow">) for unlisted URL per spec §Security
-- [ ] T104 [P] Create CI pipeline in .github/workflows/ci.yml (steps: checkout, Node 24 setup, npm ci, npm run lint, npm run typecheck, npm test for all packages — Vitest frontend+agent, Jest infra, npm run build, greeting manifest validation, npm audit per constitution P6)
+- [ ] T104 [P] Create CI pipeline in .github/workflows/ci.yml (steps: checkout, Node 24 setup, pnpm install --frozen-lockfile, pnpm run lint, pnpm run typecheck, pnpm test for all packages — Vitest frontend+agent, Jest infra, pnpm run build, greeting manifest validation, pnpm audit per constitution P6)
 
 ### Performance + Validation
 
 - [ ] T105 Optimize frontend bundle performance (lazy-load Three.js and React Three Fiber for wireframe backdrop and CRT shader, code-split CRT effects from core app, tree-shake @aws-sdk/client-polly to ~85KB per research.md R4, target <200KB initial JS bundle, CloudFront caching headers for greeting audio)
 - [ ] T106 [P] Validate agent Dockerfile in packages/agent/Dockerfile (verify port 8080 exposure, /invocations POST and /ping GET health check endpoints respond, LINUX_ARM64 platform build, non-root USER directive, image size <200MB per research.md R2)
 - [ ] T107 [P] Run greeting manifest build-time validation (verify manifest.json passes JSON Schema from greeting-manifest.md, all 16 audioPath entries resolve to existing MP3 files, all 8 archetypes have ≥2 greetings, no duplicate IDs, audioDurationMs within ±500ms of actual file duration)
-- [ ] T108 Validate quickstart.md developer setup instructions (execute all steps from quickstart.md: clone, npm install, configure AWS, bootstrap CDK, local dev for frontend and agent, run tests, deploy, verify accuracy and completeness)
+- [ ] T108 Validate quickstart.md developer setup instructions (execute all steps from quickstart.md: clone, pnpm install, configure AWS, bootstrap CDK, local dev for frontend and agent, run tests, deploy, verify accuracy and completeness)
 - [ ] T109 Final accessibility audit across all pages (verify logical tab order per R6a: TV knob → text input → mic button → settings/data controls, :focus-visible indicators visible in CRT theme, Enter/Space activation on all interactive elements, no keyboard traps, test with keyboard-only navigation)
 - [ ] T110 [P] Add fan-project framing and privacy disclosure to UI per constitution P4 and NFR §Privacy — create a footer or About overlay component in packages/frontend/src/components/AboutFooter.tsx containing: "Max Height is a non-commercial fan project inspired by Max Headroom. Not affiliated with or endorsed by any rights holder." Include privacy disclosures: guest identity method (Cognito guest), local actor ID usage, 30-day memory retention window, and links to "Forget me" and "Export" data controls. Include a visible link/toggle in the page layout (e.g., footer text or ⓘ icon). Write Vitest test verifying the framing text and privacy disclosures render.
 
@@ -528,7 +528,7 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 - [P] tasks = different files, no dependencies on incomplete tasks in same phase
 - [Story] label maps task to specific user story for traceability
 - Each user story is independently completable and testable at its checkpoint
-- All file paths follow plan.md §Project Structure (npm workspaces monorepo)
+- All file paths follow plan.md §Project Structure (pnpm workspaces monorepo)
 - **Tests per phase** (P10): Each user story phase includes test tasks written FIRST (TDD)
 - **Observability** (P9): Trace spans wired in Phase 2, referenced in implementation tasks
 - **Personality gate** (P3): Hard gate at end of Phase 3 — blocks V1 features

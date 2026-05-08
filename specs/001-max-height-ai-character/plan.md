@@ -41,7 +41,7 @@ MVP delivers text + voice + personality + 2D placeholder avatar (SVG with binary
 | **P3. Personality-First Build Order** | ✅ PASS | MVP = personality + text + voice + 2D placeholder avatar. 3D deferred to V1. Golden-set rubric is a ship gate (SC-001, SC-003). |
 | **P4. IP & Legal Posture** | ✅ PASS | Name is "Max Height" throughout. No voice cloning. Fan-project framing in spec. Non-commercial. |
 | **P5. No Real-Time LLM-as-Judge** | ✅ PASS | Personality evaluation uses offline golden sets via AgentCore Evaluations (research.md §R5). No live LLM scoring in hot path. |
-| **P6. Supply-Chain Discipline** | ✅ PASS | Exact versions pinned in research.md §R0 version table. `package-lock.json` required. `npm audit` gate before dependency merges. New deps reviewed per P6 criteria. |
+| **P6. Supply-Chain Discipline** | ✅ PASS | Exact versions pinned in research.md §R0 version table. `pnpm-lock.yaml` required. `pnpm audit` gate before dependency merges. New deps reviewed per P6 criteria. |
 | **P7. Friends-and-Family Audience** | ✅ PASS | Cognito guest identity (no user accounts). Unlisted URL. Minimal moderation. No public registration or analytics beyond operational metrics. |
 | **P8. Graceful Degradation** | ✅ PASS | Three fallback axes designed: no WebGL → 2D fallback (V1 concern, MVP is 2D); no mic → text input always available; cloud unavailable → in-character "signal lost" state. |
 | **P9. Observability Before Features** | ✅ PASS | AgentCore Observability auto-collected (research.md §R2). Trace spans required per latency target. X-Ray tracing via OpenTelemetry. |

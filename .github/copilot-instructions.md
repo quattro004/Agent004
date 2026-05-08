@@ -64,22 +64,22 @@ When the user asks to fix a bug, add a feature, or change behavior — even with
 Run the full validation pipeline before considering any task complete:
 
 ```sh
-npm run validate
+pnpm run validate
 ```
 
 This chains: **lint → format:check → typecheck → build → test**. All five must pass. If any step fails, fix it before committing.
 
 Individual scripts (for targeted fixes):
 
-| Command                | Purpose                |
-| ---------------------- | ---------------------- |
-| `npm run lint`         | ESLint errors/warnings |
-| `npm run lint:fix`     | Auto-fix lint issues   |
-| `npm run format:check` | Prettier formatting    |
-| `npm run format`       | Auto-fix formatting    |
-| `npm run typecheck`    | TypeScript type errors |
-| `npm run build`        | Workspace builds       |
-| `npm run test`         | Unit/integration tests |
+| Command                 | Purpose                |
+| ----------------------- | ---------------------- |
+| `pnpm run lint`         | ESLint errors/warnings |
+| `pnpm run lint:fix`     | Auto-fix lint issues   |
+| `pnpm run format:check` | Prettier formatting    |
+| `pnpm run format`       | Auto-fix formatting    |
+| `pnpm run typecheck`    | TypeScript type errors |
+| `pnpm run build`        | Workspace builds       |
+| `pnpm run test`         | Unit/integration tests |
 
 ---
 

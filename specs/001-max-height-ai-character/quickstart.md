@@ -10,7 +10,7 @@
 | Tool | Version | Install |
 |------|---------|---------|
 | Node.js | 24 LTS | [nodejs.org](https://nodejs.org/) |
-| npm | 11+ | Bundled with Node 24 |
+| pnpm | 11+ | `npm install -g pnpm@11.0.8` |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.250+ | `npm install -g aws-cdk` |
 | AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |
@@ -39,7 +39,7 @@ docs/                # Design documents, personality bible
 # Clone and install
 git clone <repo-url>
 cd Agent004
-npm install                      # See note below if Zod peer conflict arises
+pnpm install                     # See note below if Zod peer conflict arises
 
 # Configure AWS credentials
 aws configure                    # Or use SSO / env vars
@@ -59,7 +59,7 @@ npx cdk bootstrap
 
 ```bash
 cd packages/frontend
-npm run dev
+pnpm run dev
 # Opens at http://localhost:5173
 ```
 
@@ -78,7 +78,7 @@ Alternatively, without the AgentCore CLI:
 
 ```bash
 cd packages/agent
-npm run dev
+pnpm run dev
 # Starts local agent server on port 8080
 ```
 
@@ -97,15 +97,15 @@ npx cdk deploy         # Deploy all stacks
 
 ```bash
 # All tests
-npm test
+pnpm test
 
 # By package
-cd packages/frontend && npm test    # Vitest + RTL
-cd packages/agent && npm test       # Vitest
-cd packages/infra && npm test       # Jest + CDK assertions
+cd packages/frontend && pnpm test    # Vitest + RTL
+cd packages/agent && pnpm test       # Vitest
+cd packages/infra && pnpm test       # Jest + CDK assertions
 
 # E2E (requires deployed stack)
-cd packages/frontend && npm run test:e2e   # Playwright
+cd packages/frontend && pnpm run test:e2e   # Playwright
 ```
 
 ---
@@ -151,7 +151,7 @@ This deploys:
 
 The agent itself is deployed separately via `agentcore deploy` (see above).
 
-Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/frontend && npm run build && aws s3 sync dist/ s3://<bucket>`.
+Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/frontend && pnpm run build && aws s3 sync dist/ s3://<bucket>`.
 
 ---
 
@@ -159,10 +159,10 @@ Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/
 
 | Command | Description |
 |---------|-------------|
-| `npm run lint` | ESLint across all packages |
-| `npm run typecheck` | TypeScript compilation check |
-| `npm run build` | Build all packages |
-| `npm run test:coverage` | Tests with coverage report |
+| `pnpm run lint` | ESLint across all packages |
+| `pnpm run typecheck` | TypeScript compilation check |
+| `pnpm run build` | Build all packages |
+| `pnpm run test:coverage` | Tests with coverage report |
 
 ---
 
@@ -170,7 +170,7 @@ Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/
 
 | Problem | Solution |
 |---------|----------|
-| `zod` peer dependency error | Add `"overrides": { "zod": "^4.3.6" }` to root `package.json`, then `npm install`. Use `--legacy-peer-deps` only as a last resort. |
+| `zod` peer dependency error | Add `"overrides": { "zod": "^4.3.6" }` to root `package.json`, then `pnpm install`. |
 | CDK bootstrap error | Ensure CDK CLI ≥ 2.250.0 and correct AWS region |
 | Polly "not authorized" | Check Cognito guest role has `polly:SynthesizeSpeech` |
 | WebSocket connection fails | Verify presigned URL generation, check Cognito identity pool |
