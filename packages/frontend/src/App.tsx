@@ -5,6 +5,8 @@ import { BroadcastText } from './components/BroadcastText';
 import { BufferingOverlay } from './components/BufferingOverlay';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
 import { TextInput } from './components/TextInput';
+import { TvKnob } from './components/TvKnob';
+import { VolumeKnob } from './components/VolumeKnob';
 import { NeonBackdrop } from './effects/NeonBackdrop';
 import { useWebSocket } from './hooks/useWebSocket';
 import { createUseAudio } from './hooks/useAudio';
@@ -19,6 +21,11 @@ import './effects/crtFallback.css';
 import './App.css';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080';
+
+/** TV power states: off (dark screen), powering (transition), on (fully active). */
+export type TvPowerState = 'off' | 'powering' | 'on';
+
+const POWER_UP_DURATION_MS = 800;
 
 /** Map domain SessionState to the overlay subset (null if no overlay needed). */
 function toOverlayState(state: SessionState): OverlayState {
@@ -35,8 +42,8 @@ function toOverlayState(state: SessionState): OverlayState {
 }
 
 export function App() {
-  // TV is always on for now — power button will be wired in a follow-up task
-  const isTvOn = true;
+  const [tvPower, setTvPower] = useState<TvPowerState>('off');
+  const isTvOn = tvPower === 'on';
   const [volume, setVolume] = useState(0.5);
   const audioChainRef = useRef(createAudioChain());
   const audioRef = useRef(createUseAudio(audioChainRef.current));
@@ -55,9 +62,7 @@ export function App() {
 
   const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
 
-  // Suppress unused variable warnings — these will be used when controls are wired
-  void volume;
-  void setVolume;
+  // Suppress unused variable warnings — will be used when greeting flow is wired
   void greetingRef;
 
   useEffect(() => {
@@ -72,6 +77,26 @@ export function App() {
     };
   }, []);
 
+  // Power-up transition: advance from 'powering' to 'on' after brief delay
+  useEffect(() => {
+    if (tvPower !== 'powering') return;
+    const timer = setTimeout(() => setTvPower('on'), POWER_UP_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [tvPower]);
+
+  // Reset TV power when session enters a terminal state
+  useEffect(() => {
+    const terminalStates: SessionState[] = ['ENDED', 'BUDGET_CAPPED', 'RATE_LIMITED', 'ERROR'];
+    if (isTvOn && terminalStates.includes(sessionState)) {
+      setTvPower('off');
+    }
+  }, [sessionState, isTvOn]);
+
+  const handlePowerOn = useCallback(() => {
+    if (tvPower !== 'off') return;
+    setTvPower('powering');
+  }, [tvPower]);
+
   const handleSend = useCallback(
     (text: string) => {
       if (!text.trim() || !isActive) return;
@@ -83,19 +108,28 @@ export function App() {
     [isActive, sendMessage, currentTurnIndex],
   );
 
+  const controlPanel = (
+    <>
+      <TvKnob onTurnOn={handlePowerOn} disabled={tvPower !== 'off'} />
+      <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={!isTvOn} />
+    </>
+  );
+
+  const footerControls = isTvOn ? (
+    <div className="controls-area">
+      <TextInput onSubmit={handleSend} disabled={!isActive} />
+    </div>
+  ) : null;
+
   return (
     <div id="max-height-app" className="crt-fallback">
-      <CrtFrame>
+      <CrtFrame panel={controlPanel} footer={footerControls}>
         {isTvOn && <NeonBackdrop isMobile={isMobile} />}
         {isTvOn && <Avatar2D isMouthOpen={isMouthOpen} />}
         {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
-        <BufferingOverlay isConnecting={!isConnected && isTvOn} isThinking={isStreaming} />
-        <SessionStateOverlay state={toOverlayState(sessionState)} />
+        {isTvOn && <BufferingOverlay isConnecting={!isConnected} isThinking={isStreaming} />}
+        {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState)} />}
       </CrtFrame>
-
-      <div className="chat-bar">
-        <TextInput onSubmit={handleSend} disabled={!isTvOn || !isActive} />
-      </div>
     </div>
   );
 }

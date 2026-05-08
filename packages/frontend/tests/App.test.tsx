@@ -3,9 +3,21 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock all child components
 vi.mock('../src/components/CrtFrame', () => ({
-  CrtFrame: ({ children, videoSrc }: { children?: React.ReactNode; videoSrc?: string }) => (
+  CrtFrame: ({
+    children,
+    videoSrc,
+    panel,
+    footer,
+  }: {
+    children?: React.ReactNode;
+    videoSrc?: string;
+    panel?: React.ReactNode;
+    footer?: React.ReactNode;
+  }) => (
     <div data-testid="crt-frame" data-video-src={videoSrc}>
       <div data-testid="crt-screen-mock">{children}</div>
+      {panel && <div data-testid="crt-panel-mock">{panel}</div>}
+      {footer && <div data-testid="crt-footer-mock">{footer}</div>}
     </div>
   ),
 }));
@@ -39,6 +51,14 @@ vi.mock('../src/components/SessionStateOverlay', () => ({
 
 vi.mock('../src/effects/NeonBackdrop', () => ({
   NeonBackdrop: () => <div data-testid="neon-backdrop" />,
+}));
+
+vi.mock('../src/components/TvKnob', () => ({
+  TvKnob: ({ onTurnOn, disabled }: { onTurnOn: () => void; disabled: boolean }) => (
+    <button data-testid="tv-knob" onClick={onTurnOn} disabled={disabled}>
+      ON/OFF
+    </button>
+  ),
 }));
 
 vi.mock('../src/components/TextInput', () => ({
@@ -169,77 +189,83 @@ vi.mock('../src/audio/audioChain', () => ({
   }),
 }));
 
-describe('App', () => {
+describe('App — TV Power Lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should render the CRT frame', async () => {
+  it('should render the CRT frame regardless of power state', async () => {
     const { App } = await import('../src/App');
     render(<App />);
     expect(screen.getByTestId('crt-frame')).toBeInTheDocument();
   });
 
-  it('should render avatar (TV is always on)', async () => {
+  it('should start with TV off — no avatar, no backdrop, no broadcast text', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    expect(screen.getByTestId('avatar-2d')).toBeInTheDocument();
+    expect(screen.queryByTestId('avatar-2d')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('neon-backdrop')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
   });
 
-  it('should render neon backdrop (TV is always on)', async () => {
+  it('should render TvKnob in the control panel when TV is off', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    expect(screen.getByTestId('neon-backdrop')).toBeInTheDocument();
+    expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
   });
 
-  it('should render broadcast text', async () => {
+  it('should not render session state overlays when TV is off', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    expect(screen.getByTestId('broadcast-text')).toBeInTheDocument();
+    expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
   });
 
-  it('should render children inside CrtFrame screen area', async () => {
+  it('should show screen content after TvKnob is clicked (power on)', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    const screenArea = screen.getByTestId('crt-screen-mock');
-    expect(screenArea.querySelector('[data-testid="avatar-2d"]')).toBeInTheDocument();
-    expect(screenArea.querySelector('[data-testid="neon-backdrop"]')).toBeInTheDocument();
-    expect(screenArea.querySelector('[data-testid="broadcast-text"]')).toBeInTheDocument();
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    // After powering transition completes, content should appear
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('avatar-2d')).toBeInTheDocument();
+      expect(screen.getByTestId('neon-backdrop')).toBeInTheDocument();
+    });
   });
 
-  it('should show buffering overlay when not connected', async () => {
-    const { useConnectionStore } = await import('../src/stores/connectionStore');
-    const connStore = useConnectionStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-    };
-    connStore._setState({ isWebSocketReady: false });
-
+  it('should disable TvKnob while TV is on', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    expect(screen.getByTestId('buffering-overlay')).toBeInTheDocument();
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(knob).toBeDisabled();
+    });
   });
 
-  it('should render TextInput in a chat-bar container', async () => {
+  it('should not render TextInput when TV is off', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    const input = screen.getByTestId('text-input');
-    expect(input).toBeInTheDocument();
-    expect(input.closest('.chat-bar')).toBeInTheDocument();
+    expect(screen.queryByTestId('text-input')).not.toBeInTheDocument();
   });
 
-  it('should render chat-bar outside CrtFrame (viewport-level overlay)', async () => {
+  it('should render TextInput after TV is turned on and session is active', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    const chatBar = document.querySelector('.chat-bar');
-    expect(chatBar).not.toBeNull();
-    // chat-bar is a sibling of CrtFrame, not nested inside it
-    const crtFrame = screen.getByTestId('crt-frame');
-    expect(crtFrame.contains(chatBar)).toBe(false);
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('text-input')).toBeInTheDocument();
+    });
   });
 
-  it('should send message when TextInput is submitted', async () => {
+  it('should send message when TextInput is submitted while TV is on', async () => {
     const { App } = await import('../src/App');
     render(<App />);
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('text-input')).toBeInTheDocument();
+    });
     const input = screen.getByTestId('text-input');
     fireEvent.change(input, { target: { value: 'hello Max' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -249,5 +275,68 @@ describe('App', () => {
         payload: expect.objectContaining({ text: 'hello Max' }),
       }),
     );
+  });
+
+  it('should re-enable TvKnob when session enters ENDED state', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+
+    const { App } = await import('../src/App');
+    const { rerender } = render(<App />);
+
+    // Turn on the TV
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(knob).toBeDisabled();
+    });
+
+    // Session ends
+    connStore._setState({ sessionState: 'ENDED' });
+    rerender(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).not.toBeDisabled();
+    });
+  });
+
+  it('should show session state overlay only when TV is on', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({ sessionState: 'SIGNAL_LOST' });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    // TV is off — should NOT show SIGNAL_LOST overlay
+    expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
+  });
+
+  it('should disable TextInput on terminal session state', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    // Turn on TV
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('text-input')).toBeInTheDocument();
+    });
+
+    // Session state goes to ENDED — input should become disabled
+    connStore._setState({ sessionState: 'ENDED' });
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('text-input')).toBeDisabled();
+    });
   });
 });

@@ -84,4 +84,34 @@ describe('CrtFrame', () => {
     expect(img.style.objectFit).toBe('');
     expect(img).toHaveClass('crt-frame-image');
   });
+
+  it('should render panel slot when provided', () => {
+    render(<CrtFrame panel={<div data-testid="panel-content">Panel</div>} />);
+
+    const panel = document.querySelector('.crt-panel');
+    expect(panel).not.toBeNull();
+    expect(screen.getByTestId('panel-content')).toBeInTheDocument();
+  });
+
+  it('should NOT render panel slot when not provided', () => {
+    render(<CrtFrame />);
+
+    const panel = document.querySelector('.crt-panel');
+    expect(panel).toBeNull();
+  });
+
+  it('should render footer slot when provided', () => {
+    render(<CrtFrame footer={<div data-testid="footer-content">Footer</div>} />);
+
+    const footer = document.querySelector('.crt-footer-overlay');
+    expect(footer).not.toBeNull();
+    expect(screen.getByTestId('footer-content')).toBeInTheDocument();
+  });
+
+  it('should NOT render footer slot when not provided', () => {
+    render(<CrtFrame />);
+
+    const footer = document.querySelector('.crt-footer-overlay');
+    expect(footer).toBeNull();
+  });
 });
