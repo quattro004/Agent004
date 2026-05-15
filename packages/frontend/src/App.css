@@ -96,12 +96,11 @@
 .crt-panel {
   position: absolute;
   /* Position over TV-frame.png control strip.
-     Toggle switch sits at roughly x=73-78%, y=20-35%.
-     Volume knob sits at roughly x=73-78%, y=38-55%. */
-  right: 12%;
-  top: 18%;
+     Aligned to the frame's ON/OFF switch and volume knob area. */
+  right: 5%;
+  top: 15%;
   bottom: 38%;
-  width: 10%;
+  width: 12%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -120,24 +119,12 @@
   gap: 4px;
 }
 
-.tv-knob-label {
-  font-family: 'Courier New', monospace;
-  font-size: 0.6rem;
-  font-weight: bold;
-  letter-spacing: 0.08em;
-  color: rgba(0, 255, 255, 0.8);
-  text-shadow: 0 0 6px rgba(0, 255, 255, 0.5);
-  text-transform: uppercase;
-  user-select: none;
-  pointer-events: none;
-}
-
 .tv-knob {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
+  width: clamp(36px, 4.5vw, 56px);
+  height: clamp(48px, 6vw, 72px);
+  border-radius: 6px;
   background: transparent;
-  border: 1px solid rgba(0, 255, 255, 0.25);
+  border: 2px solid rgba(0, 255, 255, 0.3);
   box-shadow: 0 0 8px rgba(0, 255, 255, 0.35);
   cursor: pointer;
   transition:
@@ -162,9 +149,22 @@
   animation: none;
 }
 
-.tv-knob:hover:not(:disabled):not(.rotate) {
-  background: rgba(0, 255, 255, 0.15);
-  border-color: rgba(0, 255, 255, 0.6);
+/* Desktop hover: highlight + pointer cursor */
+@media (hover: hover) {
+  .tv-knob:hover:not(:disabled):not(.rotate) {
+    background: rgba(0, 255, 255, 0.15);
+    border-color: rgba(0, 255, 255, 0.6);
+    box-shadow:
+      0 0 16px rgba(0, 255, 255, 0.5),
+      0 0 32px rgba(0, 255, 255, 0.2);
+    animation: none;
+  }
+}
+
+/* Mobile touch feedback */
+.tv-knob:active:not(:disabled):not(.rotate) {
+  background: rgba(0, 255, 255, 0.2);
+  border-color: rgba(0, 255, 255, 0.7);
   box-shadow:
     0 0 16px rgba(0, 255, 255, 0.5),
     0 0 32px rgba(0, 255, 255, 0.2);
@@ -179,8 +179,8 @@
 /* ===== Volume Knob (invisible hit area over image's volume knob) ===== */
 
 .volume-knob {
-  width: 50px;
-  height: 50px;
+  width: clamp(36px, 4.5vw, 54px);
+  height: clamp(36px, 4.5vw, 54px);
   border-radius: 50%;
   background: transparent;
   border: none;

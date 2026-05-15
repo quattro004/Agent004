@@ -16,7 +16,6 @@ export function TvKnob({ onTurnOn, disabled }: TvKnobProps) {
 
   return (
     <div className="tv-knob-wrapper">
-      <span className="tv-knob-label">ON / OFF</span>
       <button
         type="button"
         aria-label="Turn on"
