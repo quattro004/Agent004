@@ -69,10 +69,10 @@
   position: absolute;
   /* Content area sits BEHIND the TV frame image. The frame's opaque
      wood/chrome masks any overflow, so these coordinates fill the
-     transparent glass area of TV-frame.png (left ~68% of the image). */
-  left: 5%;
+     transparent glass area of TV-frame.png (screen: 12.2%–71.8%). */
+  left: 11%;
   top: 8%;
-  width: 65%;
+  width: 61%;
   height: 80%;
   background: #0a0a0a;
   border-radius: 8px;
@@ -96,10 +96,11 @@
 .crt-panel {
   position: absolute;
   /* Position over TV-frame.png control strip.
-     Aligned to the frame's ON/OFF switch and volume knob area. */
-  right: 5%;
-  top: 15%;
-  bottom: 38%;
+     Aligned to the frame's ON/OFF switch and volume knob area.
+     Right panel opaque area: 71.8%–93.0%, center ~82.4%. */
+  right: 13%;
+  top: 5%;
+  bottom: 40%;
   width: 12%;
   display: flex;
   flex-direction: column;
