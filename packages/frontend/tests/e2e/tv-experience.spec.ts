@@ -5,6 +5,73 @@ test.describe('TV Experience', () => {
     await page.goto('/');
   });
 
+  test.describe('CRT Screen Bounds', () => {
+    test('CRT screen does not extend above the TV frame glass area', async ({ page }) => {
+      const bezel = page.getByTestId('crt-bezel');
+      const screen = page.locator('.crt-screen');
+      await expect(bezel).toBeVisible();
+      await expect(screen).toBeVisible();
+
+      const bezelBox = await bezel.boundingBox();
+      const screenBox = await screen.boundingBox();
+      expect(bezelBox).not.toBeNull();
+      expect(screenBox).not.toBeNull();
+
+      // Screen top should be at least 12% below bezel top (TV frame glass starts ~14%)
+      const relTop = (screenBox!.y - bezelBox!.y) / bezelBox!.height;
+      expect(relTop).toBeGreaterThanOrEqual(0.12);
+    });
+
+    test('CRT screen does not extend below the TV frame glass area', async ({ page }) => {
+      const bezel = page.getByTestId('crt-bezel');
+      const screen = page.locator('.crt-screen');
+      await expect(bezel).toBeVisible();
+      await expect(screen).toBeVisible();
+
+      const bezelBox = await bezel.boundingBox();
+      const screenBox = await screen.boundingBox();
+      expect(bezelBox).not.toBeNull();
+      expect(screenBox).not.toBeNull();
+
+      // Screen bottom should be no more than 80% from bezel top (glass ends ~76%)
+      const relBottom = (screenBox!.y + screenBox!.height - bezelBox!.y) / bezelBox!.height;
+      expect(relBottom).toBeLessThanOrEqual(0.8);
+    });
+  });
+
+  test.describe('Power Button Size and Position', () => {
+    test('power button has a minimum clickable size', async ({ page }) => {
+      const powerBtn = page.getByRole('button', { name: /turn on/i });
+      await expect(powerBtn).toBeVisible();
+
+      const btnBox = await powerBtn.boundingBox();
+      expect(btnBox).not.toBeNull();
+
+      // Button should be at least 30×30px for usability (WCAG touch target)
+      expect(btnBox!.width).toBeGreaterThanOrEqual(30);
+      expect(btnBox!.height).toBeGreaterThanOrEqual(30);
+    });
+
+    test('power button center aligns with the ON/OFF switch in the frame', async ({ page }) => {
+      const bezel = page.getByTestId('crt-bezel');
+      const powerBtn = page.getByRole('button', { name: /turn on/i });
+      await expect(bezel).toBeVisible();
+      await expect(powerBtn).toBeVisible();
+
+      const bezelBox = await bezel.boundingBox();
+      const btnBox = await powerBtn.boundingBox();
+      expect(bezelBox).not.toBeNull();
+      expect(btnBox).not.toBeNull();
+
+      const btnCenterY = btnBox!.y + btnBox!.height / 2;
+      const relY = (btnCenterY - bezelBox!.y) / bezelBox!.height;
+
+      // ON/OFF switch toggle in the frame is at approximately 23-28% from top
+      expect(relY).toBeGreaterThan(0.2);
+      expect(relY).toBeLessThan(0.32);
+    });
+  });
+
   test.describe('Responsive Layout', () => {
     test('TV bezel maintains approximately 3:2 aspect ratio', async ({ page }) => {
       const bezel = page.getByTestId('crt-bezel');
