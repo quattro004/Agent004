@@ -45,12 +45,14 @@
      Container always matches image proportions so percentage-based
      overlays track the image content at any viewport size. */
   aspect-ratio: 1536 / 1024;
-  max-width: 100vw;
-  max-height: 100vh;
-  /* Width auto-calculated from height when height is the constraint,
-     and vice versa — aspect-ratio handles both directions. */
-  width: auto;
-  height: 100vh;
+  /* Fill the viewport edge-to-edge. On widescreen (16:9) the TV
+     extends beyond the viewport vertically; on tall/narrow screens
+     it extends horizontally. The parent overflow:hidden crops the
+     excess, creating an immersive full-screen feel.
+     The 104% factor pushes the TV slightly past viewport edges
+     so no black gaps are visible around the cabinet. */
+  width: max(108vw, calc(108vh * 1536 / 1024));
+  height: auto;
   flex-shrink: 0;
 }
 
@@ -635,10 +637,9 @@
 
   .crt-bezel {
     /* On narrow viewports, width becomes the constraint.
-       Height auto-derived from aspect-ratio. */
-    height: auto;
+       Height auto-derived from aspect-ratio. No overflow needed. */
     width: 100vw;
-    max-height: none;
+    height: auto;
   }
 }
 
