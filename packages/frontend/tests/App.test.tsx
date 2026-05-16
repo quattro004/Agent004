@@ -54,8 +54,8 @@ vi.mock('../src/effects/NeonBackdrop', () => ({
 }));
 
 vi.mock('../src/components/TvKnob', () => ({
-  TvKnob: ({ onTurnOn, disabled }: { onTurnOn: () => void; disabled: boolean }) => (
-    <button data-testid="tv-knob" onClick={onTurnOn} disabled={disabled}>
+  TvKnob: ({ onToggle, isOn }: { onToggle: () => void; isOn: boolean }) => (
+    <button data-testid="tv-knob" onClick={onToggle} data-is-on={isOn}>
       ON/OFF
     </button>
   ),
@@ -232,13 +232,14 @@ describe('App — TV Power Lifecycle', () => {
     });
   });
 
-  it('should disable TvKnob while TV is on', async () => {
+  it('should keep TvKnob enabled while TV is on (toggle behavior)', async () => {
     const { App } = await import('../src/App');
     render(<App />);
     const knob = screen.getByTestId('tv-knob');
     fireEvent.click(knob);
     await vi.waitFor(() => {
-      expect(knob).toBeDisabled();
+      expect(knob).toBeEnabled();
+      expect(knob.getAttribute('data-is-on')).toBe('true');
     });
   });
 
@@ -277,7 +278,7 @@ describe('App — TV Power Lifecycle', () => {
     );
   });
 
-  it('should re-enable TvKnob when session enters ENDED state', async () => {
+  it('should turn TV off when session enters ENDED state', async () => {
     const { useConnectionStore } = await import('../src/stores/connectionStore');
     const connStore = useConnectionStore as unknown as {
       _setState: (s: Record<string, unknown>) => void;
@@ -290,15 +291,15 @@ describe('App — TV Power Lifecycle', () => {
     const knob = screen.getByTestId('tv-knob');
     fireEvent.click(knob);
     await vi.waitFor(() => {
-      expect(knob).toBeDisabled();
+      expect(knob.getAttribute('data-is-on')).toBe('true');
     });
 
-    // Session ends
+    // Session ends — TV should turn off
     connStore._setState({ sessionState: 'ENDED' });
     rerender(<App />);
 
     await vi.waitFor(() => {
-      expect(screen.getByTestId('tv-knob')).not.toBeDisabled();
+      expect(screen.getByTestId('tv-knob').getAttribute('data-is-on')).toBe('false');
     });
   });
 

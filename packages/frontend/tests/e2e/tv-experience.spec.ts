@@ -246,8 +246,9 @@ test.describe('TV Experience', () => {
 
     await powerBtn.click();
 
-    // After clicking, the button should rotate (gain .rotate class)
-    await expect(powerBtn).toHaveClass(/rotate/);
+    // After power-up transition, button label changes and gains .on class
+    const knob = page.locator('.tv-knob');
+    await expect(knob).toHaveClass(/on/);
   });
 
   test('clicking power button turns on TV and shows screen content', async ({ page }) => {
@@ -259,8 +260,9 @@ test.describe('TV Experience', () => {
     const powerBtn = page.getByRole('button', { name: /turn on/i });
     await powerBtn.click();
 
-    // After turning on: knob rotates
-    await expect(powerBtn).toHaveClass(/rotate/);
+    // After turning on: knob has .on class (no glow)
+    const knob = page.locator('.tv-knob');
+    await expect(knob).toHaveClass(/on/);
 
     // Screen content appears
     await expect(page.getByTestId('avatar-svg')).toBeVisible();

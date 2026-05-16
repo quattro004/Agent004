@@ -92,9 +92,12 @@ export function App() {
     }
   }, [sessionState, isTvOn]);
 
-  const handlePowerOn = useCallback(() => {
-    if (tvPower !== 'off') return;
-    setTvPower('powering');
+  const handlePowerToggle = useCallback(() => {
+    if (tvPower === 'off') {
+      setTvPower('powering');
+    } else if (tvPower === 'on') {
+      setTvPower('off');
+    }
   }, [tvPower]);
 
   const handleSend = useCallback(
@@ -110,7 +113,7 @@ export function App() {
 
   const controlPanel = (
     <>
-      <TvKnob onTurnOn={handlePowerOn} disabled={tvPower !== 'off'} />
+      <TvKnob onToggle={handlePowerToggle} isOn={isTvOn} />
       <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={!isTvOn} />
     </>
   );
