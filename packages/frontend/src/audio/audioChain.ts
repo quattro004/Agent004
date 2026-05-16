@@ -29,42 +29,49 @@ export function createAudioChain(): AudioChain {
   let currentSource: AudioBufferSourceNode | null = null;
   let frequencyData: Uint8Array<ArrayBuffer> | null = null;
   let visibilityHandler: (() => void) | null = null;
+  let initPromise: Promise<void> | null = null;
 
   return {
-    async init() {
-      ctx = new AudioContext();
+    init() {
+      // Idempotent: only create AudioContext once. Subsequent calls
+      // return the same promise so callers can safely await ordering.
+      if (initPromise) return initPromise;
+      initPromise = (async () => {
+        ctx = new AudioContext();
 
-      // iOS Safari autoplay unlock — resume suspended context
-      await ctx.resume();
+        // iOS Safari autoplay unlock — resume suspended context
+        await ctx.resume();
 
-      await ctx.audioWorklet.addModule(new URL('./stutterProcessor.ts', import.meta.url).href);
-      await ctx.audioWorklet.addModule(new URL('./pitchProcessor.ts', import.meta.url).href);
-      await ctx.audioWorklet.addModule(new URL('./eqProcessor.ts', import.meta.url).href);
-      await ctx.audioWorklet.addModule(new URL('./staticProcessor.ts', import.meta.url).href);
+        await ctx.audioWorklet.addModule(new URL('./stutterProcessor.ts', import.meta.url).href);
+        await ctx.audioWorklet.addModule(new URL('./pitchProcessor.ts', import.meta.url).href);
+        await ctx.audioWorklet.addModule(new URL('./eqProcessor.ts', import.meta.url).href);
+        await ctx.audioWorklet.addModule(new URL('./staticProcessor.ts', import.meta.url).href);
 
-      stutterNode = new AudioWorkletNode(ctx, 'stutter-processor');
-      pitchNode = new AudioWorkletNode(ctx, 'pitch-processor');
-      eqNode = new AudioWorkletNode(ctx, 'eq-processor');
-      staticNode = new AudioWorkletNode(ctx, 'static-processor');
+        stutterNode = new AudioWorkletNode(ctx, 'stutter-processor');
+        pitchNode = new AudioWorkletNode(ctx, 'pitch-processor');
+        eqNode = new AudioWorkletNode(ctx, 'eq-processor');
+        staticNode = new AudioWorkletNode(ctx, 'static-processor');
 
-      analyser = ctx.createAnalyser();
-      analyser.fftSize = FFT_SIZE;
-      frequencyData = new Uint8Array(analyser.frequencyBinCount);
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = FFT_SIZE;
+        frequencyData = new Uint8Array(analyser.frequencyBinCount);
 
-      // Chain: stutter → pitch → EQ → static → analyser → destination
-      stutterNode.connect(pitchNode);
-      pitchNode.connect(eqNode);
-      eqNode.connect(staticNode);
-      staticNode.connect(analyser);
-      analyser.connect(ctx.destination);
+        // Chain: stutter → pitch → EQ → static → analyser → destination
+        stutterNode.connect(pitchNode);
+        pitchNode.connect(eqNode);
+        eqNode.connect(staticNode);
+        staticNode.connect(analyser);
+        analyser.connect(ctx.destination);
 
-      // iOS Safari 16–16.3 audio routing fix: resume on visibility return
-      visibilityHandler = () => {
-        if (document.visibilityState === 'visible' && ctx?.state === 'suspended') {
-          ctx.resume();
-        }
-      };
-      document.addEventListener('visibilitychange', visibilityHandler);
+        // iOS Safari 16–16.3 audio routing fix: resume on visibility return
+        visibilityHandler = () => {
+          if (document.visibilityState === 'visible' && ctx?.state === 'suspended') {
+            ctx.resume();
+          }
+        };
+        document.addEventListener('visibilitychange', visibilityHandler);
+      })();
+      return initPromise;
     },
 
     play(audioBuffer: AudioBuffer) {
@@ -128,6 +135,7 @@ export function createAudioChain(): AudioChain {
       eqNode = null;
       staticNode = null;
       currentSource = null;
+      initPromise = null;
     },
   };
 }

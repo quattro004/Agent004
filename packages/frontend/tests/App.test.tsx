@@ -185,16 +185,20 @@ vi.mock('../src/stores/visitorStore', () => ({
   ),
 }));
 
-// Mock audio chain
+// Mock audio chain — hoist init mock so individual tests can assert on it
+const { mockAudioInit, mockAudioDispose } = vi.hoisted(() => ({
+  mockAudioInit: vi.fn().mockResolvedValue(undefined),
+  mockAudioDispose: vi.fn(),
+}));
 vi.mock('../src/audio/audioChain', () => ({
   createAudioChain: vi.fn().mockReturnValue({
-    init: vi.fn().mockResolvedValue(undefined),
+    init: mockAudioInit,
     play: vi.fn(),
     stop: vi.fn(),
     getIsMouthOpen: vi.fn().mockReturnValue(false),
     triggerStutter: vi.fn(),
     triggerStaticBurst: vi.fn(),
-    dispose: vi.fn(),
+    dispose: mockAudioDispose,
   }),
 }));
 
@@ -356,6 +360,27 @@ describe('App — TV Power Lifecycle', () => {
 
     // TV is on — avatar should render regardless of WebSocket
     expect(screen.getByTestId('avatar-frame')).toBeInTheDocument();
+  });
+
+  it('should NOT initialize the audio chain on mount (defer to user gesture)', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+    // Wait a tick to ensure mount effects ran
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockAudioInit).not.toHaveBeenCalled();
+  });
+
+  it('should initialize the audio chain when the TV is powered on (user gesture)', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+    expect(mockAudioInit).not.toHaveBeenCalled();
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(mockAudioInit).toHaveBeenCalled();
+    });
   });
 
   it('should disable TextInput on terminal session state', async () => {

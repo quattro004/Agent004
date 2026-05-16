@@ -131,6 +131,41 @@ describe('audioChain — iOS AudioContext unlock', () => {
     expect(resumeMock).toHaveBeenCalled();
   });
 
+  it('should be idempotent — multiple init() calls create only one AudioContext', async () => {
+    const mockAnalyser = {
+      fftSize: 0,
+      frequencyBinCount: 128,
+      getByteFrequencyData: vi.fn(),
+      connect: vi.fn(),
+    };
+    const mockAudioContext = {
+      resume: vi.fn().mockResolvedValue(undefined),
+      audioWorklet: {
+        addModule: vi.fn().mockResolvedValue(undefined),
+      },
+      createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      destination: {},
+      close: vi.fn(),
+    };
+
+    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
+      connect: vi.fn(),
+      port: { postMessage: vi.fn() },
+    }));
+
+    const audioContextCtor = vi.fn(() => mockAudioContext);
+    vi.stubGlobal('AudioContext', audioContextCtor);
+    vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
+
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    await chain.init();
+    await chain.init();
+
+    expect(audioContextCtor).toHaveBeenCalledTimes(1);
+  });
+
   it('should remove visibilitychange handler on dispose', async () => {
     const removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
     const mockAnalyser = {

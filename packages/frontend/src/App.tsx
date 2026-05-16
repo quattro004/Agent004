@@ -105,11 +105,6 @@ export function App() {
   }, [isTvOn]);
 
   useEffect(() => {
-    try {
-      void audioChainRef.current.init();
-    } catch {
-      // AudioContext may fail; continue without audio
-    }
     return () => {
       audioRef.current.dispose();
       audioChainRef.current.dispose();
@@ -133,6 +128,11 @@ export function App() {
 
   const handlePowerToggle = useCallback(() => {
     if (tvPower === 'off') {
+      // AudioContext requires a user gesture to start without warnings.
+      // Initialize the audio chain here (idempotent) on the power-on click.
+      void audioChainRef.current.init().catch(() => {
+        // AudioContext may fail; continue without audio
+      });
       setTvPower('powering');
       setIsGreetingDone(false);
       setGreetingText(null);
