@@ -183,6 +183,8 @@ describe('AvatarFrameCycler', () => {
       vi.spyOn(Math, 'random')
         .mockReturnValueOnce(0.2) // glitch delay: 4000ms
         .mockReturnValueOnce(0) // blink delay: 4000ms
+        .mockReturnValueOnce(0.5) // laugh delay (don't care)
+        .mockReturnValueOnce(0.5) // side-eye delay (don't care)
         .mockReturnValueOnce(0) // glitch duration: 100ms
         .mockReturnValue(0.5);
 
@@ -209,6 +211,72 @@ describe('AvatarFrameCycler', () => {
         vi.advanceTimersByTime(3000);
       });
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'glitch');
+    });
+  });
+
+  describe('laugh expression', () => {
+    it('should show laugh frame after scheduled delay when idle', () => {
+      // With Math.random=0: laugh delay = 8000ms, but glitch fires at 3000ms (100ms),
+      // blink at 4000ms (150ms), side-eye at 10000ms. Laugh at 8000ms.
+      render(<AvatarFrameCycler isMouthOpen={false} />);
+
+      // Advance past glitch (3000+100ms) and blink (4000+150ms)
+      act(() => {
+        vi.advanceTimersByTime(8000);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'laugh');
+    });
+
+    it('should return to idle after laugh duration (800ms)', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} />);
+
+      act(() => {
+        vi.advanceTimersByTime(8000);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'laugh');
+
+      act(() => {
+        vi.advanceTimersByTime(800);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'idle');
+    });
+  });
+
+  describe('side-eye expression', () => {
+    it('should show side-eye frame after scheduled delay when idle', () => {
+      // With Math.random=0: side-eye delay = 10000ms
+      render(<AvatarFrameCycler isMouthOpen={false} />);
+
+      act(() => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'side-eye');
+    });
+
+    it('should return to idle after side-eye duration (1200ms)', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} />);
+
+      act(() => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'side-eye');
+
+      act(() => {
+        vi.advanceTimersByTime(1200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'idle');
+    });
+
+    it('should not show laugh or side-eye during talk (talk takes priority)', () => {
+      const { rerender } = render(<AvatarFrameCycler isMouthOpen={false} />);
+      rerender(<AvatarFrameCycler isMouthOpen={true} />);
+
+      // Advance to laugh time
+      act(() => {
+        vi.advanceTimersByTime(8000);
+      });
+      // Talk should take priority over laugh
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
     });
   });
 

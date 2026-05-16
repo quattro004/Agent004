@@ -21,6 +21,8 @@ interface AvatarFrameCyclerProps {
 function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps) {
   const [isGlitching, setIsGlitching] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
+  const [isLaughing, setIsLaughing] = useState(false);
+  const [isSideEye, setIsSideEye] = useState(false);
   const [talkToggle, setTalkToggle] = useState(false);
   const prevMouthOpenRef = useRef(false);
 
@@ -67,6 +69,40 @@ function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps
     return () => clearTimeout(timeoutId);
   }, []);
 
+  // Recursive laugh timer: laugh every 8–15s for 800ms
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const delay = 8000 + Math.random() * 7000;
+      timeoutId = setTimeout(() => {
+        setIsLaughing(true);
+        timeoutId = setTimeout(() => {
+          setIsLaughing(false);
+          schedule();
+        }, 800);
+      }, delay);
+    };
+    schedule();
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Recursive side-eye timer: side-eye every 10–20s for 1200ms
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const delay = 10000 + Math.random() * 10000;
+      timeoutId = setTimeout(() => {
+        setIsSideEye(true);
+        timeoutId = setTimeout(() => {
+          setIsSideEye(false);
+          schedule();
+        }, 1200);
+      }, delay);
+    };
+    schedule();
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   // Preload all frames to avoid flicker on first display
   useEffect(() => {
     ALL_FRAMES.forEach((f) => {
@@ -83,7 +119,11 @@ function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps
       ? 'blink'
       : isMouthOpen
         ? talkFrame
-        : 'idle';
+        : isLaughing
+          ? 'laugh'
+          : isSideEye
+            ? 'side-eye'
+            : 'idle';
 
   return { src: `/avatar/${theme}/${frame}.png`, frame };
 }
