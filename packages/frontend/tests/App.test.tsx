@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // Mock all child components
 vi.mock('../src/components/CrtFrame', () => ({
@@ -93,10 +93,15 @@ vi.mock('../src/hooks/useAudio', () => ({
   createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 }));
 
+const { mockPlayGreeting, mockStopGreeting } = vi.hoisted(() => ({
+  mockPlayGreeting: vi.fn().mockResolvedValue({ id: 'g-001', text: 'Hello!' }),
+  mockStopGreeting: vi.fn(),
+}));
+
 vi.mock('../src/hooks/useGreeting', () => ({
   createUseGreeting: vi.fn().mockReturnValue({
-    playGreeting: vi.fn().mockResolvedValue({ id: 'g-001', text: 'Hello!' }),
-    stopGreeting: vi.fn(),
+    playGreeting: mockPlayGreeting,
+    stopGreeting: mockStopGreeting,
   }),
 }));
 
@@ -317,7 +322,7 @@ describe('App — TV Power Lifecycle', () => {
     expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
   });
 
-  it('should NOT show avatar when TV is on but WebSocket is not connected', async () => {
+  it('should show avatar when TV is on even without WebSocket connection', async () => {
     const { useConnectionStore } = await import('../src/stores/connectionStore');
     const connStore = useConnectionStore as unknown as {
       _setState: (s: Record<string, unknown>) => void;
@@ -334,10 +339,8 @@ describe('App — TV Power Lifecycle', () => {
       expect(knob.getAttribute('data-is-on')).toBe('true');
     });
 
-    // TV is on but WebSocket not connected — avatar should NOT render
-    expect(screen.queryByTestId('avatar-frame')).not.toBeInTheDocument();
-    // Buffering overlay should still show "Tuning in..."
-    expect(screen.getByTestId('buffering-overlay')).toBeInTheDocument();
+    // TV is on — avatar should render regardless of WebSocket
+    expect(screen.getByTestId('avatar-frame')).toBeInTheDocument();
   });
 
   it('should disable TextInput on terminal session state', async () => {
@@ -362,5 +365,170 @@ describe('App — TV Power Lifecycle', () => {
     await vi.waitFor(() => {
       expect(screen.getByTestId('text-input')).toBeDisabled();
     });
+  });
+});
+
+describe('App — Greeting Flow', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockPlayGreeting.mockResolvedValue({ id: 'g-001', text: 'Hello!' });
+
+    // Reset shared store state to clean defaults (state leaks between tests)
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    (
+      useConnectionStore as unknown as { _setState: (s: Record<string, unknown>) => void }
+    )._setState({ sessionState: 'ACTIVE', sessionId: 'test-session', isWebSocketReady: true });
+
+    const { useConversationStore } = await import('../src/stores/conversationStore');
+    (
+      useConversationStore as unknown as { _setState: (s: Record<string, unknown>) => void }
+    )._setState({ currentResponseText: '', isStreaming: false, currentTurnIndex: 0 });
+  });
+
+  async function powerOnTv() {
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(knob.getAttribute('data-is-on')).toBe('true');
+    });
+    // Flush microtasks for playGreeting promise
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it('should call playGreeting when TV powers on', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    expect(mockPlayGreeting).toHaveBeenCalled();
+  });
+
+  it('should display greeting text in broadcast text during greeting', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // Mock playGreeting returns { text: 'Hello!' }
+    expect(screen.getByTestId('broadcast-text')).toHaveTextContent('Hello!');
+  });
+
+  it('should suppress SIGNAL_LOST overlay during greeting', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({ sessionState: 'SIGNAL_LOST', isWebSocketReady: false });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // SIGNAL_LOST should be suppressed during greeting
+    expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
+  });
+
+  it('should suppress buffering overlay during greeting', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({ isWebSocketReady: false });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // Buffering overlay should NOT show during greeting
+    expect(screen.queryByTestId('buffering-overlay')).not.toBeInTheDocument();
+  });
+
+  it('should show buffering overlay after greeting completes if not connected', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({ isWebSocketReady: false });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // Wait for greeting display duration to elapse (5000ms)
+    await vi.waitFor(
+      () => {
+        expect(screen.getByTestId('buffering-overlay')).toBeInTheDocument();
+      },
+      { timeout: 7000 },
+    );
+  }, 10000);
+
+  it('should show SIGNAL_LOST after greeting completes', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({ sessionState: 'SIGNAL_LOST', isWebSocketReady: false });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // During greeting — suppressed
+    expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
+
+    // Wait for greeting display duration to elapse
+    await vi.waitFor(
+      () => {
+        expect(screen.getByTestId('session-state-overlay')).toBeInTheDocument();
+      },
+      { timeout: 7000 },
+    );
+  }, 10000);
+
+  it('should switch from greeting text to conversation tokens after greeting', async () => {
+    const { useConversationStore } = await import('../src/stores/conversationStore');
+    const convStore = useConversationStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    // Pre-set conversation text before render
+    convStore._setState({ currentResponseText: 'Agent response' });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // During greeting — greeting text overrides conversation tokens
+    expect(screen.getByTestId('broadcast-text')).toHaveTextContent('Hello!');
+
+    // Wait for greeting to elapse — conversation tokens appear
+    await vi.waitFor(
+      () => {
+        expect(screen.getByTestId('broadcast-text')).toHaveTextContent('Agent response');
+      },
+      { timeout: 7000 },
+    );
+  }, 10000);
+
+  it('should call stopGreeting when TV is turned off', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // Turn off TV
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+
+    expect(mockStopGreeting).toHaveBeenCalled();
   });
 });

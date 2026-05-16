@@ -28,7 +28,8 @@ export type TvPowerState = 'off' | 'powering' | 'on';
 const POWER_UP_DURATION_MS = 800;
 
 /** Map domain SessionState to the overlay subset (null if no overlay needed). */
-function toOverlayState(state: SessionState): OverlayState {
+function toOverlayState(state: SessionState, isGreetingDone: boolean): OverlayState {
+  if (!isGreetingDone) return null;
   switch (state) {
     case 'ENDED':
     case 'BUDGET_CAPPED':
@@ -45,6 +46,8 @@ export function App() {
   const [tvPower, setTvPower] = useState<TvPowerState>('off');
   const isTvOn = tvPower === 'on';
   const [volume, setVolume] = useState(0.5);
+  const [greetingText, setGreetingText] = useState<string | null>(null);
+  const [isGreetingDone, setIsGreetingDone] = useState(false);
   const audioChainRef = useRef(createAudioChain());
   const audioRef = useRef(createUseAudio(audioChainRef.current));
   const greetingRef = useRef(createUseGreeting(audioChainRef.current));
@@ -62,8 +65,33 @@ export function App() {
 
   const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
 
-  // Suppress unused variable warnings — will be used when greeting flow is wired
-  void greetingRef;
+  const GREETING_DISPLAY_MS = 5000;
+
+  // Play greeting when TV powers on
+  useEffect(() => {
+    if (!isTvOn) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    void greetingRef.current.playGreeting().then((result) => {
+      if (cancelled) return;
+      if (result?.text) {
+        setGreetingText(result.text);
+      }
+      timer = setTimeout(() => {
+        if (!cancelled) {
+          setIsGreetingDone(true);
+          setGreetingText(null);
+        }
+      }, GREETING_DISPLAY_MS);
+    });
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [isTvOn]);
 
   useEffect(() => {
     try {
@@ -95,8 +123,13 @@ export function App() {
   const handlePowerToggle = useCallback(() => {
     if (tvPower === 'off') {
       setTvPower('powering');
+      setIsGreetingDone(false);
+      setGreetingText(null);
     } else if (tvPower === 'on') {
+      greetingRef.current.stopGreeting();
       setTvPower('off');
+      setIsGreetingDone(false);
+      setGreetingText(null);
     }
   }, [tvPower]);
 
@@ -124,14 +157,19 @@ export function App() {
     </div>
   ) : null;
 
+  const displayText = greetingText ?? tokens;
+  const showBuffering = isGreetingDone && !isConnected;
+
   return (
     <div id="max-height-app" className="crt-fallback">
       <CrtFrame panel={controlPanel} footer={footerControls}>
         {isTvOn && <NeonBackdrop isMobile={isMobile} />}
-        {isTvOn && isConnected && <AvatarFrameCycler isMouthOpen={isMouthOpen} />}
-        {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
-        {isTvOn && <BufferingOverlay isConnecting={!isConnected} isThinking={isStreaming} />}
-        {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState)} />}
+        {isTvOn && <AvatarFrameCycler isMouthOpen={isMouthOpen} />}
+        {isTvOn && (
+          <BroadcastText tokens={displayText.split('')} fullText={greetingText ? null : fullText} />
+        )}
+        {isTvOn && <BufferingOverlay isConnecting={showBuffering} isThinking={isStreaming} />}
+        {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState, isGreetingDone)} />}
       </CrtFrame>
     </div>
   );
