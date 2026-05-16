@@ -41,9 +41,10 @@ describe('SessionStateOverlay', () => {
       expect(colorBars).not.toBeNull();
     });
 
-    it('renders PLEASE STAND BY text', () => {
+    it('renders PLEASE STAND BY and Max Is Off Air text', () => {
       render(<SessionStateOverlay state="SIGNAL_LOST" />);
       expect(screen.getByTestId('session-state-overlay')).toHaveTextContent('PLEASE STAND BY');
+      expect(screen.getByTestId('session-state-overlay')).toHaveTextContent('Max Is Off Air');
     });
 
     it('preserves the data-testid for integration tests', () => {

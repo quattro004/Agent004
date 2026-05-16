@@ -49,10 +49,9 @@ function SignalLostOverlay() {
         </filter>
         <rect width="100%" height="100%" filter="url(#static-filter)" opacity="0.35" />
       </svg>
-
-      {/* PLEASE STAND BY text */}
       <div className="standby-banner">
         <span className="standby-text">PLEASE STAND BY</span>
+        <span className="standby-subtext">Max Is Off Air</span>
       </div>
     </div>
   );
