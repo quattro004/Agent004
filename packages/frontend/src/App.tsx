@@ -128,7 +128,7 @@ export function App() {
     <div id="max-height-app" className="crt-fallback">
       <CrtFrame panel={controlPanel} footer={footerControls}>
         {isTvOn && <NeonBackdrop isMobile={isMobile} />}
-        {isTvOn && <Avatar2D isMouthOpen={isMouthOpen} />}
+        {isTvOn && isConnected && <Avatar2D isMouthOpen={isMouthOpen} />}
         {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
         {isTvOn && <BufferingOverlay isConnecting={!isConnected} isThinking={isStreaming} />}
         {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState)} />}

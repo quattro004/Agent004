@@ -270,9 +270,9 @@ test.describe('TV Experience', () => {
     const knob = page.locator('.tv-knob');
     await expect(knob).toHaveClass(/on/);
 
-    // Screen content appears
-    await expect(page.getByTestId('avatar-svg')).toBeVisible();
+    // Backdrop appears, but avatar stays hidden while connecting (no backend)
     await expect(page.getByTestId('neon-backdrop')).toBeVisible();
+    await expect(page.getByTestId('avatar-svg')).not.toBeVisible();
 
     // Buffering overlay shows "Tuning in..." (no backend → stays connecting)
     await expect(page.getByTestId('buffering-overlay')).toBeVisible();

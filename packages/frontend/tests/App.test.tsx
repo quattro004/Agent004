@@ -317,6 +317,29 @@ describe('App — TV Power Lifecycle', () => {
     expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
   });
 
+  it('should NOT show avatar when TV is on but WebSocket is not connected', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+    connStore._setState({ isWebSocketReady: false });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    // Turn on TV
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(knob.getAttribute('data-is-on')).toBe('true');
+    });
+
+    // TV is on but WebSocket not connected — avatar should NOT render
+    expect(screen.queryByTestId('avatar-2d')).not.toBeInTheDocument();
+    // Buffering overlay should still show "Tuning in..."
+    expect(screen.getByTestId('buffering-overlay')).toBeInTheDocument();
+  });
+
   it('should disable TextInput on terminal session state', async () => {
     const { useConnectionStore } = await import('../src/stores/connectionStore');
     const connStore = useConnectionStore as unknown as {
