@@ -51,6 +51,50 @@ npx cdk bootstrap
 
 > **Note**: If a Zod peer dependency conflict occurs between `@strands-agents/sdk` and transitive dependencies still on Zod 3, add an `overrides` block to the root `package.json`: `"overrides": { "zod": "^4.3.6" }`. Zod 4 includes a `zod/v3` compatibility mode for gradual migration. Avoid `--legacy-peer-deps` — it silently masks conflicts. See `research.md §R1` for details.
 
+### SSM SecureString secrets (required before `cdk deploy`)
+
+CloudFormation does **not** support creating SSM `SecureString` parameters,
+so the agent's tool API keys must be created manually before deploying the
+`AgentStack`. The stack imports them by name and surfaces the expected names
+as CloudFormation outputs (`WeatherApiKeyParam`, `NewsApiKeyParam`).
+
+```bash
+# Weather API key (OpenWeather or your chosen provider)
+aws ssm put-parameter \
+  --name /max-height/weather-api-key \
+  --type SecureString \
+  --value "<your-weather-api-key>" \
+  --overwrite
+
+# News API key (NewsAPI.org or your chosen provider)
+aws ssm put-parameter \
+  --name /max-height/news-api-key \
+  --type SecureString \
+  --value "<your-news-api-key>" \
+  --overwrite
+```
+
+If either parameter is missing at deploy time, the Lambda will fail to read
+the key and the agent will reject tool invocations.
+
+### Rollback
+
+`AgentStack` publishes a Lambda version and a `live` alias on the WebSocket
+handler. To roll back a bad deploy without rerunning CDK:
+
+```bash
+# List versions
+aws lambda list-versions-by-function --function-name <FunctionName>
+
+# Repoint the alias to a known-good version
+aws lambda update-alias \
+  --function-name <FunctionName> \
+  --name live \
+  --function-version <prior-version-number>
+```
+
+The `WebSocketHandlerLiveAliasArn` CloudFormation output is the alias ARN.
+
 ---
 
 ## Local Development

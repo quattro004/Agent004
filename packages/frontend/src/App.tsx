@@ -14,6 +14,7 @@ import { createUseGreeting } from './hooks/useGreeting';
 import { useIsMobile } from './hooks/useIsMobile';
 import { createAudioChain } from './audio/audioChain';
 import { GREETING_DISPLAY_MS } from './config/timing';
+import { resolveWsUrl } from './config/wsUrl';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
 import { useVoiceStore } from './stores/voiceStore';
@@ -21,7 +22,14 @@ import type { SessionState } from './types/domain';
 import './effects/crtFallback.css';
 import './App.css';
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080';
+const wsResolution = resolveWsUrl(import.meta.env.VITE_WS_URL, Boolean(import.meta.env.PROD));
+if (!wsResolution.connect) {
+  console.error(
+    `[App] Refusing to open WebSocket in production: ${wsResolution.reason}. ` +
+      `Set VITE_WS_URL to a non-localhost wss:// URL at build time.`,
+  );
+}
+const WS_URL = wsResolution.url || 'ws://invalid';
 
 /** TV power states: off (dark screen), powering (transition), on (fully active). */
 export type TvPowerState = 'off' | 'powering' | 'on';
@@ -55,7 +63,11 @@ export function App() {
   const isMobile = useIsMobile();
 
   const sessionId = useConnectionStore((s) => s.sessionId) ?? 'pending';
-  const { sendMessage } = useWebSocket({ url: WS_URL, sessionId, enabled: isTvOn });
+  const { sendMessage } = useWebSocket({
+    url: WS_URL,
+    sessionId,
+    enabled: isTvOn && wsResolution.connect,
+  });
   const sessionState = useConnectionStore((s) => s.sessionState);
   const tokens = useConversationStore((s) => s.currentResponseText);
   const fullText = useConversationStore((s) => (s.isStreaming ? null : s.currentResponseText));

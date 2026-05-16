@@ -37,7 +37,7 @@ describe('BudgetStack', () => {
     template.hasResource('AWS::SNS::Topic', {});
   });
 
-  test('creates alert notifications at $5 and $8 thresholds', () => {
+  test('creates alert notifications at 50%, 80%, and 100% thresholds', () => {
     template.hasResourceProperties('AWS::Budgets::Budget', {
       NotificationsWithSubscribers: Match.arrayWith([
         Match.objectLike({
@@ -53,6 +53,27 @@ describe('BudgetStack', () => {
             ComparisonOperator: 'GREATER_THAN',
             Threshold: 80,
           }),
+        }),
+        Match.objectLike({
+          Notification: Match.objectLike({
+            NotificationType: 'ACTUAL',
+            ComparisonOperator: 'GREATER_THAN',
+            Threshold: 100,
+          }),
+        }),
+      ]),
+    });
+  });
+
+  test('100% threshold notification subscribes the hard-stop SNS topic', () => {
+    // Constitution P2: at 100% of the $10 cap, the hard-stop Lambda must fire
+    // to detach the unauth role policy. The 100% notification therefore must
+    // route to the alertTopic that the hard-stop Lambda is subscribed to.
+    template.hasResourceProperties('AWS::Budgets::Budget', {
+      NotificationsWithSubscribers: Match.arrayWith([
+        Match.objectLike({
+          Notification: Match.objectLike({ Threshold: 100 }),
+          Subscribers: Match.arrayWith([Match.objectLike({ SubscriptionType: 'SNS' })]),
         }),
       ]),
     });

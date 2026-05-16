@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 
 // Mock all child components
 vi.mock('../src/components/CrtFrame', () => ({
@@ -203,6 +203,17 @@ describe('App — TV Power Lifecycle', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(async () => {
+    // Power-up (POWER_UP_DURATION_MS) and greeting (GREETING_DISPLAY_MS,
+    // mocked to 200ms) schedule real setTimeouts that may still be pending
+    // when the test returns. Unmounting then flushing pending timers under
+    // act() prevents "update was not wrapped in act(...)" warnings.
+    cleanup();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+    });
+  });
+
   it('should render the CRT frame regardless of power state', async () => {
     const { App } = await import('../src/App');
     render(<App />);
@@ -387,6 +398,15 @@ describe('App — Greeting Flow', () => {
     (
       useConversationStore as unknown as { _setState: (s: Record<string, unknown>) => void }
     )._setState({ currentResponseText: '', isStreaming: false, currentTurnIndex: 0 });
+  });
+
+  afterEach(async () => {
+    // Flush any pending greeting / power-up timers inside act() so they
+    // don't trigger post-test "update was not wrapped in act(...)" warnings.
+    cleanup();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+    });
   });
 
   async function powerOnTv() {

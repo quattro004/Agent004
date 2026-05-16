@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   startSpan,
   endSpan,
   getActiveSpans,
+  setSpanEmitter,
   TRACE_SPANS,
+  type TraceSpan,
 } from '../../src/handlers/observability.js';
 
 describe('Observability', () => {
@@ -12,6 +14,8 @@ describe('Observability', () => {
     for (const span of getActiveSpans()) {
       endSpan(span.name);
     }
+    // Reset emitter to a no-op so other tests don't see stdout noise
+    setSpanEmitter(() => {});
   });
 
   describe('TRACE_SPANS constants', () => {
@@ -101,6 +105,37 @@ describe('Observability', () => {
       const result = endSpan('reply.first_token', { latencyMs: 1200 });
 
       expect(result!.attributes).toHaveProperty('latencyMs', 1200);
+    });
+
+    it('should emit the completed span to the configured sink', () => {
+      const emitted: TraceSpan[] = [];
+      setSpanEmitter((span) => emitted.push(span));
+
+      startSpan('reply.first_token', { sessionId: 's1' });
+      endSpan('reply.first_token', { tokenCount: 250 });
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0]).toMatchObject({
+        name: 'reply.first_token',
+        attributes: { sessionId: 's1', tokenCount: 250 },
+      });
+      expect(emitted[0].durationMs).toBeGreaterThanOrEqual(0);
+      expect(emitted[0].endTime).not.toBeNull();
+    });
+
+    it('should not throw if the emit sink throws', () => {
+      setSpanEmitter(() => {
+        throw new Error('boom');
+      });
+      startSpan('reply.first_token');
+      expect(() => endSpan('reply.first_token')).not.toThrow();
+    });
+
+    it('should not emit when ending an unknown span', () => {
+      const emit = vi.fn();
+      setSpanEmitter(emit);
+      endSpan('nonexistent.span');
+      expect(emit).not.toHaveBeenCalled();
     });
   });
 

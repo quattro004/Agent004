@@ -99,6 +99,17 @@ exports.handler = async (event) => {
           },
           subscribers: [{ subscriptionType: 'SNS', address: alertTopic.topicArn }],
         },
+        // Constitution P2: hard-stop at $10 (100%). Triggers the hard-stop
+        // Lambda via SNS to detach the unauth role's inline policy.
+        {
+          notification: {
+            notificationType: 'ACTUAL',
+            comparisonOperator: 'GREATER_THAN',
+            threshold: 100,
+            thresholdType: 'PERCENTAGE',
+          },
+          subscribers: [{ subscriptionType: 'SNS', address: alertTopic.topicArn }],
+        },
       ],
     });
 

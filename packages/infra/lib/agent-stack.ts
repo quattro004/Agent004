@@ -31,6 +31,14 @@ export class AgentStack extends cdk.Stack {
       },
     });
 
+    // Publish a version and a "live" alias so deploys are blue/green and a
+    // bad release can be rolled back by repointing the alias to a prior
+    // version (P9 — solo-dev rollback).
+    const wsHandlerAlias = new lambda.Alias(this, 'WebSocketHandlerLiveAlias', {
+      aliasName: 'live',
+      version: wsHandler.currentVersion,
+    });
+
     // Grant Lambda access to read the secure parameters
     weatherApiKey.grantRead(wsHandler);
     newsApiKey.grantRead(wsHandler);
@@ -44,7 +52,7 @@ export class AgentStack extends cdk.Stack {
     const integration = new apigatewayv2.CfnIntegration(this, 'LambdaIntegration', {
       apiId: webSocketApi.ref,
       integrationType: 'AWS_PROXY',
-      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${wsHandler.functionArn}/invocations`,
+      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${wsHandlerAlias.functionArn}/invocations`,
     });
 
     // IAM authorizer for WebSocket $connect — validates SigV4 signatures
@@ -77,8 +85,8 @@ export class AgentStack extends cdk.Stack {
       },
     });
 
-    // Grant API Gateway permission to invoke the Lambda
-    wsHandler.addPermission('ApiGwInvoke', {
+    // Grant API Gateway permission to invoke the Lambda (via the live alias)
+    wsHandlerAlias.addPermission('ApiGwInvoke', {
       principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
       sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/*`,
     });
@@ -93,6 +101,25 @@ export class AgentStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'WebSocketEndpoint', {
       value: `wss://${webSocketApi.ref}.execute-api.${this.region}.amazonaws.com/prod`,
+    });
+
+    new cdk.CfnOutput(this, 'WebSocketHandlerLiveAliasArn', {
+      value: wsHandlerAlias.functionArn,
+      description: 'ARN of the "live" alias — repoint to a prior version to roll back.',
+    });
+
+    // SSM SecureString parameters cannot be created by CloudFormation, so
+    // operators must create them out of band before `cdk deploy`. Surface
+    // the expected parameter names as stack outputs so they are discoverable.
+    new cdk.CfnOutput(this, 'WeatherApiKeyParam', {
+      value: '/max-height/weather-api-key',
+      description:
+        'SSM SecureString parameter for the weather API key — create manually before deploy.',
+    });
+    new cdk.CfnOutput(this, 'NewsApiKeyParam', {
+      value: '/max-height/news-api-key',
+      description:
+        'SSM SecureString parameter for the news API key — create manually before deploy.',
     });
   }
 }

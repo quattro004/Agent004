@@ -42,6 +42,23 @@ describe('AgentStack', () => {
     template.hasResource('AWS::Lambda::Function', {});
   });
 
+  test('publishes a Lambda version and "live" alias for blue/green rollback', () => {
+    // Without a Lambda version + alias, there is no atomic rollback target
+    // (P9: solo-developer debugging requires a quick way to revert a bad deploy).
+    template.hasResource('AWS::Lambda::Version', {});
+    template.hasResourceProperties('AWS::Lambda::Alias', {
+      Name: 'live',
+    });
+  });
+
+  test('outputs the names of SSM SecureString parameters required at deploy time', () => {
+    // These parameters cannot be created by CloudFormation (no SecureString
+    // support in CFN). They must be created manually before deploy — surface
+    // them as outputs so the operator can see what is missing.
+    template.hasOutput('WeatherApiKeyParam', {});
+    template.hasOutput('NewsApiKeyParam', {});
+  });
+
   test('configures stage with throttling limits', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
       DefaultRouteSettings: {

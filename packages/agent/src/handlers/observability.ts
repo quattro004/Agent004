@@ -6,6 +6,11 @@
  * - greeting.delivery: 2s P95 greeting after TV-on
  * - session.cold_start: 5s P95 cold start
  * - crt.frame_rate: 60fps CRT effects on desktop
+ *
+ * Completed spans are emitted as a single line of structured JSON on stdout
+ * via `console.log`. AgentCore + CloudWatch Logs pick this up automatically;
+ * Logs Insights can filter on `type = "trace"` for personality / latency
+ * regression debugging.
  */
 
 // --- Constants ---
@@ -32,6 +37,30 @@ export interface TraceSpan {
 
 const activeSpans: Map<string, TraceSpan> = new Map();
 
+// Sink used to emit completed spans. Defaults to stdout via console.log so
+// AgentCore + CloudWatch pick them up. Swappable for tests.
+let emitFn: (span: TraceSpan) => void = (span) => {
+  // Single-line JSON keeps CloudWatch Logs parsing trivial.
+  console.log(
+    JSON.stringify({
+      type: 'trace',
+      name: span.name,
+      durationMs: span.durationMs,
+      startTime: span.startTime,
+      endTime: span.endTime,
+      attributes: span.attributes,
+    }),
+  );
+};
+
+/**
+ * Override the emit sink. Intended for tests; in production the default
+ * console.log sink is used.
+ */
+export function setSpanEmitter(fn: (span: TraceSpan) => void): void {
+  emitFn = fn;
+}
+
 // --- Functions ---
 
 /**
@@ -54,7 +83,8 @@ export function startSpan(
 }
 
 /**
- * End a trace span by name, recording its duration.
+ * End a trace span by name, recording its duration and emitting the
+ * completed span via the configured sink.
  * Returns the completed span, or null if not found.
  */
 export function endSpan(
@@ -71,6 +101,11 @@ export function endSpan(
   span.attributes = { ...span.attributes, ...additionalAttributes };
 
   activeSpans.delete(name);
+  try {
+    emitFn(span);
+  } catch {
+    // Never let a misbehaving emitter break the request path.
+  }
   return span;
 }
 

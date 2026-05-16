@@ -47,6 +47,27 @@
 **Monthly infrastructure**: ~$1.00 (S3, CloudFront, CloudWatch)
 **Monthly conversation budget**: ~$9.00 → ~16 full or ~53 average sessions
 
+#### Polly Neural TTS — worst-case detail (constitution P2)
+
+Amazon Polly Neural is billed at **$16 per 1,000,000 characters** synthesized.
+Max's responses are capped at ~250 model tokens (~1,000 characters of TTS text)
+per turn by the per-reply token limit (`BedrockModel.maxTokens: 250`).
+
+| Scenario | Chars synthesized | Polly cost |
+|---|---|---|
+| Single average reply (~500 chars) | 500 | $0.008 |
+| Single max reply (~1,000 chars) | 1,000 | $0.016 |
+| Full session (50 turns × 1,000 chars) | 50,000 | $0.80 |
+| 50 full sessions in a month | 2,500,000 | $40.00 ❌ |
+| 12 full sessions in a month | 600,000 | $9.60 ⚠️ |
+| 53 average sessions in a month | 397,500 | $6.36 ✅ |
+
+**Cap interaction**: TTS spend dominates beyond ~12 full-budget sessions/month;
+the $8 soft-degrade (voice off) and per-session 20k-token + 50-turn caps in
+`sessionManager.ts` together keep worst-case Polly spend within the $10 ceiling
+even under adversarial traffic. The 100% budget threshold detaches the unauth
+Cognito role inline policy and shuts off both LLM and Polly access (P2 hard-stop).
+
 Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice off) provides additional headroom for text-only sessions.
 
 ---

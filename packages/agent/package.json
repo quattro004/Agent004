@@ -12,15 +12,15 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.800.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1048.0",
     "@strands-agents/sdk": "1.0.0-rc.5",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "25.6.0",
     "aws-sdk-client-mock": "^4.1.0",
-    "tsx": "^4.20.0",
-    "typescript": "^5.8.2",
-    "vitest": "^3.2.0"
+    "tsx": "^4.22.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   }
 }
