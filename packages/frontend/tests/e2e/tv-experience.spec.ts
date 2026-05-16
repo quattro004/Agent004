@@ -216,11 +216,17 @@ test.describe('TV Experience', () => {
     expect(boxShadow).toContain('rgb');
   });
 
-  test('power button has an ON/OFF label so users know what it does', async ({ page }) => {
-    // There should be visible text near the power button indicating ON/OFF
-    const label = page.locator('.tv-knob-label');
-    await expect(label).toBeVisible();
-    await expect(label).toHaveText(/on\s*\/\s*off/i);
+  test('power button has accessible label so users know what it does', async ({ page }) => {
+    // The knob's aria-label provides the ON/OFF affordance
+    const powerBtn = page.getByRole('button', { name: /turn on/i });
+    await expect(powerBtn).toBeVisible();
+
+    // After turning on, label should flip to "Turn off"
+    await powerBtn.click();
+    const knob = page.locator('.tv-knob');
+    await expect(knob).toHaveClass(/on/);
+    const offBtn = page.getByRole('button', { name: /turn off/i });
+    await expect(offBtn).toBeVisible();
   });
 
   test('power button glows brighter on hover', async ({ page }) => {
@@ -286,6 +292,12 @@ test.describe('TV Experience', () => {
   });
 
   test('input is visible on TV cabinet base as overlay', async ({ page }) => {
+    // Turn TV on first — input only renders when TV is on
+    const powerBtn = page.getByRole('button', { name: /turn on/i });
+    await powerBtn.click();
+    const knob = page.locator('.tv-knob');
+    await expect(knob).toHaveClass(/on/);
+
     // Input should be inside the CRT bezel footer overlay
     const footerOverlay = page.locator('.crt-footer-overlay');
     await expect(footerOverlay).toBeVisible();
@@ -325,6 +337,12 @@ test.describe('TV Experience', () => {
   });
 
   test('input has visible cyan border', async ({ page }) => {
+    // Turn TV on first — input only renders when TV is on
+    const powerBtn = page.getByRole('button', { name: /turn on/i });
+    await powerBtn.click();
+    const knob = page.locator('.tv-knob');
+    await expect(knob).toHaveClass(/on/);
+
     const input = page.getByTestId('text-input');
     await expect(input).toBeVisible();
 
@@ -359,8 +377,15 @@ test.describe('TV Experience', () => {
     expect(position).toBe('absolute');
   });
 
-  test('input is disabled before TV is turned on', async ({ page }) => {
+  test('input is disabled when TV is on but session is not active', async ({ page }) => {
+    // Turn TV on — input renders but should be disabled without an active session
+    const powerBtn = page.getByRole('button', { name: /turn on/i });
+    await powerBtn.click();
+    const knob = page.locator('.tv-knob');
+    await expect(knob).toHaveClass(/on/);
+
     const input = page.getByTestId('text-input');
+    await expect(input).toBeVisible();
     await expect(input).toBeDisabled();
   });
 
