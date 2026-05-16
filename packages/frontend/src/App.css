@@ -150,11 +150,13 @@
   content: none;
 }
 
-/* TV is on — no glow, transparent overlay */
+/* TV is on — steady subtle glow (no pulse animation) */
 .tv-knob.on {
-  box-shadow: none;
+  box-shadow:
+    0 0 10px rgba(0, 255, 255, 0.45),
+    0 0 20px rgba(0, 255, 255, 0.2);
   animation: none;
-  border-color: rgba(0, 255, 255, 0.1);
+  border-color: rgba(0, 255, 255, 0.5);
 }
 
 /* Desktop hover: highlight + pointer cursor */
