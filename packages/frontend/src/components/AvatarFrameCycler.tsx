@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 
 export type AvatarFrame = 'idle' | 'talk-1' | 'talk-2' | 'glitch' | 'blink' | 'laugh' | 'side-eye';
-export type AvatarTheme = 'retro' | 'pop-art';
+export type AvatarTheme = 'retro' | 'pop-art' | 'cartoon';
 
 const ALL_FRAMES: AvatarFrame[] = [
   'idle',

@@ -48,6 +48,11 @@ describe('AvatarFrameCycler', () => {
       render(<AvatarFrameCycler isMouthOpen={false} theme="pop-art" />);
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/pop-art/idle.png');
     });
+
+    it('should use cartoon theme when specified', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} theme="cartoon" />);
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/cartoon/idle.png');
+    });
   });
 
   describe('talk animation', () => {
