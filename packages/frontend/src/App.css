@@ -452,7 +452,7 @@
 
 /* ===== Avatar ===== */
 
-.avatar-2d {
+.avatar-frame-cycler {
   position: absolute;
   bottom: 10%;
   left: 50%;

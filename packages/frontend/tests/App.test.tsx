@@ -22,9 +22,9 @@ vi.mock('../src/components/CrtFrame', () => ({
   ),
 }));
 
-vi.mock('../src/components/Avatar2D', () => ({
-  Avatar2D: ({ isMouthOpen }: { isMouthOpen: boolean }) => (
-    <div data-testid="avatar-2d" data-mouth-open={isMouthOpen} />
+vi.mock('../src/components/AvatarFrameCycler', () => ({
+  AvatarFrameCycler: ({ isMouthOpen }: { isMouthOpen: boolean }) => (
+    <div data-testid="avatar-frame" data-mouth-open={isMouthOpen} />
   ),
 }));
 
@@ -203,7 +203,7 @@ describe('App — TV Power Lifecycle', () => {
   it('should start with TV off — no avatar, no backdrop, no broadcast text', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    expect(screen.queryByTestId('avatar-2d')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('avatar-frame')).not.toBeInTheDocument();
     expect(screen.queryByTestId('neon-backdrop')).not.toBeInTheDocument();
     expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
   });
@@ -227,7 +227,7 @@ describe('App — TV Power Lifecycle', () => {
     fireEvent.click(knob);
     // After powering transition completes, content should appear
     await vi.waitFor(() => {
-      expect(screen.getByTestId('avatar-2d')).toBeInTheDocument();
+      expect(screen.getByTestId('avatar-frame')).toBeInTheDocument();
       expect(screen.getByTestId('neon-backdrop')).toBeInTheDocument();
     });
   });
@@ -335,7 +335,7 @@ describe('App — TV Power Lifecycle', () => {
     });
 
     // TV is on but WebSocket not connected — avatar should NOT render
-    expect(screen.queryByTestId('avatar-2d')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('avatar-frame')).not.toBeInTheDocument();
     // Buffering overlay should still show "Tuning in..."
     expect(screen.getByTestId('buffering-overlay')).toBeInTheDocument();
   });

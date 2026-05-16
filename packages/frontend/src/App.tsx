@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CrtFrame } from './components/CrtFrame';
-import { Avatar2D } from './components/Avatar2D';
+import { AvatarFrameCycler } from './components/AvatarFrameCycler';
 import { BroadcastText } from './components/BroadcastText';
 import { BufferingOverlay } from './components/BufferingOverlay';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
@@ -128,7 +128,7 @@ export function App() {
     <div id="max-height-app" className="crt-fallback">
       <CrtFrame panel={controlPanel} footer={footerControls}>
         {isTvOn && <NeonBackdrop isMobile={isMobile} />}
-        {isTvOn && isConnected && <Avatar2D isMouthOpen={isMouthOpen} />}
+        {isTvOn && isConnected && <AvatarFrameCycler isMouthOpen={isMouthOpen} />}
         {isTvOn && <BroadcastText tokens={tokens.split('')} fullText={fullText} />}
         {isTvOn && <BufferingOverlay isConnecting={!isConnected} isThinking={isStreaming} />}
         {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState)} />}
