@@ -5,6 +5,126 @@ test.describe('TV Experience', () => {
     await page.goto('/');
   });
 
+  test.describe('Responsive Layout', () => {
+    test('TV bezel maintains approximately 3:2 aspect ratio', async ({ page }) => {
+      const bezel = page.getByTestId('crt-bezel');
+      await expect(bezel).toBeVisible();
+
+      const box = await bezel.boundingBox();
+      expect(box).not.toBeNull();
+
+      // TV-frame.png is 1536x1024 = 3:2 ratio. Bezel should maintain this.
+      const ratio = box!.width / box!.height;
+      expect(ratio).toBeGreaterThan(1.3);
+      expect(ratio).toBeLessThan(1.7);
+    });
+
+    test('power button stays within ON/OFF switch region at default viewport', async ({ page }) => {
+      const bezel = page.getByTestId('crt-bezel');
+      const powerBtn = page.getByRole('button', { name: /turn on/i });
+      await expect(bezel).toBeVisible();
+      await expect(powerBtn).toBeVisible();
+
+      const bezelBox = await bezel.boundingBox();
+      const btnBox = await powerBtn.boundingBox();
+      expect(bezelBox).not.toBeNull();
+      expect(btnBox).not.toBeNull();
+
+      // Power button center should be in right ~20% of bezel and top ~35%
+      const btnCenterX = btnBox!.x + btnBox!.width / 2;
+      const btnCenterY = btnBox!.y + btnBox!.height / 2;
+      const relX = (btnCenterX - bezelBox!.x) / bezelBox!.width;
+      const relY = (btnCenterY - bezelBox!.y) / bezelBox!.height;
+
+      // ON/OFF switch is at approximately 82% from left, 22% from top
+      expect(relX).toBeGreaterThan(0.75);
+      expect(relX).toBeLessThan(0.92);
+      expect(relY).toBeGreaterThan(0.12);
+      expect(relY).toBeLessThan(0.38);
+    });
+
+    test('power button stays aligned after viewport resize to 1024x768', async ({ page }) => {
+      await page.setViewportSize({ width: 1024, height: 768 });
+      await page.goto('/');
+
+      const bezel = page.getByTestId('crt-bezel');
+      const powerBtn = page.getByRole('button', { name: /turn on/i });
+      await expect(bezel).toBeVisible();
+      await expect(powerBtn).toBeVisible();
+
+      const bezelBox = await bezel.boundingBox();
+      const btnBox = await powerBtn.boundingBox();
+      expect(bezelBox).not.toBeNull();
+      expect(btnBox).not.toBeNull();
+
+      const btnCenterX = btnBox!.x + btnBox!.width / 2;
+      const btnCenterY = btnBox!.y + btnBox!.height / 2;
+      const relX = (btnCenterX - bezelBox!.x) / bezelBox!.width;
+      const relY = (btnCenterY - bezelBox!.y) / bezelBox!.height;
+
+      // Same expected region regardless of viewport size
+      expect(relX).toBeGreaterThan(0.75);
+      expect(relX).toBeLessThan(0.92);
+      expect(relY).toBeGreaterThan(0.12);
+      expect(relY).toBeLessThan(0.38);
+    });
+
+    test('mobile viewport shows TV frame and power button is accessible', async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 667 });
+      await page.goto('/');
+
+      const frameImage = page.getByTestId('crt-frame-image');
+      const powerBtn = page.getByRole('button', { name: /turn on/i });
+
+      await expect(frameImage).toBeVisible();
+      await expect(powerBtn).toBeVisible();
+
+      // The TV frame should be visible (has non-zero dimensions)
+      const frameBox = await frameImage.boundingBox();
+      expect(frameBox).not.toBeNull();
+      expect(frameBox!.width).toBeGreaterThan(100);
+      expect(frameBox!.height).toBeGreaterThan(100);
+
+      // Power button should be within the viewport bounds
+      const btnBox = await powerBtn.boundingBox();
+      expect(btnBox).not.toBeNull();
+      expect(btnBox!.x).toBeGreaterThanOrEqual(0);
+      expect(btnBox!.y).toBeGreaterThanOrEqual(0);
+      expect(btnBox!.x + btnBox!.width).toBeLessThanOrEqual(375);
+      expect(btnBox!.y + btnBox!.height).toBeLessThanOrEqual(667);
+    });
+
+    test('power button position is stable across viewport sizes', async ({ page }) => {
+      // Check position at 1280x720, then at 1920x1080 — relative position should be similar
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.goto('/');
+
+      const bezel = page.getByTestId('crt-bezel');
+      const powerBtn = page.getByRole('button', { name: /turn on/i });
+      await expect(bezel).toBeVisible();
+      await expect(powerBtn).toBeVisible();
+
+      const bezelBox1 = await bezel.boundingBox();
+      const btnBox1 = await powerBtn.boundingBox();
+
+      const relX1 = (btnBox1!.x + btnBox1!.width / 2 - bezelBox1!.x) / bezelBox1!.width;
+      const relY1 = (btnBox1!.y + btnBox1!.height / 2 - bezelBox1!.y) / bezelBox1!.height;
+
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      await page.waitForTimeout(200);
+
+      const bezelBox2 = await bezel.boundingBox();
+      const btnBox2 = await powerBtn.boundingBox();
+
+      const relX2 = (btnBox2!.x + btnBox2!.width / 2 - bezelBox2!.x) / bezelBox2!.width;
+      const relY2 = (btnBox2!.y + btnBox2!.height / 2 - bezelBox2!.y) / bezelBox2!.height;
+
+      // Relative position should remain stable (within 3% tolerance)
+      expect(Math.abs(relX1 - relX2)).toBeLessThan(0.03);
+      expect(Math.abs(relY1 - relY2)).toBeLessThan(0.03);
+    });
+  });
+
   test('TV fills most of the viewport height', async ({ page }) => {
     const bezel = page.getByTestId('crt-bezel');
     await expect(bezel).toBeVisible();
