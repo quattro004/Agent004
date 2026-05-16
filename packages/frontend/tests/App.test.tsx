@@ -89,6 +89,10 @@ vi.mock('../src/hooks/useIsMobile', () => ({
   isMobileQuery: () => false,
 }));
 
+vi.mock('../src/config/timing', () => ({
+  GREETING_DISPLAY_MS: 200,
+}));
+
 vi.mock('../src/hooks/useAudio', () => ({
   createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 }));
@@ -461,14 +465,14 @@ describe('App — Greeting Flow', () => {
 
     await powerOnTv();
 
-    // Wait for greeting display duration to elapse (5000ms)
+    // Wait for greeting display duration to elapse (mocked to 200ms)
     await vi.waitFor(
       () => {
         expect(screen.getByTestId('buffering-overlay')).toBeInTheDocument();
       },
-      { timeout: 7000 },
+      { timeout: 2000 },
     );
-  }, 10000);
+  });
 
   it('should show SIGNAL_LOST after greeting completes', async () => {
     const { useConnectionStore } = await import('../src/stores/connectionStore');
@@ -490,9 +494,9 @@ describe('App — Greeting Flow', () => {
       () => {
         expect(screen.getByTestId('session-state-overlay')).toBeInTheDocument();
       },
-      { timeout: 7000 },
+      { timeout: 2000 },
     );
-  }, 10000);
+  });
 
   it('should switch from greeting text to conversation tokens after greeting', async () => {
     const { useConversationStore } = await import('../src/stores/conversationStore');
@@ -515,9 +519,9 @@ describe('App — Greeting Flow', () => {
       () => {
         expect(screen.getByTestId('broadcast-text')).toHaveTextContent('Agent response');
       },
-      { timeout: 7000 },
+      { timeout: 2000 },
     );
-  }, 10000);
+  });
 
   it('should call stopGreeting when TV is turned off', async () => {
     const { App } = await import('../src/App');

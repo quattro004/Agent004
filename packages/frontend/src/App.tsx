@@ -13,6 +13,7 @@ import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
 import { useIsMobile } from './hooks/useIsMobile';
 import { createAudioChain } from './audio/audioChain';
+import { GREETING_DISPLAY_MS } from './config/timing';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
 import { useVoiceStore } from './stores/voiceStore';
@@ -64,8 +65,6 @@ export function App() {
   const currentTurnIndex = useConversationStore((s) => s.currentTurnIndex);
 
   const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
-
-  const GREETING_DISPLAY_MS = 5000;
 
   // Play greeting when TV powers on
   useEffect(() => {
