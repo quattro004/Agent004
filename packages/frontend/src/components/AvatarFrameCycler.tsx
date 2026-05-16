@@ -52,11 +52,11 @@ function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps
     return () => clearTimeout(timeoutId);
   }, []);
 
-  // Recursive blink timer: blink every 4–6s for 150ms
+  // Recursive blink timer: blink every 2–4s for 150ms
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
     const schedule = () => {
-      const delay = 4000 + Math.random() * 2000;
+      const delay = 2000 + Math.random() * 2000;
       timeoutId = setTimeout(() => {
         setIsBlinking(true);
         timeoutId = setTimeout(() => {
