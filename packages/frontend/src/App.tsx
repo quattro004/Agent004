@@ -104,6 +104,11 @@ export function App() {
     };
   }, [isTvOn]);
 
+  // Apply volume changes to the audio chain (no-op until init resolves)
+  useEffect(() => {
+    audioChainRef.current.setVolume(volume);
+  }, [volume]);
+
   useEffect(() => {
     return () => {
       audioRef.current.dispose();

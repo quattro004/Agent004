@@ -5,16 +5,14 @@ import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
 vi.mock('../src/components/CrtFrame', () => ({
   CrtFrame: ({
     children,
-    videoSrc,
     panel,
     footer,
   }: {
     children?: React.ReactNode;
-    videoSrc?: string;
     panel?: React.ReactNode;
     footer?: React.ReactNode;
   }) => (
-    <div data-testid="crt-frame" data-video-src={videoSrc}>
+    <div data-testid="crt-frame">
       <div data-testid="crt-screen-mock">{children}</div>
       {panel && <div data-testid="crt-panel-mock">{panel}</div>}
       {footer && <div data-testid="crt-footer-mock">{footer}</div>}
@@ -198,6 +196,7 @@ vi.mock('../src/audio/audioChain', () => ({
     getIsMouthOpen: vi.fn().mockReturnValue(false),
     triggerStutter: vi.fn(),
     triggerStaticBurst: vi.fn(),
+    setVolume: vi.fn(),
     dispose: mockAudioDispose,
   }),
 }));

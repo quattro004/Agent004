@@ -19,6 +19,11 @@ describe('audioChain — iOS AudioContext unlock', () => {
         addModule: vi.fn().mockResolvedValue(undefined),
       },
       createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      createGain: vi.fn().mockReturnValue({
+        gain: { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }),
+      currentTime: 0,
       destination: {},
       close: vi.fn(),
     };
@@ -55,6 +60,11 @@ describe('audioChain — iOS AudioContext unlock', () => {
         addModule: vi.fn().mockResolvedValue(undefined),
       },
       createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      createGain: vi.fn().mockReturnValue({
+        gain: { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }),
+      currentTime: 0,
       destination: {},
       close: vi.fn(),
     };
@@ -100,6 +110,11 @@ describe('audioChain — iOS AudioContext unlock', () => {
         addModule: vi.fn().mockResolvedValue(undefined),
       },
       createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      createGain: vi.fn().mockReturnValue({
+        gain: { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }),
+      currentTime: 0,
       destination: {},
       close: vi.fn(),
     };
@@ -144,6 +159,11 @@ describe('audioChain — iOS AudioContext unlock', () => {
         addModule: vi.fn().mockResolvedValue(undefined),
       },
       createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      createGain: vi.fn().mockReturnValue({
+        gain: { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }),
+      currentTime: 0,
       destination: {},
       close: vi.fn(),
     };
@@ -180,6 +200,11 @@ describe('audioChain — iOS AudioContext unlock', () => {
         addModule: vi.fn().mockResolvedValue(undefined),
       },
       createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      createGain: vi.fn().mockReturnValue({
+        gain: { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() },
+        connect: vi.fn(),
+      }),
+      currentTime: 0,
       destination: {},
       close: vi.fn(),
     };
@@ -201,5 +226,88 @@ describe('audioChain — iOS AudioContext unlock', () => {
     chain.dispose();
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+  });
+});
+
+describe('audioChain — volume control', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeMockChain() {
+    const gainParam = { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() };
+    const gainNode = { gain: gainParam, connect: vi.fn() };
+    const mockAnalyser = {
+      fftSize: 0,
+      frequencyBinCount: 128,
+      getByteFrequencyData: vi.fn(),
+      connect: vi.fn(),
+    };
+    const mockAudioContext = {
+      currentTime: 0,
+      resume: vi.fn().mockResolvedValue(undefined),
+      audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
+      createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      createGain: vi.fn().mockReturnValue(gainNode),
+      destination: {},
+      close: vi.fn(),
+    };
+    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
+      connect: vi.fn(),
+      port: { postMessage: vi.fn() },
+    }));
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(() => mockAudioContext),
+    );
+    vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
+    return { gainParam, gainNode, mockAudioContext };
+  }
+
+  it('should expose a setVolume method', async () => {
+    makeMockChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    expect(typeof chain.setVolume).toBe('function');
+  });
+
+  it('should create a GainNode during init', async () => {
+    const { mockAudioContext } = makeMockChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    expect(mockAudioContext.createGain).toHaveBeenCalled();
+  });
+
+  it('should set the gain value when setVolume is called', async () => {
+    const { gainParam } = makeMockChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.setVolume(0);
+    expect(gainParam.linearRampToValueAtTime).toHaveBeenCalledWith(0, expect.any(Number));
+    chain.setVolume(1);
+    expect(gainParam.linearRampToValueAtTime).toHaveBeenCalledWith(1, expect.any(Number));
+  });
+
+  it('should clamp setVolume input to [0, 1]', async () => {
+    const { gainParam } = makeMockChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.setVolume(-0.5);
+    expect(gainParam.linearRampToValueAtTime).toHaveBeenLastCalledWith(0, expect.any(Number));
+    chain.setVolume(2.5);
+    expect(gainParam.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, expect.any(Number));
+  });
+
+  it('should buffer setVolume calls made before init() resolves', async () => {
+    const { gainParam } = makeMockChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    // Call before init — must not throw and must apply after init
+    chain.setVolume(0.25);
+    await chain.init();
+    expect(gainParam.linearRampToValueAtTime).toHaveBeenCalledWith(0.25, expect.any(Number));
   });
 });

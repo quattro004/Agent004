@@ -36,28 +36,10 @@ describe('CrtFrame', () => {
     expect(img).toHaveAttribute('alt', 'Retro CRT Television');
   });
 
-  it('should render a video element when videoSrc is provided', () => {
-    render(<CrtFrame videoSrc="/max-height.mp4" />);
-
-    const video = document.querySelector('video');
-    expect(video).not.toBeNull();
-    expect(video).toHaveAttribute('src', '/max-height.mp4');
-    expect(video).toHaveAttribute('autoplay');
-    expect(video).toHaveClass('crt-video');
-  });
-
-  it('should NOT render a video element when videoSrc is omitted', () => {
-    render(<CrtFrame />);
-
-    const video = document.querySelector('video');
-    expect(video).toBeNull();
-  });
-
-  it('should render CRT effect layers (scan-lines, crt-glass)', () => {
+  it('should render CRT scan-lines effect layer', () => {
     render(<CrtFrame />);
 
     expect(document.querySelector('.scan-lines')).not.toBeNull();
-    expect(document.querySelector('.crt-glass')).not.toBeNull();
   });
 
   it('should NOT render a speaker grille element (image provides it)', () => {

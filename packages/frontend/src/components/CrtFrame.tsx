@@ -1,19 +1,16 @@
 import type { ReactNode } from 'react';
 
 interface CrtFrameProps {
-  videoSrc?: string;
   children?: ReactNode;
   panel?: ReactNode;
   footer?: ReactNode;
 }
 
-export function CrtFrame({ videoSrc, children, panel, footer }: CrtFrameProps) {
+export function CrtFrame({ children, panel, footer }: CrtFrameProps) {
   return (
     <div data-testid="crt-bezel" className="crt-bezel">
       <div className="crt-screen">
-        {videoSrc && <video src={videoSrc} autoPlay muted loop className="crt-video" />}
         <div className="scan-lines" />
-        <div className="crt-glass" />
         {children}
       </div>
       {panel && <div className="crt-panel">{panel}</div>}

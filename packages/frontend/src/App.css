@@ -118,6 +118,18 @@
   z-index: 6;
 }
 
+/* Volume knob wrapper — mirrors .tv-knob-wrapper for layout symmetry.
+   translateY lifts the wrapper to align over the painted brass volume knob
+   (which sits higher than flex space-around would place it). */
+.volume-knob-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  transform: translateY(-7vh);
+}
+
 /* ===== TV Power Knob (overlay on image's toggle switch) ===== */
 
 .tv-knob-wrapper {
@@ -199,25 +211,55 @@
   border: none;
   box-shadow: none;
   cursor: pointer;
-  transition: transform 0.15s ease-out;
   appearance: none;
   padding: 0;
   position: relative;
   flex-shrink: 0;
 }
 
-.volume-knob::after {
-  content: none;
-}
-
 .volume-knob:hover:not(:disabled) {
-  background: rgba(0, 255, 255, 0.08);
-  box-shadow: 0 0 10px rgba(0, 255, 255, 0.15);
+  filter: brightness(1.15);
 }
 
 .volume-knob:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* SVG indicator that overlays the painted brass knob */
+.volume-indicator {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.volume-indicator--dim {
+  opacity: 0.35;
+}
+
+.volume-pointer {
+  transition: transform 0.25s cubic-bezier(0.5, 1.5, 0.5, 1);
+  transform-origin: 50px 50px;
+}
+
+.volume-tick {
+  stroke: #00ffff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(0, 255, 255, 0.85));
+}
+
+.volume-tip {
+  fill: #ccffff;
+  filter: drop-shadow(0 0 5px rgba(0, 255, 255, 1));
+}
+
+.volume-knob:hover:not(:disabled) .volume-tick,
+.volume-knob:hover:not(:disabled) .volume-tip {
+  filter: drop-shadow(0 0 6px rgba(0, 255, 255, 1));
 }
 
 /* ===== Neon Backdrop (Max Headroom stripes) ===== */
@@ -641,36 +683,6 @@
     width: 100vw;
     height: auto;
   }
-}
-
-@keyframes glowPulse {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 8px rgba(255, 180, 80, 0.25));
-  }
-  50% {
-    filter: drop-shadow(0 0 12px rgba(255, 180, 80, 0.4));
-  }
-}
-
-.crt-video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: perspective(800px) scale(1.02);
-  border-radius: 12px;
-  animation: glowPulse 3s ease-in-out infinite;
-  filter: contrast(1.15) brightness(0.95) saturate(1.2) blur(0.4px);
-}
-
-.crt-glass {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse at top left, rgba(255, 255, 255, 0.08), transparent 60%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 40%);
-  mix-blend-mode: screen;
 }
 
 .scan-lines {

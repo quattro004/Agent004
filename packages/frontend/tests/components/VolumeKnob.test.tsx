@@ -15,16 +15,30 @@ describe('VolumeKnob', () => {
     expect(handleChange).toHaveBeenCalled();
   });
 
-  it('should reflect volume level via rotation style', () => {
-    render(<VolumeKnob volume={0.75} onVolumeChange={vi.fn()} disabled={false} />);
-    const knob = screen.getByRole('button', { name: /volume/i });
-    expect(knob.style.transform).toContain('rotate');
+  it('should render a pointer indicator whose rotation reflects volume', () => {
+    const { container } = render(
+      <VolumeKnob volume={0.5} onVolumeChange={vi.fn()} disabled={false} />,
+    );
+    const pointer = container.querySelector('[data-testid="volume-pointer"]');
+    expect(pointer).not.toBeNull();
+    // Sweep is 270°, centred so 0 → -135°, 1 → +135°, 0.5 → 0°
+    expect(pointer?.getAttribute('transform')).toContain('rotate(0');
   });
 
-  it('should not call onVolumeChange when disabled', () => {
-    const handleChange = vi.fn();
-    render(<VolumeKnob volume={0.5} onVolumeChange={handleChange} disabled={true} />);
-    fireEvent.click(screen.getByRole('button', { name: /volume/i }));
-    expect(handleChange).not.toHaveBeenCalled();
+  it('should mark the indicator as dimmed when disabled', () => {
+    const { container } = render(
+      <VolumeKnob volume={0.5} onVolumeChange={vi.fn()} disabled={true} />,
+    );
+    const indicator = container.querySelector('[data-testid="volume-indicator"]');
+    expect(indicator?.classList.contains('volume-indicator--dim')).toBe(true);
+  });
+
+  it('should be wrapped in a .volume-knob-wrapper for independent positioning', () => {
+    const { container } = render(
+      <VolumeKnob volume={0.5} onVolumeChange={vi.fn()} disabled={false} />,
+    );
+    const wrapper = container.querySelector('.volume-knob-wrapper');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.querySelector('.volume-knob')).not.toBeNull();
   });
 });

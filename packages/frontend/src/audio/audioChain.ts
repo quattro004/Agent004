@@ -9,6 +9,7 @@ export interface AudioChain {
   init(): Promise<void>;
   play(audioBuffer: AudioBuffer): void;
   stop(): void;
+  setVolume(level: number): void;
   getIsMouthOpen(): boolean;
   triggerStutter(): void;
   triggerStaticBurst(): void;
@@ -18,10 +19,13 @@ export interface AudioChain {
 const FFT_SIZE = 256;
 const MOUTH_THRESHOLD = 100;
 const LOW_FREQ_BIN_COUNT = 8; // ~0–500Hz at 44100Hz with FFT 256
+const VOLUME_RAMP_SECONDS = 0.02; // 20ms ramp avoids clicks
+const DEFAULT_VOLUME = 0.5;
 
 export function createAudioChain(): AudioChain {
   let ctx: AudioContext | null = null;
   let analyser: AnalyserNode | null = null;
+  let gainNode: GainNode | null = null;
   let stutterNode: AudioWorkletNode | null = null;
   let pitchNode: AudioWorkletNode | null = null;
   let eqNode: AudioWorkletNode | null = null;
@@ -30,6 +34,20 @@ export function createAudioChain(): AudioChain {
   let frequencyData: Uint8Array<ArrayBuffer> | null = null;
   let visibilityHandler: (() => void) | null = null;
   let initPromise: Promise<void> | null = null;
+  // Volume requested before init resolves is buffered and applied post-init
+  let pendingVolume: number | null = null;
+  let currentVolume = DEFAULT_VOLUME;
+
+  function clamp01(value: number): number {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
+  }
+
+  function applyVolume(level: number): void {
+    if (!ctx || !gainNode) return;
+    gainNode.gain.linearRampToValueAtTime(level, ctx.currentTime + VOLUME_RAMP_SECONDS);
+  }
 
   return {
     init() {
@@ -56,12 +74,16 @@ export function createAudioChain(): AudioChain {
         analyser.fftSize = FFT_SIZE;
         frequencyData = new Uint8Array(analyser.frequencyBinCount);
 
-        // Chain: stutter → pitch → EQ → static → analyser → destination
+        gainNode = ctx.createGain();
+        gainNode.gain.value = currentVolume;
+
+        // Chain: stutter → pitch → EQ → static → analyser → gain → destination
         stutterNode.connect(pitchNode);
         pitchNode.connect(eqNode);
         eqNode.connect(staticNode);
         staticNode.connect(analyser);
-        analyser.connect(ctx.destination);
+        analyser.connect(gainNode);
+        gainNode.connect(ctx.destination);
 
         // iOS Safari 16–16.3 audio routing fix: resume on visibility return
         visibilityHandler = () => {
@@ -70,6 +92,12 @@ export function createAudioChain(): AudioChain {
           }
         };
         document.addEventListener('visibilitychange', visibilityHandler);
+
+        // Apply any volume set before init resolved
+        if (pendingVolume !== null) {
+          applyVolume(pendingVolume);
+          pendingVolume = null;
+        }
       })();
       return initPromise;
     },
@@ -94,6 +122,16 @@ export function createAudioChain(): AudioChain {
     stop() {
       currentSource?.stop();
       currentSource = null;
+    },
+
+    setVolume(level: number) {
+      const clamped = clamp01(level);
+      currentVolume = clamped;
+      if (gainNode && ctx) {
+        applyVolume(clamped);
+      } else {
+        pendingVolume = clamped;
+      }
     },
 
     getIsMouthOpen(): boolean {
@@ -130,12 +168,14 @@ export function createAudioChain(): AudioChain {
       ctx?.close();
       ctx = null;
       analyser = null;
+      gainNode = null;
       stutterNode = null;
       pitchNode = null;
       eqNode = null;
       staticNode = null;
       currentSource = null;
       initPromise = null;
+      pendingVolume = null;
     },
   };
 }
