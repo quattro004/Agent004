@@ -311,3 +311,138 @@ describe('audioChain — volume control', () => {
     expect(gainParam.linearRampToValueAtTime).toHaveBeenCalledWith(0.25, expect.any(Number));
   });
 });
+
+describe('audioChain — static noise (tune-in)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  function makeMockChainWithBuffers() {
+    const gainParam = { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() };
+    const gainNode = { gain: gainParam, connect: vi.fn() };
+    const mockAnalyser = {
+      fftSize: 0,
+      frequencyBinCount: 128,
+      getByteFrequencyData: vi.fn(),
+      connect: vi.fn(),
+    };
+    const noiseSource = {
+      buffer: null as AudioBuffer | null,
+      loop: false,
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      onended: null as null | (() => void),
+    };
+    const sampleData = new Float32Array(44100);
+    const noiseBuffer = {
+      length: 44100,
+      sampleRate: 44100,
+      numberOfChannels: 1,
+      getChannelData: vi.fn(() => sampleData),
+    };
+    const mockAudioContext = {
+      currentTime: 0,
+      sampleRate: 44100,
+      resume: vi.fn().mockResolvedValue(undefined),
+      audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
+      createAnalyser: vi.fn().mockReturnValue(mockAnalyser),
+      createGain: vi.fn().mockReturnValue(gainNode),
+      createBuffer: vi.fn().mockReturnValue(noiseBuffer),
+      createBufferSource: vi.fn().mockReturnValue(noiseSource),
+      destination: {},
+      close: vi.fn(),
+    };
+    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
+      connect: vi.fn(),
+      port: { postMessage: vi.fn() },
+    }));
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(() => mockAudioContext),
+    );
+    vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
+    return { gainNode, noiseSource, noiseBuffer, sampleData, mockAudioContext };
+  }
+
+  it('exposes playStatic and stopStatic methods', async () => {
+    makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    expect(typeof chain.playStatic).toBe('function');
+    expect(typeof chain.stopStatic).toBe('function');
+  });
+
+  it('creates an AudioBuffer filled with non-zero noise samples', async () => {
+    const { mockAudioContext, sampleData } = makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.playStatic(3000);
+    expect(mockAudioContext.createBuffer).toHaveBeenCalled();
+    // The implementation must populate channel data with random noise
+    const nonZero = Array.from(sampleData).some((v) => v !== 0);
+    expect(nonZero).toBe(true);
+  });
+
+  it('routes the noise source through the gain node (so volume knob applies)', async () => {
+    const { gainNode, noiseSource } = makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.playStatic(3000);
+    expect(noiseSource.start).toHaveBeenCalled();
+    expect(noiseSource.connect).toHaveBeenCalledWith(gainNode);
+  });
+
+  it('loops the buffer so a short sample fills the full duration', async () => {
+    const { noiseSource } = makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.playStatic(3000);
+    expect(noiseSource.loop).toBe(true);
+  });
+
+  it('automatically stops the noise source after durationMs', async () => {
+    vi.useFakeTimers();
+    const { noiseSource } = makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.playStatic(3000);
+    expect(noiseSource.stop).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(3000);
+    expect(noiseSource.stop).toHaveBeenCalled();
+  });
+
+  it('stopStatic stops the noise source immediately and cancels the auto-stop timer', async () => {
+    vi.useFakeTimers();
+    const { noiseSource } = makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.playStatic(3000);
+    chain.stopStatic();
+    expect(noiseSource.stop).toHaveBeenCalledTimes(1);
+    // Advance past the would-be auto-stop time — must not call stop again
+    vi.advanceTimersByTime(5000);
+    expect(noiseSource.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('stopStatic before playStatic is a no-op', async () => {
+    makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    expect(() => chain.stopStatic()).not.toThrow();
+  });
+
+  it('playStatic before init is a no-op (does not throw)', async () => {
+    makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    expect(() => chain.playStatic(3000)).not.toThrow();
+  });
+});

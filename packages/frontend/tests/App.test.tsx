@@ -89,6 +89,8 @@ vi.mock('../src/hooks/useIsMobile', () => ({
 
 vi.mock('../src/config/timing', () => ({
   GREETING_DISPLAY_MS: 200,
+  TUNING_DURATION_MS: 0,
+  SETTLING_DURATION_MS: 0,
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({
@@ -197,6 +199,8 @@ vi.mock('../src/audio/audioChain', () => ({
     triggerStutter: vi.fn(),
     triggerStaticBurst: vi.fn(),
     setVolume: vi.fn(),
+    playStatic: vi.fn(),
+    stopStatic: vi.fn(),
     dispose: mockAudioDispose,
   }),
 }));

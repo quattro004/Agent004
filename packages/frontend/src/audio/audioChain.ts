@@ -13,6 +13,8 @@ export interface AudioChain {
   getIsMouthOpen(): boolean;
   triggerStutter(): void;
   triggerStaticBurst(): void;
+  playStatic(durationMs: number): void;
+  stopStatic(): void;
   dispose(): void;
 }
 
@@ -31,6 +33,8 @@ export function createAudioChain(): AudioChain {
   let eqNode: AudioWorkletNode | null = null;
   let staticNode: AudioWorkletNode | null = null;
   let currentSource: AudioBufferSourceNode | null = null;
+  let staticSource: AudioBufferSourceNode | null = null;
+  let staticStopTimer: ReturnType<typeof setTimeout> | null = null;
   let frequencyData: Uint8Array<ArrayBuffer> | null = null;
   let visibilityHandler: (() => void) | null = null;
   let initPromise: Promise<void> | null = null;
@@ -159,8 +163,79 @@ export function createAudioChain(): AudioChain {
       staticNode?.port.postMessage({ type: 'burst' });
     },
 
+    playStatic(durationMs: number) {
+      if (!ctx || !gainNode) return;
+
+      // Stop any previous static noise (and cancel its pending auto-stop timer)
+      if (staticStopTimer) {
+        clearTimeout(staticStopTimer);
+        staticStopTimer = null;
+      }
+      if (staticSource) {
+        try {
+          staticSource.stop();
+        } catch {
+          // Already stopped; ignore.
+        }
+        staticSource = null;
+      }
+
+      // 1-second loopable white-noise buffer (mono) — small + loops to fill duration.
+      const sampleRate = ctx.sampleRate || 44100;
+      const buffer = ctx.createBuffer(1, sampleRate, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      // Route through gainNode so the volume knob controls static loudness.
+      source.connect(gainNode);
+      source.start();
+      staticSource = source;
+
+      staticStopTimer = setTimeout(() => {
+        try {
+          source.stop();
+        } catch {
+          // Already stopped; ignore.
+        }
+        if (staticSource === source) staticSource = null;
+        staticStopTimer = null;
+      }, durationMs);
+    },
+
+    stopStatic() {
+      if (staticStopTimer) {
+        clearTimeout(staticStopTimer);
+        staticStopTimer = null;
+      }
+      if (staticSource) {
+        try {
+          staticSource.stop();
+        } catch {
+          // Already stopped; ignore.
+        }
+        staticSource = null;
+      }
+    },
+
     dispose() {
       currentSource?.stop();
+      if (staticStopTimer) {
+        clearTimeout(staticStopTimer);
+        staticStopTimer = null;
+      }
+      if (staticSource) {
+        try {
+          staticSource.stop();
+        } catch {
+          // Already stopped; ignore.
+        }
+        staticSource = null;
+      }
       if (visibilityHandler) {
         document.removeEventListener('visibilitychange', visibilityHandler);
         visibilityHandler = null;

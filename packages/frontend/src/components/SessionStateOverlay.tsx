@@ -1,4 +1,5 @@
 import React from 'react';
+import { StaticNoise } from './StaticNoise';
 
 export type OverlayState =
   | 'ENDED'
@@ -29,26 +30,7 @@ function SignalLostOverlay() {
       {/* SMPTE color bars */}
       <div className="color-bars" aria-hidden="true" />
 
-      {/* Animated static noise */}
-      <svg
-        className="static-noise"
-        xmlns="http://www.w3.org/2000/svg"
-        width="100%"
-        height="100%"
-        aria-hidden="true"
-      >
-        <filter id="static-filter">
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.65"
-            numOctaves="3"
-            stitchTiles="stitch"
-          >
-            <animate attributeName="seed" from="0" to="100" dur="0.5s" repeatCount="indefinite" />
-          </feTurbulence>
-        </filter>
-        <rect width="100%" height="100%" filter="url(#static-filter)" opacity="0.35" />
-      </svg>
+      <StaticNoise />
       <div className="standby-banner">
         <span className="standby-text">PLEASE STAND BY</span>
         <span className="standby-subtext">Max Is Off Air</span>

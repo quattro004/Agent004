@@ -5,6 +5,7 @@ import { BroadcastText } from './components/BroadcastText';
 import { BufferingOverlay } from './components/BufferingOverlay';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
 import { TextInput } from './components/TextInput';
+import { TuningOverlay } from './components/TuningOverlay';
 import { TvKnob } from './components/TvKnob';
 import { VolumeKnob } from './components/VolumeKnob';
 import { NeonBackdrop } from './effects/NeonBackdrop';
@@ -13,7 +14,7 @@ import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
 import { useIsMobile } from './hooks/useIsMobile';
 import { createAudioChain } from './audio/audioChain';
-import { GREETING_DISPLAY_MS } from './config/timing';
+import { GREETING_DISPLAY_MS, TUNING_DURATION_MS, SETTLING_DURATION_MS } from './config/timing';
 import { resolveWsUrl } from './config/wsUrl';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
@@ -31,10 +32,14 @@ if (!wsResolution.connect) {
 }
 const WS_URL = wsResolution.url || 'ws://invalid';
 
-/** TV power states: off (dark screen), powering (transition), on (fully active). */
-export type TvPowerState = 'off' | 'powering' | 'on';
-
-const POWER_UP_DURATION_MS = 800;
+/**
+ * TV power states:
+ * - off:      dark screen, no audio, no UI
+ * - tuning:   full-screen static + white-noise audio (no avatar / greeting)
+ * - settling: avatar visible, brief glitch flashes (signal locking in)
+ * - on:       fully active — greeting plays, normal operation
+ */
+export type TvPowerState = 'off' | 'tuning' | 'settling' | 'on';
 
 /** Map domain SessionState to the overlay subset (null if no overlay needed). */
 function toOverlayState(state: SessionState, isGreetingDone: boolean): OverlayState {
@@ -54,6 +59,11 @@ function toOverlayState(state: SessionState, isGreetingDone: boolean): OverlaySt
 export function App() {
   const [tvPower, setTvPower] = useState<TvPowerState>('off');
   const isTvOn = tvPower === 'on';
+  const isTuning = tvPower === 'tuning';
+  const isSettling = tvPower === 'settling';
+  // Avatar + backdrop appear from settling onward so the tune-in glitch
+  // flashes have an avatar to overlay.
+  const showSceneContent = isSettling || isTvOn;
   const [volume, setVolume] = useState(0.5);
   const [greetingText, setGreetingText] = useState<string | null>(null);
   const [isGreetingDone, setIsGreetingDone] = useState(false);
@@ -78,7 +88,7 @@ export function App() {
 
   const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
 
-  // Play greeting when TV powers on
+  // Play greeting only after the TV reaches the 'on' state (post tune-in).
   useEffect(() => {
     if (!isTvOn) return;
 
@@ -116,11 +126,19 @@ export function App() {
     };
   }, []);
 
-  // Power-up transition: advance from 'powering' to 'on' after brief delay
+  // Tuning → settling → on transitions are driven by timers anchored to
+  // the current power state. Power-off cleanup is handled by handlePowerToggle
+  // (which sets state to 'off', cancelling this effect's timer).
   useEffect(() => {
-    if (tvPower !== 'powering') return;
-    const timer = setTimeout(() => setTvPower('on'), POWER_UP_DURATION_MS);
-    return () => clearTimeout(timer);
+    if (tvPower === 'tuning') {
+      const t = setTimeout(() => setTvPower('settling'), TUNING_DURATION_MS);
+      return () => clearTimeout(t);
+    }
+    if (tvPower === 'settling') {
+      const t = setTimeout(() => setTvPower('on'), SETTLING_DURATION_MS);
+      return () => clearTimeout(t);
+    }
+    return undefined;
   }, [tvPower]);
 
   // Reset TV power when session enters a terminal state
@@ -134,14 +152,21 @@ export function App() {
   const handlePowerToggle = useCallback(() => {
     if (tvPower === 'off') {
       // AudioContext requires a user gesture to start without warnings.
-      // Initialize the audio chain here (idempotent) on the power-on click.
-      void audioChainRef.current.init().catch(() => {
-        // AudioContext may fail; continue without audio
-      });
-      setTvPower('powering');
+      // Initialize the audio chain (idempotent) and kick off the static.
+      void audioChainRef.current
+        .init()
+        .then(() => {
+          audioChainRef.current.playStatic(TUNING_DURATION_MS);
+        })
+        .catch(() => {
+          // AudioContext may fail; continue silently — visual tuning still runs.
+        });
+      setTvPower('tuning');
       setIsGreetingDone(false);
       setGreetingText(null);
-    } else if (tvPower === 'on') {
+    } else {
+      // Any non-off state (tuning, settling, on) → power down cleanly.
+      audioChainRef.current.stopStatic();
       greetingRef.current.stopGreeting();
       setTvPower('off');
       setIsGreetingDone(false);
@@ -163,7 +188,7 @@ export function App() {
   const controlPanel = (
     <>
       <TvKnob onToggle={handlePowerToggle} isOn={isTvOn} />
-      <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={!isTvOn} />
+      <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={tvPower === 'off'} />
     </>
   );
 
@@ -179,13 +204,17 @@ export function App() {
   return (
     <div id="max-height-app" className="crt-fallback">
       <CrtFrame panel={controlPanel} footer={footerControls}>
-        {isTvOn && <NeonBackdrop isMobile={isMobile} />}
-        {isTvOn && <AvatarFrameCycler isMouthOpen={isMouthOpen} />}
+        {showSceneContent && <NeonBackdrop isMobile={isMobile} />}
+        {showSceneContent && <AvatarFrameCycler isMouthOpen={isMouthOpen} />}
         {isTvOn && (
           <BroadcastText tokens={displayText.split('')} fullText={greetingText ? null : fullText} />
         )}
         {isTvOn && <BufferingOverlay isConnecting={showBuffering} isThinking={isStreaming} />}
         {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState, isGreetingDone)} />}
+        {isSettling && (
+          <div data-testid="tune-in-glitch" className="tune-in-glitch-overlay" aria-hidden="true" />
+        )}
+        <TuningOverlay visible={isTuning} />
       </CrtFrame>
     </div>
   );
