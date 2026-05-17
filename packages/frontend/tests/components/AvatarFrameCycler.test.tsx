@@ -135,12 +135,24 @@ describe('AvatarFrameCycler', () => {
   });
 
   describe('blink effect', () => {
-    it('should show blink frame after scheduled delay', () => {
-      // Math.random=0 → blink delay: 2000 + 0*2000 = 2000ms (fires before glitch at 3000ms)
+    it('should show blink frame after scheduled delay (>=5s for calm cadence)', () => {
+      // Math.random=0 → blink delay: 5000 + 0*4000 = 5000ms
       render(<AvatarFrameCycler isMouthOpen={false} />);
 
+      // Should NOT have blinked yet at the OLD short delay
       act(() => {
         vi.advanceTimersByTime(2000);
+      });
+      expect(screen.getByTestId('avatar-frame')).not.toHaveAttribute('data-frame', 'blink');
+
+      // Glitch fires at 3000ms (100ms duration) — advance past it.
+      act(() => {
+        vi.advanceTimersByTime(1100);
+      });
+
+      // Now reach 5000ms total → blink fires.
+      act(() => {
+        vi.advanceTimersByTime(1900);
       });
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/blink.png');
     });
@@ -148,8 +160,9 @@ describe('AvatarFrameCycler', () => {
     it('should return to idle after blink duration (300ms)', () => {
       render(<AvatarFrameCycler isMouthOpen={false} />);
 
+      // Advance past glitch (3000+100ms) and to blink time (5000ms total)
       act(() => {
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(5000);
       });
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'blink');
 
@@ -162,28 +175,29 @@ describe('AvatarFrameCycler', () => {
 
   describe('priority and collisions', () => {
     it('should show glitch over blink when both are active', () => {
-      // Engineer collision: glitch at 4000ms, blink at 4000ms
+      // Engineer collision at 5000ms with the slowed-down blink cadence.
+      // glitch: 3000 + 0.4*5000 = 5000ms
+      // blink:  5000 + 0*4000   = 5000ms
       vi.spyOn(Math, 'random')
-        .mockReturnValueOnce(0.2) // glitch delay: 3000 + 0.2*5000 = 4000ms
-        .mockReturnValueOnce(1) // blink delay: 2000 + 1*2000 = 4000ms
+        .mockReturnValueOnce(0.4) // glitch delay
+        .mockReturnValueOnce(0) // blink delay
         .mockReturnValueOnce(0.5) // laugh delay (don't care)
         .mockReturnValueOnce(0.5) // side-eye delay (don't care)
-        .mockReturnValueOnce(0) // glitch duration: 100 + 0*100 = 100ms
+        .mockReturnValueOnce(0) // glitch duration: 100ms
         .mockReturnValue(0.5); // subsequent
 
       render(<AvatarFrameCycler isMouthOpen={false} />);
 
-      // Both fire at 4000ms — glitch should win
       act(() => {
-        vi.advanceTimersByTime(4000);
+        vi.advanceTimersByTime(5000);
       });
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'glitch');
     });
 
     it('should show blink after glitch ends when both were active', () => {
       vi.spyOn(Math, 'random')
-        .mockReturnValueOnce(0.2) // glitch delay: 4000ms
-        .mockReturnValueOnce(1) // blink delay: 4000ms (2000 + 1*2000)
+        .mockReturnValueOnce(0.4) // glitch delay: 5000ms
+        .mockReturnValueOnce(0) // blink delay: 5000ms
         .mockReturnValueOnce(0.5) // laugh delay (don't care)
         .mockReturnValueOnce(0.5) // side-eye delay (don't care)
         .mockReturnValueOnce(0) // glitch duration: 100ms
@@ -192,9 +206,9 @@ describe('AvatarFrameCycler', () => {
       render(<AvatarFrameCycler isMouthOpen={false} />);
 
       act(() => {
-        vi.advanceTimersByTime(4000);
+        vi.advanceTimersByTime(5000);
       });
-      // Glitch ends at 4100ms, blink still active (ends at 4300ms with 300ms duration)
+      // Glitch ends at 5100ms; blink still active (ends at 5300ms).
       act(() => {
         vi.advanceTimersByTime(100);
       });
@@ -295,6 +309,36 @@ describe('AvatarFrameCycler', () => {
           vi.advanceTimersByTime(10000);
         });
       }).not.toThrow();
+    });
+  });
+
+  describe('forceFrame override', () => {
+    it('renders the forced frame regardless of internal state', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} forceFrame="glitch" />);
+      const img = screen.getByTestId('avatar-frame');
+      expect(img).toHaveAttribute('data-frame', 'glitch');
+      expect(img).toHaveAttribute('src', '/avatar/retro/glitch.png');
+    });
+
+    it('forceFrame overrides talk frame even when mouth is open', () => {
+      const { rerender } = render(<AvatarFrameCycler isMouthOpen={false} />);
+      rerender(<AvatarFrameCycler isMouthOpen={true} forceFrame="glitch" />);
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'glitch');
+    });
+
+    it('forceFrame overrides scheduled blink', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} forceFrame="idle" />);
+      act(() => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'idle');
+    });
+
+    it('clearing forceFrame returns control to internal state', () => {
+      const { rerender } = render(<AvatarFrameCycler isMouthOpen={false} forceFrame="glitch" />);
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'glitch');
+      rerender(<AvatarFrameCycler isMouthOpen={false} />);
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'idle');
     });
   });
 });

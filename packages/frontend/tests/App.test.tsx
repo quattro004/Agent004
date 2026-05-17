@@ -91,6 +91,7 @@ vi.mock('../src/config/timing', () => ({
   GREETING_DISPLAY_MS: 200,
   TUNING_DURATION_MS: 0,
   SETTLING_DURATION_MS: 0,
+  TUNE_IN_GLITCH_PATTERN: [],
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({

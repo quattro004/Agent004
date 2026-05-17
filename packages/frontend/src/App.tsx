@@ -14,7 +14,12 @@ import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
 import { useIsMobile } from './hooks/useIsMobile';
 import { createAudioChain } from './audio/audioChain';
-import { GREETING_DISPLAY_MS, TUNING_DURATION_MS, SETTLING_DURATION_MS } from './config/timing';
+import {
+  GREETING_DISPLAY_MS,
+  TUNING_DURATION_MS,
+  SETTLING_DURATION_MS,
+  TUNE_IN_GLITCH_PATTERN,
+} from './config/timing';
 import { resolveWsUrl } from './config/wsUrl';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
@@ -58,6 +63,7 @@ function toOverlayState(state: SessionState, isGreetingDone: boolean): OverlaySt
 
 export function App() {
   const [tvPower, setTvPower] = useState<TvPowerState>('off');
+  const [glitchStep, setGlitchStep] = useState(0);
   const isTvOn = tvPower === 'on';
   const isTuning = tvPower === 'tuning';
   const isSettling = tvPower === 'settling';
@@ -141,6 +147,19 @@ export function App() {
     return undefined;
   }, [tvPower]);
 
+  // Drive the avatar through the tune-in glitch pattern while in `settling`.
+  // Each step holds the frame for its configured duration, then advances.
+  useEffect(() => {
+    if (tvPower !== 'settling') {
+      setGlitchStep(0);
+      return undefined;
+    }
+    if (glitchStep >= TUNE_IN_GLITCH_PATTERN.length) return undefined;
+    const step = TUNE_IN_GLITCH_PATTERN[glitchStep];
+    const t = setTimeout(() => setGlitchStep((s) => s + 1), step.durationMs);
+    return () => clearTimeout(t);
+  }, [tvPower, glitchStep]);
+
   // Reset TV power when session enters a terminal state
   useEffect(() => {
     const terminalStates: SessionState[] = ['ENDED', 'BUDGET_CAPPED', 'RATE_LIMITED', 'ERROR'];
@@ -205,7 +224,16 @@ export function App() {
     <div id="max-height-app" className="crt-fallback">
       <CrtFrame panel={controlPanel} footer={footerControls}>
         {showSceneContent && <NeonBackdrop isMobile={isMobile} />}
-        {showSceneContent && <AvatarFrameCycler isMouthOpen={isMouthOpen} />}
+        {showSceneContent && (
+          <AvatarFrameCycler
+            isMouthOpen={isMouthOpen}
+            forceFrame={
+              isSettling && glitchStep < TUNE_IN_GLITCH_PATTERN.length
+                ? TUNE_IN_GLITCH_PATTERN[glitchStep].frame
+                : undefined
+            }
+          />
+        )}
         {isTvOn && (
           <BroadcastText tokens={displayText.split('')} fullText={greetingText ? null : fullText} />
         )}

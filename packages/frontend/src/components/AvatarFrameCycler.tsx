@@ -16,6 +16,13 @@ const ALL_FRAMES: AvatarFrame[] = [
 interface AvatarFrameCyclerProps {
   isMouthOpen: boolean;
   theme?: AvatarTheme;
+  /**
+   * When provided, this frame is rendered unconditionally and all internal
+   * timers (blink, glitch, laugh, side-eye, talk) are ignored for selection
+   * purposes. Useful for driving deterministic sequences like the TV
+   * tune-in glitch flashes.
+   */
+  forceFrame?: AvatarFrame;
 }
 
 function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps) {
@@ -52,11 +59,11 @@ function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps
     return () => clearTimeout(timeoutId);
   }, []);
 
-  // Recursive blink timer: blink every 2–4s for 300ms
+  // Recursive blink timer: blink every 5–9s for 300ms (calm, lifelike cadence)
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
     const schedule = () => {
-      const delay = 2000 + Math.random() * 2000;
+      const delay = 5000 + Math.random() * 4000;
       timeoutId = setTimeout(() => {
         setIsBlinking(true);
         timeoutId = setTimeout(() => {
@@ -128,15 +135,17 @@ function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps
   return { src: `/avatar/${theme}/${frame}.png`, frame };
 }
 
-export function AvatarFrameCycler({ isMouthOpen, theme }: AvatarFrameCyclerProps) {
+export function AvatarFrameCycler({ isMouthOpen, theme, forceFrame }: AvatarFrameCyclerProps) {
   const { src, frame } = useAvatarFrame({ isMouthOpen, theme });
+  const displayFrame = forceFrame ?? frame;
+  const displaySrc = forceFrame ? `/avatar/${theme ?? 'retro'}/${forceFrame}.png` : src;
 
   return (
     <img
-      src={src}
+      src={displaySrc}
       alt=""
       data-testid="avatar-frame"
-      data-frame={frame}
+      data-frame={displayFrame}
       className="avatar-frame-cycler"
     />
   );

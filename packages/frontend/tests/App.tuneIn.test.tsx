@@ -22,8 +22,18 @@ vi.mock('../src/components/CrtFrame', () => ({
 }));
 
 vi.mock('../src/components/AvatarFrameCycler', () => ({
-  AvatarFrameCycler: ({ isMouthOpen }: { isMouthOpen: boolean }) => (
-    <div data-testid="avatar-frame" data-mouth-open={isMouthOpen} />
+  AvatarFrameCycler: ({
+    isMouthOpen,
+    forceFrame,
+  }: {
+    isMouthOpen: boolean;
+    forceFrame?: string;
+  }) => (
+    <div
+      data-testid="avatar-frame"
+      data-mouth-open={isMouthOpen}
+      data-frame={forceFrame ?? 'idle'}
+    />
   ),
 }));
 
@@ -96,6 +106,11 @@ vi.mock('../src/config/timing', () => ({
   GREETING_DISPLAY_MS: 200,
   TUNING_DURATION_MS: 60,
   SETTLING_DURATION_MS: 300,
+  TUNE_IN_GLITCH_PATTERN: [
+    { frame: 'glitch', durationMs: 30 },
+    { frame: 'idle', durationMs: 20 },
+    { frame: 'glitch', durationMs: 30 },
+  ],
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({
@@ -280,6 +295,19 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
       expect(screen.getByTestId('tune-in-glitch')).toBeInTheDocument();
       // Avatar appears in settling so the glitch frames have something to show.
       expect(screen.getByTestId('avatar-frame')).toBeInTheDocument();
+    });
+  });
+
+  it('forces the avatar to glitch.png at least once during settling', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+
+    // Wait into the settling window and observe that the avatar is forced
+    // to the glitch frame at some point (so the user actually sees Max glitch).
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('avatar-frame').getAttribute('data-frame')).toBe('glitch');
     });
   });
 
