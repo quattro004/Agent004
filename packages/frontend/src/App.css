@@ -105,40 +105,51 @@
   position: absolute;
   /* Position over TV-frame.png control strip.
      Aligned to the frame's ON/OFF switch and volume knob area.
-     Right panel opaque area: 71.8%–93.0%, center ~82.4%. */
+     Right panel opaque area: 71.8%–93.0%, center ~82.4%.
+     Panel spans 18%–58% of bezel height (height = 40% of bezel). */
   right: 13.3%;
   top: 18%;
   bottom: 42%;
   width: 11%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-around;
   pointer-events: auto;
   z-index: 6;
 }
 
-/* Volume knob wrapper — mirrors .tv-knob-wrapper for layout symmetry.
-   translateY lifts the wrapper to align over the painted brass volume knob
-   (which sits higher than flex space-around would place it). */
-.volume-knob-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 88%;
-  transform: translateY(-7vh);
-}
+/* Both control wrappers are absolutely positioned within .crt-panel so they
+   anchor to the bezel image (which has fixed aspect ratio) rather than to the
+   viewport. This eliminates vertical drift on window resize.
 
-/* ===== TV Power Knob (overlay on image's toggle switch) ===== */
+   Painted positions (bezel coords): ON/OFF switch cy ≈ 0.28, brass knob cy ≈ 0.41.
+   Panel spans 0.18–0.58 → switch at 25% of panel, knob at 57.5% of panel. */
 
 .tv-knob-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 25%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  width: 100%;
 }
+
+/* The volume button sits at the top of this wrapper with the LED bar below.
+   We want the BUTTON center (not the wrapper center) at 57.5% of panel.
+   Button height ≈ 55% × 88% = 48.4% of panel width = ~20% of panel height
+   (at the bezel's ~1.5:1 aspect ratio), so offset the wrapper top by
+   half the button height to land the button center on the painted knob. */
+.volume-knob-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 47.5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ===== TV Power Knob (overlay on image's toggle switch) ===== */
 
 .tv-knob {
   /* Size to cover just the physical switch toggle in the frame */
@@ -235,7 +246,7 @@
   align-items: center;
   justify-content: center;
   gap: 4%;
-  width: 100%;
+  width: 70%;
   margin-top: 6%;
   pointer-events: none;
 }

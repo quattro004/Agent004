@@ -57,6 +57,55 @@ test.describe('Panel control alignment', () => {
     expect(cxRel).toBeLessThanOrEqual(PAINTED.panelCx + PAINTED.panelTol);
   });
 
+  // Regression: the LED bar / knob must stay anchored to the painted brass knob
+  // across viewport resizes. Previously `translateY(-7vh)` on the wrapper caused
+  // vertical drift because vh is viewport-relative, not bezel-relative.
+  const RESIZE_VIEWPORTS = [
+    { width: 1536, height: 1024 },
+    { width: 1280, height: 720 },
+    { width: 1920, height: 1080 },
+    { width: 1024, height: 900 },
+  ];
+
+  for (const vp of RESIZE_VIEWPORTS) {
+    test(`VolumeKnob stays anchored at viewport ${vp.width}x${vp.height}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto('/');
+      const bezel = page.getByTestId('crt-bezel');
+      const knob = page.locator('.volume-knob');
+      await expect(bezel).toBeVisible();
+      await expect(knob).toBeVisible();
+
+      const bezelBox = (await bezel.boundingBox())!;
+      const knobBox = (await knob.boundingBox())!;
+      const cyRel = (knobBox.y + knobBox.height / 2 - bezelBox.y) / bezelBox.height;
+
+      expect(cyRel).toBeGreaterThanOrEqual(PAINTED.volume.cy - PAINTED.volume.tol);
+      expect(cyRel).toBeLessThanOrEqual(PAINTED.volume.cy + PAINTED.volume.tol);
+    });
+
+    test(`VolumeLedBar stays just below painted knob at ${vp.width}x${vp.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(vp);
+      await page.goto('/');
+      const bezel = page.getByTestId('crt-bezel');
+      const ledBar = page.getByTestId('volume-led-bar');
+      await expect(bezel).toBeVisible();
+      await expect(ledBar).toBeVisible();
+
+      const bezelBox = (await bezel.boundingBox())!;
+      const ledBox = (await ledBar.boundingBox())!;
+      const cyRel = (ledBox.y + ledBox.height / 2 - bezelBox.y) / bezelBox.height;
+
+      // LED bar should sit a hair below the painted brass knob (cy ~0.41),
+      // roughly in the 0.44–0.50 range. Tight enough to catch drift,
+      // loose enough to allow minor styling tweaks.
+      expect(cyRel).toBeGreaterThanOrEqual(0.44);
+      expect(cyRel).toBeLessThanOrEqual(0.5);
+    });
+  }
+
   test('panel screenshot for visual review', async ({ page }) => {
     const bezel = page.getByTestId('crt-bezel');
     const bezelBox = (await bezel.boundingBox())!;
