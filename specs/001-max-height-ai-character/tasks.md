@@ -347,6 +347,29 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ---
 
+## Phase 9: Web Speech API Enhancements
+
+**Purpose**: Enhance STT with on-device processing and contextual biasing; add browser TTS fallback for budget degradation. All are additive — no regression to existing pipelines.
+
+**Dependencies**: Phase 3 complete (useSpeech.ts and pollyTts.ts must be implemented).
+
+### STT Enhancements (research.md §R8)
+
+- [ ] T131 [P] Write Vitest tests for on-device speech recognition in packages/frontend/tests/hooks/useSpeech-ondevice.test.ts (test feature detection of SpeechRecognition.available(), test processLocally=true when enabled, test language pack install flow, test graceful fallback when unavailable, test SpeechDisclosure shows "processed locally" text)
+- [ ] T132 [P] Write Vitest tests for contextual biasing in packages/frontend/tests/hooks/useSpeech-biasing.test.ts (test SpeechRecognitionPhrase creation with boost values, test phrases applied to recognition instance, test graceful no-op when constructor unavailable)
+- [ ] T133 Implement on-device speech recognition option in packages/frontend/src/hooks/useSpeech.ts (add processLocally support via SpeechRecognition.available() feature detection, handle install() for language pack download, expose isLocalProcessing state, gate behind user preference from visitorStore, update SpeechDisclosure.tsx to show "processed locally on your device" when active)
+- [ ] T134 Implement contextual biasing in packages/frontend/src/hooks/useSpeech.ts (feature-detect SpeechRecognitionPhrase constructor, create phrase objects for Max-specific vocabulary per research.md §R8b table, set recognition.phrases before start(), graceful no-op on unsupported browsers)
+- [ ] T135 [P] Add on-device recognition preference to visitor settings UI (toggle in settings panel, stored in localStorage via visitorStore, default: off, hidden when SpeechRecognition.available() returns "unavailable")
+
+### TTS Browser Fallback (research.md §R9)
+
+- [ ] T136 [P] Write Vitest tests for browser TTS fallback service in packages/frontend/tests/services/browserTts.test.ts (test voice selection priority: en-US Google/Microsoft > en-US any > en any > default, test pitch=1.2 and rate=1.05 params, test speak() creates SpeechSynthesisUtterance correctly, test isAvailable() detection, test graceful unavailable handling)
+- [ ] T137 Implement browser TTS fallback service in packages/frontend/src/services/browserTts.ts (SpeechSynthesis wrapper with voice selection priority per research.md §R9, pitch=1.2 rate=1.05 approximation, isAvailable() check, speak(text) method returning Promise that resolves on utterance end, stop() method for interruption)
+- [ ] T138 Wire browser TTS fallback into budget degradation handler in packages/frontend/src/services/budgetDegradation.ts (on BUDGET_CAPPED at $8: check browserTts.isAvailable(), if available switch useAudio to use browserTts.speak() instead of Polly, prepend in-character "signal's getting weak" message on first fallback utterance, disable AudioWorklet stutter/pitch/static/EQ effects since raw buffer unavailable)
+- [ ] T139 [P] Write Playwright E2E test for budget-degradation voice fallback in packages/frontend/tests/e2e/budget-fallback.spec.ts (mock session_state_change with budget soft-degrade, verify SpeechSynthesis.speak() is called instead of Polly, verify in-character degradation message appears, verify text-only fallback when SpeechSynthesis unavailable)
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -359,6 +382,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 - **User Story 4 (Phase 6)**: Depends on Phase 2 (agent-side memory adapter + extractor) AND partially on Phase 3 (T088/T089 modify systemPrompt.ts from T036, T091 modifies dataManager.ts from T066, T116 web search tool depends on agent entry point from T039). T086/T087 can start after Phase 2; T088/T089/T091/T092/T116 require Phase 3 completion.
 - **User Story 5 (Phase 7)**: Depends on Phase 3 (US1 provides the app shell to cache)
 - **Polish (Phase 8)**: Depends on all desired user stories being complete
+- **Web Speech API Enhancements (Phase 9)**: Depends on Phase 3 (useSpeech.ts T076, pollyTts.ts T050, budgetDegradation.ts T062). Can run in parallel with Phases 4–8.
 
 ### User Story Dependencies
 
@@ -373,12 +397,12 @@ Phase 2 (Foundational) ──── GATE: blocks all stories
 Phase 3 (US1: First Visit)   Phase 6a (US4: Memory adapters)
     │  ↳ Personality Gate (P3)     │ (T086/T087 can start early)
     │                              │
-    ├──────────┐                   │
-    ▼          ▼                   │
-Phase 4    Phase 5                 │
-(US2:iOS)  (US3:NoMic)            │
-    │          │                   │
-    ▼          ▼                   ▼
+    ├──────────┬───────────────┐   │
+    ▼          ▼               ▼   │
+Phase 4    Phase 5         Phase 9 │
+(US2:iOS)  (US3:NoMic)    (Speech) │
+    │          │               │   │
+    ▼          ▼               │   ▼
               Phase 6b (US4: T088/T089/T091/T092 + T116 web search)
               │ (requires Phase 3 files: systemPrompt.ts, dataManager.ts, index.ts)
               ▼
@@ -506,7 +530,7 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 
 | Metric | Value |
 |--------|-------|
-| **Total tasks** | 121 |
+| **Total tasks** | 130 |
 | **Phase 1 — Setup** | 9 tasks |
 | **Phase 2 — Foundational** | 18 tasks (incl. observability, Lambda handler, tests) |
 | **Phase 3 — US1: First Visit (P1 MVP)** | 47 tasks (incl. 5 test tasks + personality gate + 4 tool tasks; web search T116 deferred to V1) |
@@ -516,9 +540,10 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 | **Phase 6 — US4: Memory (P3 V1)** | 12 tasks (incl. 2 test tasks + SC-007 eval + web search T116) |
 | **Phase 7 — US5: PWA/Offline (P3 V1)** | 6 tasks (incl. 1 test task) |
 | **Phase 8 — Polish** | 15 tasks (incl. 3 E2E Playwright, 3 operational readiness) |
-| **Test tasks embedded in phases** | 22 total (15 Vitest/Jest + 3 Playwright + 1 CDK alarm test + 2 eval gates + 1 manual) |
+| **Phase 9 — Web Speech API Enhancements** | 9 tasks (5 STT + 4 TTS fallback) |
+| **Test tasks embedded in phases** | 26 total (19 Vitest/Jest + 4 Playwright + 1 CDK alarm test + 2 eval gates + 1 manual) |
 | **MVP tasks (Phases 1–5 + SC-003)** | 89 tasks |
-| **V1 additional (Phases 6–8)** | 32 tasks |
+| **V1 additional (Phases 6–9)** | 41 tasks |
 | **Max parallel tasks (Phase 3)** | ~20 simultaneous |
 
 ---

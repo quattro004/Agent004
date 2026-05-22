@@ -87,6 +87,15 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 **Tasks removed**: —
 **Tasks marked complete**: —
 
+### Iteration 2026-05-22: Web Speech API enhancements (STT on-device + TTS budget fallback)
+
+**Change**: Add Phase 9 with two progressive enhancements: (1) STT — on-device processing option (`processLocally`) and contextual biasing (`SpeechRecognitionPhrase`) for improved privacy and recognition accuracy; (2) TTS — browser `SpeechSynthesis` as a degraded voice fallback when Polly is budget-capped at $8, replacing complete silence with a lower-quality but present voice. FR-016 updated to describe the fallback.
+**Scope**: Feature-wide
+**Artifacts updated**: spec.md, research.md (§R8, §R9), tasks.md (Phase 9), contracts/message-protocol.md, contracts/polly-tts.md
+**Tasks added**: T131, T132, T133, T134, T135, T136, T137, T138, T139
+**Tasks removed**: —
+**Tasks marked complete**: —
+
 ---
 
 ## Personas
@@ -236,7 +245,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-013a**: The personality guard's `ai_identity` banned-phrase detection MUST distinguish between **assistant-coded helplessness** (e.g., "I'm just a program, I can't help", "As an AI, I don't have feelings") and **Max's canonical meta-aware digital humor** (e.g., "I'm a digital entity", "One of us is digital", "I'm an AI? YOU'RE an AI"). Only defeatist constructions — where a digital-identity phrase is combined with limitation, apology, or inability language — MUST be flagged. Playful, boastful, or ironic self-awareness per `docs/max-personality-bible.md` §1 (meta-awareness) and §3.3 (catchphrases) MUST pass.
 - **FR-014**: The page MUST show a friendly in-character error state when the backend is unavailable; never a white screen or raw error.
 - **FR-015**: At the $10 hard-stop, the page MUST show an in-character "Max is taking a break" state.
-- **FR-016**: At the $8 soft-degrade, voice output MUST disable gracefully and the text-only path MUST remain available.
+- **FR-016**: At the $8 soft-degrade, Polly Neural voice output MUST disable gracefully. If the browser supports `SpeechSynthesis`, a degraded browser-native voice fallback SHOULD be used instead of complete silence. The text-only path MUST remain available as the final fallback. The transition MUST be acknowledged in-character (e.g., "Signal's getting weak...").
 - **FR-017**: A visitor MUST be able to wipe all stored data with a single-click "Forget me" action [MVP].
 - **FR-018**: A visitor MUST be able to export what Max remembers as a downloadable JSON file [MVP].
 - **FR-019**: On first mic activation, an explicit disclosure MUST name the browser's speech provider (Google/Apple), plus a persistent small-print notice at the mic control.
@@ -336,7 +345,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 
 - Visitors have a modern browser that supports standard web audio playback (via user gesture for iOS/Safari).
 - The visitor's network connection is sufficient for streaming short voice responses (a few seconds of audio per turn).
-- Speech recognition uses the browser's built-in speech provider (varying by platform) — this is not a custom model.
+- Speech recognition uses the browser's built-in speech provider (varying by platform) — this is not a custom model. On-device processing (`processLocally`) is available as an opt-in privacy option on supported browsers (Chrome 128+); see research.md §R8a.
 - The personality bible (`docs/max-personality-bible.md`) is complete and stable; no further character design changes are expected for MVP.
 - The 50-case golden set for personality fidelity testing is already authored and available in the personality bible.
 - A single monthly cost budget of $10 is sufficient for the expected low traffic (personal/educational project, not a commercial product).

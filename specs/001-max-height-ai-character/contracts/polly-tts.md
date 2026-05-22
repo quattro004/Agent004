@@ -144,10 +144,33 @@ At 50 turns/session: ~$0.08 per session on Polly alone.
 
 | Error | Behavior |
 |-------|----------|
-| Polly throttle (429) | Retry once after 500ms. On second failure, play text-only (no audio). |
+| Polly throttle (429) | Retry once after 500ms. On second failure, attempt browser TTS fallback; if unavailable, play text-only (no audio). |
 | Polly text limit (3,000 chars) | Should never hit — Max's responses are 40–100 words. If exceeded, truncate and synthesize first 2,900 chars. |
 | AudioContext not allowed | Show "unmute" prompt. Only possible if user hasn't interacted (shouldn't happen post-TV-on). |
 | Viseme call fails | Silently ignore — MVP doesn't use visemes. Log warning for V1 debugging. |
+| Budget soft-degrade ($8) | Polly disabled by `budgetDegradation.ts`. Switch to browser `SpeechSynthesis` fallback (see §Browser TTS Fallback below). If `SpeechSynthesis` unavailable, remain text-only. |
+
+---
+
+## Browser TTS Fallback (Budget Degradation)
+
+When the $8 soft-degrade threshold is reached and Polly is disabled, the frontend MAY use the browser's native `SpeechSynthesis` API as a degraded voice fallback. See research.md §R9 for full rationale and limitations.
+
+**Activation**: `budgetDegradation.ts` receives `session_state_change` → switches TTS provider from Polly to `browserTts.ts`.
+
+**Voice selection priority**:
+1. `en-US` voice with name containing "Google" or "Microsoft" (higher-quality neural voices).
+2. Any `en-US` voice.
+3. Any `en` voice.
+4. System default voice.
+
+**Parameters**: `pitch = 1.2`, `rate = 1.05` (approximate Polly's SSML `pitch="+10%" rate="105%"`).
+
+**Limitations in fallback mode**:
+- AudioWorklet chain (stutter, pitch shift, static, EQ) is NOT applied — `SpeechSynthesis` outputs directly to speakers.
+- No viseme data available.
+- Voice varies by platform — character consistency is degraded.
+- First fallback utterance is preceded by in-character acknowledgment: "Signal's getting weak..."
 
 ---
 

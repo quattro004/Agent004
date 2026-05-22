@@ -304,3 +304,120 @@ The following items were resolved during the second clarification session and ar
 - Specific news and weather providers to be selected during T114/T115 implementation.
 - Web search tool format to be determined during T116 implementation.
 - API keys (if required) will be injected as environment variables in the agent container.
+
+---
+
+## R8. Web Speech API STT Enhancements
+
+**Decision**: Enhance the existing Web Speech API `SpeechRecognition` implementation with two optional features: on-device processing and contextual biasing. Both are progressive enhancements that degrade gracefully on unsupported browsers.
+
+**Date**: 2026-05-22
+
+### R8a. On-Device Speech Recognition
+
+**Decision**: Add `processLocally = true` as an opt-in user preference for privacy-conscious visitors. Default remains server-based (current behavior).
+
+**Rationale**:
+- Privacy benefit: audio never leaves the device when enabled.
+- Performance benefit: lower latency, works offline after language pack download.
+- Constitution P1 compliance: The constitution's evidence column already approves Web Speech API as "not a local model" — on-device processing is an optimization of the same browser-native API, not a custom model weight.
+- Progressive: If `SpeechRecognition.available()` returns `"unavailable"`, feature is hidden from UI.
+
+**Browser support (May 2026)**:
+- Chrome 128+ (desktop and Android): Full support including `available()`, `install()`, `processLocally`.
+- Edge: Follows Chrome (Chromium-based).
+- Safari / iOS: Not supported — falls back to server-based recognition silently.
+- Firefox: Not supported — falls back to server-based recognition silently.
+
+**Implementation approach**:
+1. Feature-detect via `SpeechRecognition.available({ langs: ["en-US"], processLocally: true })`.
+2. If `"available"` or `"downloadable"`: expose toggle in settings UI.
+3. If user enables: set `recognition.processLocally = true` before `start()`.
+4. If language pack needed: trigger `SpeechRecognition.install()` with user-visible progress.
+5. Update `SpeechDisclosure.tsx`: when on-device is active, show "processed locally" instead of third-party provider name.
+
+**Alternatives considered**:
+- Always-on local: Too aggressive; language pack download is a one-time cost but may confuse users.
+- Remove server-based entirely: Would break Safari/Firefox visitors.
+
+### R8b. Contextual Biasing
+
+**Decision**: Use `SpeechRecognitionPhrase` to boost recognition of Max-specific vocabulary.
+
+**Rationale**: Max uses distinctive terms, character names, and retro-tech vocabulary that standard speech recognition may misidentify. Contextual biasing improves accuracy without changing the recognition engine.
+
+**Phrases to boost** (initial set):
+| Phrase | Boost | Reason |
+|--------|-------|--------|
+| "Max Height" | 5.0 | Character name — critical to recognize correctly |
+| "signal lost" | 3.0 | Error state terminology |
+| "on air" | 3.0 | UI state vocabulary |
+| "glitch" | 2.0 | Common in retro-tech context |
+| "broadcast" | 2.0 | Character's self-framing |
+
+Additional phrases may be added based on personality bible catchphrases during implementation.
+
+**Browser support (May 2026)**:
+- Chrome 128+ with on-device recognition: Full support.
+- Other browsers: `SpeechRecognitionPhrase` constructor not available — graceful no-op.
+
+**Implementation approach**:
+1. Feature-detect `SpeechRecognitionPhrase` constructor existence.
+2. If available: create phrase objects and set `recognition.phrases`.
+3. If unavailable: skip silently (no error, no fallback needed).
+
+**Alternatives considered**:
+- Server-side post-processing: More complex, adds latency, couples STT to backend.
+- Custom vocabulary grammar (`SpeechGrammarList`): Deprecated/limited; contextual biasing supersedes it.
+
+---
+
+## R9. Browser TTS Budget Fallback (SpeechSynthesis)
+
+**Decision**: Use the browser's native `SpeechSynthesis` API as a degraded voice fallback when Amazon Polly is budget-capped at the $8 soft-degrade threshold. Polly remains the primary TTS.
+
+**Date**: 2026-05-22
+
+**Rationale**:
+- Currently, hitting the $8 budget threshold completely disables voice — Max goes text-only. This is a UX cliff.
+- Browser `SpeechSynthesis` is free (no AWS cost), which is exactly what's needed when budget is the constraint.
+- Aligns with P8 (Graceful Degradation): voice quality degrades rather than disappearing entirely.
+- No constitution amendment needed: Polly remains the mandated primary TTS; browser TTS is an additive fallback behavior.
+- In-character framing makes the transition acceptable: Max can acknowledge the quality shift ("Signal's getting weak... must be the budget cuts").
+
+**Limitations (important — why this is fallback-only, not a Polly replacement)**:
+| Factor | Impact |
+|--------|--------|
+| Voice varies by OS/browser | Cannot guarantee consistent character voice |
+| No raw audio buffer access | AudioWorklet chain (stutter, pitch, static, EQ) cannot be applied |
+| No SSML support | Cannot apply pitch +10% / rate 105% reliably |
+| No viseme data | V1 lip-sync preparation not possible |
+| Quality varies | Some platforms (Linux, older Android) have robotic voices |
+
+**Voice selection strategy**:
+1. Call `speechSynthesis.getVoices()`.
+2. Prefer: `en-US` locale, name containing "Google" or "Microsoft" (higher quality neural voices on those platforms).
+3. Fallback: any `en-US` voice, then any `en` voice, then default voice.
+4. Set `pitch = 1.2` and `rate = 1.05` (approximate Max's SSML prosody using SpeechSynthesis params).
+
+**Activation trigger**:
+- `budgetDegradation.ts` receives `session_state_change` event with budget soft-degrade ($8 threshold).
+- Switch TTS provider from Polly to browser `SpeechSynthesis`.
+- On first fallback utterance: prepend in-character signal-degradation message.
+- If `speechSynthesis` unavailable: remain text-only (current behavior).
+
+**Cost impact**:
+- Polly cost at $8 threshold: $0 (disabled by soft-degrade).
+- Browser TTS cost: $0 (free, no AWS calls).
+- Effect: Visitors still hear Max's responses (degraded quality) instead of silence.
+
+**Browser support**:
+- Chrome/Edge: Excellent — multiple high-quality voices available.
+- Safari/iOS: Good — Apple voices are high quality.
+- Firefox: Good — uses OS voices.
+- Android Chrome: Acceptable — Google voices available.
+
+**Alternatives considered**:
+- Keep text-only at $8: Simpler, but violates the spirit of P8 since voice can still be provided at zero cost.
+- Pre-generate a limited set of budget-mode audio: Doesn't cover dynamic LLM responses.
+- Third-party free TTS (e.g., Coqui): Adds dependency, quality uncertain, may not be truly free long-term.

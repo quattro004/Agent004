@@ -183,6 +183,24 @@ Last user_message or re-engagement message
 4. If recognition fails: show in-character "bad signal" message, prompt text input.
 5. Voice input and text input are mutually exclusive per turn but can alternate between turns.
 
+### On-Device Processing (Optional)
+
+If the visitor has enabled on-device recognition (user preference, default off):
+1. Set `recognition.processLocally = true` before `start()`.
+2. If language pack not installed: trigger `SpeechRecognition.install({ langs: ["en-US"], processLocally: true })` and show download progress.
+3. `SpeechDisclosure` shows "processed locally on your device" instead of third-party provider name.
+4. If `SpeechRecognition.available()` returns `"unavailable"`: hide on-device toggle, use server-based recognition.
+
+See research.md §R8a for browser compatibility details.
+
+### Contextual Biasing
+
+On supported browsers (Chrome 128+ with on-device recognition), contextual biasing phrases are applied to improve recognition of Max-specific vocabulary:
+- `recognition.phrases` is populated with `SpeechRecognitionPhrase` objects for character terms.
+- Graceful no-op on browsers that do not support the `SpeechRecognitionPhrase` constructor.
+
+See research.md §R8b for phrase list and boost values.
+
 ---
 
 ## Error Recovery Matrix
@@ -193,7 +211,8 @@ Last user_message or re-engagement message
 | Token timeout (10s) | Send retry or show SIGNAL_LOST | — |
 | Agent processing error | Receive `error` frame, show in-character error | Send `error` frame, log |
 | WebSocket disconnect | Reconnect + `session_resume` | Accept resume, replay missed state |
-| Polly failure | Play text-only (no audio) | — |
+| Polly failure | Attempt browser TTS fallback (`SpeechSynthesis`); if unavailable, play text-only (no audio) | — |
+| Polly budget-capped ($8) | Switch to browser TTS fallback; show in-character signal-degradation message on first use | — |
 | Rate limit breach | Show in-character refusal | Send `session_state_change` |
 
 ---
