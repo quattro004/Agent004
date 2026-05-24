@@ -26,16 +26,15 @@
   left: 0;
   width: 100%;
   z-index: 10;
-  padding: 1.2rem 2rem 1.5rem;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.92) 40%);
-  pointer-events: none;
+  padding: 0.8rem 1.5rem 1rem;
+  background: rgba(0, 0, 0, 0.95);
+  border-top: 1px solid rgba(0, 255, 255, 0.2);
   box-sizing: border-box;
   display: flex;
   justify-content: center;
 }
 
 .chat-bar > * {
-  pointer-events: auto;
   width: 100%;
   max-width: 600px;
 }
@@ -394,21 +393,40 @@
 
 .text-input {
   flex: 1;
-  height: 100%;
-  min-height: 28px;
-  max-height: 40px;
-  padding: 0 10px;
-  background: rgba(10, 10, 10, 0.85);
-  border: 1px solid rgba(0, 255, 255, 0.5);
+  height: 40px;
+  min-height: 36px;
+  padding: 0 12px;
+  background: rgba(10, 10, 10, 0.9);
+  border: 2px solid rgba(0, 255, 255, 0.5);
   border-radius: 4px;
   color: #00ffff;
   font-family: 'Courier New', Courier, monospace;
-  font-size: clamp(11px, 1.5vw, 15px);
+  font-size: clamp(13px, 1.6vw, 16px);
   caret-color: #00ffff;
-  box-shadow: 0 0 6px rgba(0, 255, 255, 0.2);
+  box-shadow:
+    0 0 8px rgba(0, 255, 255, 0.35),
+    0 0 20px rgba(0, 255, 255, 0.15),
+    inset 0 0 6px rgba(0, 255, 255, 0.05);
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
+  animation: input-glow 2s ease-in-out infinite;
+}
+
+@keyframes input-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px rgba(0, 255, 255, 0.35),
+      0 0 20px rgba(0, 255, 255, 0.15),
+      inset 0 0 6px rgba(0, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow:
+      0 0 12px rgba(0, 255, 255, 0.5),
+      0 0 28px rgba(0, 255, 255, 0.25),
+      inset 0 0 8px rgba(0, 255, 255, 0.08);
+  }
 }
 
 .text-input::placeholder {
@@ -418,14 +436,20 @@
 
 .text-input:focus {
   border-color: #00ffff;
-  box-shadow: 0 0 12px rgba(0, 255, 255, 0.4);
+  box-shadow:
+    0 0 12px rgba(0, 255, 255, 0.6),
+    0 0 32px rgba(0, 255, 255, 0.3),
+    inset 0 0 8px rgba(0, 255, 255, 0.1);
   outline: none;
+  animation: none;
 }
 
 .text-input:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
-  border-color: rgba(0, 255, 255, 0.15);
+  border-color: rgba(0, 255, 255, 0.25);
+  box-shadow: 0 0 6px rgba(0, 255, 255, 0.15);
+  animation: none;
 }
 
 /* ===== Mic Button ===== */
@@ -749,6 +773,10 @@
   .neon-stripes--cyan,
   .neon-stripes--magenta,
   .neon-stripes--green {
+    animation: none;
+  }
+
+  .text-input {
     animation: none;
   }
 }
