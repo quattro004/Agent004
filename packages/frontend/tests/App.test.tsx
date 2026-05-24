@@ -60,10 +60,9 @@ vi.mock('../src/components/TvKnob', () => ({
 }));
 
 vi.mock('../src/components/TextInput', () => ({
-  TextInput: ({ onSubmit, disabled }: { onSubmit: (text: string) => void; disabled: boolean }) => (
+  TextInput: ({ onSubmit }: { onSubmit: (text: string) => void }) => (
     <input
       data-testid="text-input"
-      disabled={disabled}
       onKeyDown={(e) => {
         if (e.key === 'Enter') onSubmit((e.target as HTMLInputElement).value);
       }}
@@ -403,11 +402,11 @@ describe('App — TV Power Lifecycle', () => {
       expect(screen.getByTestId('text-input')).toBeInTheDocument();
     });
 
-    // Session state goes to ENDED — input should become disabled
+    // Session state goes to ENDED — TV powers off, input is removed
     connStore._setState({ sessionState: 'ENDED' });
 
     await vi.waitFor(() => {
-      expect(screen.getByTestId('text-input')).toBeDisabled();
+      expect(screen.queryByTestId('text-input')).not.toBeInTheDocument();
     });
   });
 });

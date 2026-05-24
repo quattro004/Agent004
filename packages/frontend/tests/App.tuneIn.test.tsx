@@ -75,10 +75,9 @@ vi.mock('../src/components/VolumeKnob', () => ({
 }));
 
 vi.mock('../src/components/TextInput', () => ({
-  TextInput: ({ onSubmit, disabled }: { onSubmit: (text: string) => void; disabled: boolean }) => (
+  TextInput: ({ onSubmit }: { onSubmit: (text: string) => void }) => (
     <input
       data-testid="text-input"
-      disabled={disabled}
       onKeyDown={(e) => {
         if (e.key === 'Enter') onSubmit((e.target as HTMLInputElement).value);
       }}

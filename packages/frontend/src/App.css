@@ -11,24 +11,31 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   height: 100vh;
   padding: 0;
   gap: 0;
+}
+
+/* TV wrapper — contains the oversized TV and clips overflow.
+   Takes all vertical space except the chat-bar. */
+.tv-wrapper {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 
-/* ===== Chat Bar (floating input at bottom) ===== */
+/* ===== Chat Bar (input below TV frame) ===== */
 
 .chat-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
+  flex-shrink: 0;
   width: 100%;
   z-index: 10;
-  padding: 0.8rem 1.5rem 1rem;
+  padding: 0.5rem 1.5rem;
   background: rgba(0, 0, 0, 0.95);
-  border-top: 1px solid rgba(0, 255, 255, 0.2);
   box-sizing: border-box;
   display: flex;
   justify-content: center;
@@ -36,7 +43,6 @@
 
 .chat-bar > * {
   width: 100%;
-  max-width: 600px;
 }
 
 /* ===== CRT Console TV Cabinet ===== */
@@ -396,7 +402,7 @@
   height: 40px;
   min-height: 36px;
   padding: 0 12px;
-  background: rgba(10, 10, 10, 0.9);
+  background: rgba(0, 255, 255, 0.06);
   border: 2px solid rgba(0, 255, 255, 0.5);
   border-radius: 4px;
   color: #00ffff;
@@ -404,9 +410,9 @@
   font-size: clamp(13px, 1.6vw, 16px);
   caret-color: #00ffff;
   box-shadow:
-    0 0 8px rgba(0, 255, 255, 0.35),
-    0 0 20px rgba(0, 255, 255, 0.15),
-    inset 0 0 6px rgba(0, 255, 255, 0.05);
+    0 0 10px rgba(0, 255, 255, 0.45),
+    0 0 24px rgba(0, 255, 255, 0.2),
+    inset 0 0 8px rgba(0, 255, 255, 0.06);
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
@@ -417,15 +423,15 @@
   0%,
   100% {
     box-shadow:
-      0 0 8px rgba(0, 255, 255, 0.35),
-      0 0 20px rgba(0, 255, 255, 0.15),
-      inset 0 0 6px rgba(0, 255, 255, 0.05);
+      0 0 10px rgba(0, 255, 255, 0.45),
+      0 0 24px rgba(0, 255, 255, 0.2),
+      inset 0 0 8px rgba(0, 255, 255, 0.06);
   }
   50% {
     box-shadow:
-      0 0 12px rgba(0, 255, 255, 0.5),
-      0 0 28px rgba(0, 255, 255, 0.25),
-      inset 0 0 8px rgba(0, 255, 255, 0.08);
+      0 0 16px rgba(0, 255, 255, 0.6),
+      0 0 36px rgba(0, 255, 255, 0.3),
+      inset 0 0 10px rgba(0, 255, 255, 0.1);
   }
 }
 
@@ -435,20 +441,13 @@
 }
 
 .text-input:focus {
+  background: rgba(0, 255, 255, 0.1);
   border-color: #00ffff;
   box-shadow:
-    0 0 12px rgba(0, 255, 255, 0.6),
-    0 0 32px rgba(0, 255, 255, 0.3),
-    inset 0 0 8px rgba(0, 255, 255, 0.1);
+    0 0 16px rgba(0, 255, 255, 0.7),
+    0 0 40px rgba(0, 255, 255, 0.35),
+    inset 0 0 10px rgba(0, 255, 255, 0.12);
   outline: none;
-  animation: none;
-}
-
-.text-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  border-color: rgba(0, 255, 255, 0.25);
-  box-shadow: 0 0 6px rgba(0, 255, 255, 0.15);
   animation: none;
 }
 
@@ -784,12 +783,6 @@
 /* ===== Mobile / Small Screens ===== */
 
 @media (max-width: 600px) {
-  #max-height-app {
-    padding: 0;
-    gap: 0;
-    justify-content: center;
-  }
-
   .crt-bezel {
     /* On narrow viewports, width becomes the constraint.
        Height auto-derived from aspect-ratio. No overflow needed. */

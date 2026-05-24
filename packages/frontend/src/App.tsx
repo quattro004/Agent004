@@ -218,31 +218,40 @@ export function App() {
 
   return (
     <div id="max-height-app" className="crt-fallback">
-      <CrtFrame panel={controlPanel} footer={footerControls}>
-        {showSceneContent && <NeonBackdrop isMobile={isMobile} />}
-        {showSceneContent && (
-          <AvatarFrameCycler
-            isMouthOpen={isMouthOpen}
-            forceFrame={
-              isSettling && glitchStep < TUNE_IN_GLITCH_PATTERN.length
-                ? TUNE_IN_GLITCH_PATTERN[glitchStep].frame
-                : undefined
-            }
-          />
-        )}
-        {isTvOn && (
-          <BroadcastText tokens={displayText.split('')} fullText={greetingText ? null : fullText} />
-        )}
-        {isTvOn && <BufferingOverlay isConnecting={showBuffering} isThinking={isStreaming} />}
-        {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState, isGreetingDone)} />}
-        {isSettling && (
-          <div data-testid="tune-in-glitch" className="tune-in-glitch-overlay" aria-hidden="true" />
-        )}
-        <TuningOverlay visible={isTuning} />
-      </CrtFrame>
+      <div className="tv-wrapper">
+        <CrtFrame panel={controlPanel} footer={footerControls}>
+          {showSceneContent && <NeonBackdrop isMobile={isMobile} />}
+          {showSceneContent && (
+            <AvatarFrameCycler
+              isMouthOpen={isMouthOpen}
+              forceFrame={
+                isSettling && glitchStep < TUNE_IN_GLITCH_PATTERN.length
+                  ? TUNE_IN_GLITCH_PATTERN[glitchStep].frame
+                  : undefined
+              }
+            />
+          )}
+          {isTvOn && (
+            <BroadcastText
+              tokens={displayText.split('')}
+              fullText={greetingText ? null : fullText}
+            />
+          )}
+          {isTvOn && <BufferingOverlay isConnecting={showBuffering} isThinking={isStreaming} />}
+          {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState, isGreetingDone)} />}
+          {isSettling && (
+            <div
+              data-testid="tune-in-glitch"
+              className="tune-in-glitch-overlay"
+              aria-hidden="true"
+            />
+          )}
+          <TuningOverlay visible={isTuning} />
+        </CrtFrame>
+      </div>
       {isTvOn && (
         <div className="chat-bar">
-          <TextInput onSubmit={handleSend} disabled={!isActive} />
+          <TextInput onSubmit={handleSend} />
         </div>
       )}
     </div>
