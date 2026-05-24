@@ -249,11 +249,9 @@ export function App() {
           <TuningOverlay visible={isTuning} />
         </CrtFrame>
       </div>
-      {isTvOn && (
-        <div className="chat-bar">
-          <TextInput onSubmit={handleSend} />
-        </div>
-      )}
+      <div className="chat-bar">
+        <TextInput onSubmit={handleSend} disabled={!isTvOn} />
+      </div>
     </div>
   );
 }

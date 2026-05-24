@@ -34,8 +34,10 @@
   flex-shrink: 0;
   width: 100%;
   z-index: 10;
-  padding: 0.5rem 1.5rem;
-  background: rgba(0, 0, 0, 0.95);
+  padding: 0.25rem 1.5rem 0.4rem;
+  margin-top: -20px;
+  position: relative;
+  background: transparent;
   box-sizing: border-box;
   display: flex;
   justify-content: center;
@@ -451,6 +453,15 @@
   animation: none;
 }
 
+.text-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(10, 10, 10, 0.9);
+  border-color: rgba(0, 255, 255, 0.15);
+  box-shadow: 0 0 4px rgba(0, 255, 255, 0.1);
+  animation: none;
+}
+
 /* ===== Mic Button ===== */
 
 .mic-button {
@@ -788,6 +799,27 @@
        Height auto-derived from aspect-ratio. No overflow needed. */
     width: 100vw;
     height: auto;
+  }
+
+  .tv-wrapper {
+    /* TV fits inside wrapper on portrait — don't grow beyond content */
+    flex: 0 0 auto;
+  }
+
+  #max-height-app {
+    justify-content: center;
+  }
+
+  .chat-bar {
+    margin-top: 0;
+  }
+}
+
+/* Mobile landscape — short viewport, TV oversized */
+@media (max-height: 500px) {
+  .chat-bar {
+    margin-top: -10px;
+    padding: 0.2rem 1rem 0.3rem;
   }
 }
 

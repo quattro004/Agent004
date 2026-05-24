@@ -60,9 +60,10 @@ vi.mock('../src/components/TvKnob', () => ({
 }));
 
 vi.mock('../src/components/TextInput', () => ({
-  TextInput: ({ onSubmit }: { onSubmit: (text: string) => void }) => (
+  TextInput: ({ onSubmit, disabled }: { onSubmit: (text: string) => void; disabled?: boolean }) => (
     <input
       data-testid="text-input"
+      disabled={disabled}
       onKeyDown={(e) => {
         if (e.key === 'Enter') onSubmit((e.target as HTMLInputElement).value);
       }}
@@ -270,13 +271,14 @@ describe('App — TV Power Lifecycle', () => {
     });
   });
 
-  it('should not render TextInput when TV is off', async () => {
+  it('should render TextInput disabled when TV is off', async () => {
     const { App } = await import('../src/App');
     render(<App />);
-    expect(screen.queryByTestId('text-input')).not.toBeInTheDocument();
+    expect(screen.getByTestId('text-input')).toBeInTheDocument();
+    expect(screen.getByTestId('text-input')).toBeDisabled();
   });
 
-  it('should render TextInput after TV is turned on and session is active', async () => {
+  it('should render TextInput enabled after TV is turned on', async () => {
     const { App } = await import('../src/App');
     render(<App />);
     const knob = screen.getByTestId('tv-knob');
@@ -399,14 +401,14 @@ describe('App — TV Power Lifecycle', () => {
     const knob = screen.getByTestId('tv-knob');
     fireEvent.click(knob);
     await vi.waitFor(() => {
-      expect(screen.getByTestId('text-input')).toBeInTheDocument();
+      expect(screen.getByTestId('text-input')).not.toBeDisabled();
     });
 
-    // Session state goes to ENDED — TV powers off, input is removed
+    // Session state goes to ENDED — TV powers off, input becomes disabled
     connStore._setState({ sessionState: 'ENDED' });
 
     await vi.waitFor(() => {
-      expect(screen.queryByTestId('text-input')).not.toBeInTheDocument();
+      expect(screen.getByTestId('text-input')).toBeDisabled();
     });
   });
 });
