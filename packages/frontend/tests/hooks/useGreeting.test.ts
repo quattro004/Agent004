@@ -28,6 +28,15 @@ vi.mock('../../src/services/greetingSelector', () => ({
   loadManifest: vi.fn((raw: string) => JSON.parse(raw)),
 }));
 
+// Mock browserTts
+const mockBrowserSpeak = vi.fn();
+const mockBrowserIsAvailable = vi.fn();
+vi.mock('../../src/services/browserTts', () => ({
+  speak: (...args: unknown[]) => mockBrowserSpeak(...args),
+  isAvailable: () => mockBrowserIsAvailable(),
+  stop: vi.fn(),
+}));
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 
@@ -39,6 +48,8 @@ describe('useGreeting', () => {
 
     // Stub globals each test (clearAllMocks doesn't restore stubs)
     vi.stubGlobal('fetch', mockFetch);
+    mockBrowserIsAvailable.mockReturnValue(true);
+    mockBrowserSpeak.mockResolvedValue(undefined);
 
     // Mock AudioContext for decoding (jsdom doesn't have it)
     const mockAudioBuffer = {} as AudioBuffer;
@@ -237,5 +248,44 @@ describe('useGreeting', () => {
       (call) => call[0] === '/greetings/manifest.json',
     );
     expect(manifestCalls).toHaveLength(1);
+  });
+
+  it('should fall back to browser TTS when greeting audio fetch returns 404', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const greetingEntry = {
+      id: 'g-004',
+      archetype: 'TV_PRESENTER_INTRO' as const,
+      text: 'G-G-Good evening!',
+      audioPath: 'audio/g-004.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/g-004.mp4',
+      weight: 1.0,
+      tags: [],
+    };
+
+    const manifestData = {
+      version: '1.0.0',
+      voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+      greetings: [greetingEntry],
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(manifestData)),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      });
+
+    mockSelectGreeting.mockReturnValue(greetingEntry);
+
+    const greeting = createUseGreeting(mockAudioChain);
+    const result = await greeting.playGreeting();
+
+    expect(result).toEqual({ id: 'g-004', text: 'G-G-Good evening!' });
+    expect(mockBrowserSpeak).toHaveBeenCalledWith('G-G-Good evening!');
   });
 });

@@ -1,5 +1,6 @@
 /**
  * useAudio — bridges Polly TTS → AudioWorklet chain → voiceStore mouth animation.
+ * Falls back to browser SpeechSynthesis when Polly is unavailable.
  * Subscribes to conversationStore for streaming→complete transitions,
  * calls synthesizeTurn(), decodes audio, plays through audioChain,
  * polls mouth state at ~20Hz.
@@ -9,6 +10,7 @@ import type { AudioChain } from '../audio/audioChain';
 import { useConversationStore } from '../stores/conversationStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { synthesizeTurn } from '../services/pollyTts';
+import { speak as browserSpeak, isAvailable as browserTtsAvailable } from '../services/browserTts';
 
 const MOUTH_POLL_INTERVAL_MS = 50; // ~20Hz
 
@@ -45,6 +47,10 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
       const result = await synthesizeTurn(text);
 
       if (result.textOnly || !result.audioData) {
+        // Polly returned text-only — try browser TTS as fallback
+        if (browserTtsAvailable()) {
+          await browserSpeak(text);
+        }
         voiceState.setSpeaking(false);
         return;
       }
@@ -61,7 +67,15 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
       audioChain.play(audioBuffer);
       startMouthPolling();
     } catch {
-      useVoiceStore.getState().setSpeaking(false);
+      // Polly failed — fall back to browser TTS
+      if (browserTtsAvailable()) {
+        try {
+          await browserSpeak(text);
+        } catch {
+          // Browser TTS also failed — silent fallback
+        }
+      }
+      voiceState.setSpeaking(false);
       stopMouthPolling();
     }
   }

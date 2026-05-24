@@ -211,11 +211,7 @@ export function App() {
     </>
   );
 
-  const footerControls = isTvOn ? (
-    <div className="controls-area">
-      <TextInput onSubmit={handleSend} disabled={!isActive} />
-    </div>
-  ) : null;
+  const footerControls = null; // TextInput moved below CrtFrame
 
   const displayText = greetingText ?? tokens;
   const showBuffering = isGreetingDone && !isConnected;
@@ -244,6 +240,11 @@ export function App() {
         )}
         <TuningOverlay visible={isTuning} />
       </CrtFrame>
+      {isTvOn && (
+        <div className="chat-bar">
+          <TextInput onSubmit={handleSend} disabled={!isActive} />
+        </div>
+      )}
     </div>
   );
 }

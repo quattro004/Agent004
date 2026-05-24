@@ -8,6 +8,7 @@ import type { AudioChain } from '../audio/audioChain';
 import { useVisitorStore } from '../stores/visitorStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { selectGreeting, loadManifest, type GreetingManifest } from '../services/greetingSelector';
+import { speak as browserSpeak, isAvailable as browserTtsAvailable } from '../services/browserTts';
 
 const MOUTH_POLL_INTERVAL_MS = 50;
 
@@ -59,7 +60,13 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
 
       // Fetch the pre-generated MP3
       const audioResponse = await fetch(selected.audioPath);
-      if (!audioResponse.ok) return { id: selected.id, text: selected.text };
+      if (!audioResponse.ok) {
+        // Audio file not available — fall back to browser TTS
+        if (browserTtsAvailable()) {
+          void browserSpeak(selected.text);
+        }
+        return { id: selected.id, text: selected.text };
+      }
 
       const arrayBuffer = await audioResponse.arrayBuffer();
       const audioCtx = new AudioContext();

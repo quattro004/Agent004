@@ -45,12 +45,23 @@ vi.mock('../../src/services/pollyTts', () => ({
   synthesizeTurn: (...args: unknown[]) => mockSynthesizeTurn(...args),
 }));
 
+// Mock browserTts
+const mockBrowserSpeak = vi.fn();
+const mockBrowserIsAvailable = vi.fn();
+vi.mock('../../src/services/browserTts', () => ({
+  speak: (...args: unknown[]) => mockBrowserSpeak(...args),
+  isAvailable: () => mockBrowserIsAvailable(),
+  stop: vi.fn(),
+}));
+
 describe('useAudio', () => {
   let mockAudioChain: AudioChain;
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    mockBrowserIsAvailable.mockReturnValue(true);
+    mockBrowserSpeak.mockResolvedValue(undefined);
 
     mockAudioChain = {
       init: vi.fn().mockResolvedValue(undefined),
@@ -219,6 +230,56 @@ describe('useAudio', () => {
     await vi.advanceTimersByTimeAsync(100);
 
     expect(mockSynthesizeTurn).toHaveBeenCalledTimes(1);
+    audio.dispose();
+  });
+
+  it('should fall back to browser TTS when Polly synthesis fails', async () => {
+    const { createUseAudio } = await import('../../src/hooks/useAudio');
+    const { useConversationStore } = await import('../../src/stores/conversationStore');
+    const store = useConversationStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+      _reset: () => void;
+    };
+
+    store._reset();
+
+    // Polly fails
+    mockSynthesizeTurn.mockRejectedValue(new Error('No AWS credentials'));
+
+    const audio = createUseAudio(mockAudioChain);
+
+    store._setState({ currentResponseText: 'Hello world', isStreaming: true, currentTurnIndex: 1 });
+    store._setState({
+      currentResponseText: 'Hello world',
+      isStreaming: false,
+      currentTurnIndex: 1,
+    });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(mockBrowserSpeak).toHaveBeenCalledWith('Hello world');
+    audio.dispose();
+  });
+
+  it('should not call browser TTS when it is unavailable', async () => {
+    const { createUseAudio } = await import('../../src/hooks/useAudio');
+    const { useConversationStore } = await import('../../src/stores/conversationStore');
+    const store = useConversationStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+      _reset: () => void;
+    };
+
+    store._reset();
+
+    mockSynthesizeTurn.mockRejectedValue(new Error('No AWS credentials'));
+    mockBrowserIsAvailable.mockReturnValue(false);
+
+    const audio = createUseAudio(mockAudioChain);
+
+    store._setState({ currentResponseText: 'Test', isStreaming: true, currentTurnIndex: 1 });
+    store._setState({ currentResponseText: 'Test', isStreaming: false, currentTurnIndex: 1 });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(mockBrowserSpeak).not.toHaveBeenCalled();
     audio.dispose();
   });
 });
