@@ -1,6 +1,7 @@
 /**
  * useAudio — bridges Polly TTS → AudioWorklet chain → voiceStore mouth animation.
  * Falls back to browser SpeechSynthesis when Polly is unavailable.
+ * Respects budget degradation mode: skips Polly when in browser_tts mode.
  * Subscribes to conversationStore for streaming→complete transitions,
  * calls synthesizeTurn(), decodes audio, plays through audioChain,
  * polls mouth state at ~20Hz.
@@ -11,6 +12,9 @@ import { useConversationStore } from '../stores/conversationStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { synthesizeTurn } from '../services/pollyTts';
 import { speak as browserSpeak, isAvailable as browserTtsAvailable } from '../services/browserTts';
+import type { createBudgetDegradation } from '../services/budgetDegradation';
+
+type BudgetDegradationInstance = ReturnType<typeof createBudgetDegradation>;
 
 const MOUTH_POLL_INTERVAL_MS = 50; // ~20Hz
 
@@ -18,7 +22,10 @@ export interface UseAudioHandle {
   dispose: () => void;
 }
 
-export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
+export function createUseAudio(
+  audioChain: AudioChain,
+  budget?: BudgetDegradationInstance,
+): UseAudioHandle {
   let lastProcessedTurnIndex = -1;
   let mouthPollTimer: ReturnType<typeof setInterval> | null = null;
   let wasStreaming = false;
@@ -39,9 +46,28 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
     useVoiceStore.getState().setMouthOpen(false);
   }
 
+  async function handleBrowserTts(text: string) {
+    let spokenText = text;
+    if (budget && budget.isFirstFallback()) {
+      spokenText = `${budget.getFirstFallbackMessage()} ${text}`;
+    }
+    await browserSpeak(spokenText);
+  }
+
   async function handleTurnComplete(text: string) {
     const voiceState = useVoiceStore.getState();
     voiceState.setSpeaking(true);
+
+    // Budget degradation: skip Polly entirely, use browser TTS
+    if (budget && budget.getMode() === 'browser_tts') {
+      try {
+        await handleBrowserTts(text);
+      } catch {
+        // Browser TTS failed — silent fallback
+      }
+      voiceState.setSpeaking(false);
+      return;
+    }
 
     try {
       const result = await synthesizeTurn(text);

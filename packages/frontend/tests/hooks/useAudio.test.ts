@@ -282,4 +282,97 @@ describe('useAudio', () => {
     expect(mockBrowserSpeak).not.toHaveBeenCalled();
     audio.dispose();
   });
+
+  describe('budget degradation mode', () => {
+    it('should skip Polly and use browser TTS directly when budget mode is browser_tts', async () => {
+      const { createUseAudio } = await import('../../src/hooks/useAudio');
+      const { createBudgetDegradation } = await import('../../src/services/budgetDegradation');
+      const { useConversationStore } = await import('../../src/stores/conversationStore');
+      const store = useConversationStore as unknown as {
+        _setState: (s: Record<string, unknown>) => void;
+        _reset: () => void;
+      };
+
+      store._reset();
+
+      const budget = createBudgetDegradation();
+      budget.onBudgetCapped(true); // browser_tts mode
+
+      const audio = createUseAudio(mockAudioChain, budget);
+
+      store._setState({
+        currentResponseText: 'Budget test',
+        isStreaming: true,
+        currentTurnIndex: 1,
+      });
+      store._setState({
+        currentResponseText: 'Budget test',
+        isStreaming: false,
+        currentTurnIndex: 1,
+      });
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(mockSynthesizeTurn).not.toHaveBeenCalled();
+      expect(mockBrowserSpeak).toHaveBeenCalled();
+      expect(mockAudioChain.play).not.toHaveBeenCalled();
+      audio.dispose();
+    });
+
+    it('should prepend first-fallback message on first utterance in browser_tts mode', async () => {
+      const { createUseAudio } = await import('../../src/hooks/useAudio');
+      const { createBudgetDegradation } = await import('../../src/services/budgetDegradation');
+      const { useConversationStore } = await import('../../src/stores/conversationStore');
+      const store = useConversationStore as unknown as {
+        _setState: (s: Record<string, unknown>) => void;
+        _reset: () => void;
+      };
+
+      store._reset();
+
+      const budget = createBudgetDegradation();
+      budget.onBudgetCapped(true);
+
+      const audio = createUseAudio(mockAudioChain, budget);
+
+      store._setState({ currentResponseText: 'Response', isStreaming: true, currentTurnIndex: 1 });
+      store._setState({ currentResponseText: 'Response', isStreaming: false, currentTurnIndex: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+
+      const spokenText = mockBrowserSpeak.mock.calls[0][0] as string;
+      expect(spokenText).toContain('Signal');
+      expect(spokenText).toContain('Response');
+      audio.dispose();
+    });
+
+    it('should not prepend degradation message on subsequent utterances', async () => {
+      const { createUseAudio } = await import('../../src/hooks/useAudio');
+      const { createBudgetDegradation } = await import('../../src/services/budgetDegradation');
+      const { useConversationStore } = await import('../../src/stores/conversationStore');
+      const store = useConversationStore as unknown as {
+        _setState: (s: Record<string, unknown>) => void;
+        _reset: () => void;
+      };
+
+      store._reset();
+
+      const budget = createBudgetDegradation();
+      budget.onBudgetCapped(true);
+
+      const audio = createUseAudio(mockAudioChain, budget);
+
+      // First utterance
+      store._setState({ currentResponseText: 'First', isStreaming: true, currentTurnIndex: 1 });
+      store._setState({ currentResponseText: 'First', isStreaming: false, currentTurnIndex: 1 });
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Second utterance
+      store._setState({ currentResponseText: 'Second', isStreaming: true, currentTurnIndex: 2 });
+      store._setState({ currentResponseText: 'Second', isStreaming: false, currentTurnIndex: 2 });
+      await vi.advanceTimersByTimeAsync(100);
+
+      const secondCall = mockBrowserSpeak.mock.calls[1][0] as string;
+      expect(secondCall).toBe('Second');
+      audio.dispose();
+    });
+  });
 });
