@@ -217,7 +217,7 @@ export function App() {
     <div id="max-height-app" className="crt-fallback">
       <div className="tv-wrapper">
         <CrtFrame panel={controlPanel} footer={footerControls}>
-          {showSceneContent && <BackgroundCycler />}
+          {showSceneContent && !overlayState && <BackgroundCycler />}
           {showAvatar && (
             <AvatarFrameCycler
               isMouthOpen={isMouthOpen}

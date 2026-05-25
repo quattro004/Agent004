@@ -9,10 +9,7 @@ interface CrtFrameProps {
 export function CrtFrame({ children, panel, footer }: CrtFrameProps) {
   return (
     <div data-testid="crt-bezel" className="crt-bezel">
-      <div className="crt-screen">
-        <div className="scan-lines" />
-        {children}
-      </div>
+      <div className="crt-screen">{children}</div>
       {panel && <div className="crt-panel">{panel}</div>}
       {footer && <div className="crt-footer-overlay">{footer}</div>}
       <img

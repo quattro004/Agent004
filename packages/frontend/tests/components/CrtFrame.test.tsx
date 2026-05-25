@@ -36,12 +36,6 @@ describe('CrtFrame', () => {
     expect(img).toHaveAttribute('alt', 'Retro CRT Television');
   });
 
-  it('should render CRT scan-lines effect layer', () => {
-    render(<CrtFrame />);
-
-    expect(document.querySelector('.scan-lines')).not.toBeNull();
-  });
-
   it('should NOT render a speaker grille element (image provides it)', () => {
     render(<CrtFrame />);
 
