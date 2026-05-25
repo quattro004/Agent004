@@ -8,7 +8,7 @@ import { TextInput } from './components/TextInput';
 import { TuningOverlay } from './components/TuningOverlay';
 import { TvKnob } from './components/TvKnob';
 import { VolumeKnob } from './components/VolumeKnob';
-import { NeonBackdrop } from './effects/NeonBackdrop';
+import { WireframeBackdrop } from './effects/WireframeBackdrop';
 import { useWebSocket } from './hooks/useWebSocket';
 import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
@@ -220,7 +220,7 @@ export function App() {
     <div id="max-height-app" className="crt-fallback">
       <div className="tv-wrapper">
         <CrtFrame panel={controlPanel} footer={footerControls}>
-          {showSceneContent && <NeonBackdrop isMobile={isMobile} />}
+          {showSceneContent && <WireframeBackdrop isMobile={isMobile} />}
           {showSceneContent && (
             <AvatarFrameCycler
               isMouthOpen={isMouthOpen}

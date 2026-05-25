@@ -47,8 +47,8 @@ vi.mock('../src/components/SessionStateOverlay', () => ({
     state ? <div data-testid="session-state-overlay">{state}</div> : null,
 }));
 
-vi.mock('../src/effects/NeonBackdrop', () => ({
-  NeonBackdrop: () => <div data-testid="neon-backdrop" />,
+vi.mock('../src/effects/WireframeBackdrop', () => ({
+  WireframeBackdrop: () => <div data-testid="wireframe-backdrop" />,
 }));
 
 vi.mock('../src/components/TvKnob', () => ({
@@ -232,7 +232,7 @@ describe('App — TV Power Lifecycle', () => {
     const { App } = await import('../src/App');
     render(<App />);
     expect(screen.queryByTestId('avatar-frame')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('neon-backdrop')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('wireframe-backdrop')).not.toBeInTheDocument();
     expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
   });
 
@@ -256,7 +256,7 @@ describe('App — TV Power Lifecycle', () => {
     // After powering transition completes, content should appear
     await vi.waitFor(() => {
       expect(screen.getByTestId('avatar-frame')).toBeInTheDocument();
-      expect(screen.getByTestId('neon-backdrop')).toBeInTheDocument();
+      expect(screen.getByTestId('wireframe-backdrop')).toBeInTheDocument();
     });
   });
 

@@ -297,9 +297,9 @@
     0 0 12px rgba(255, 85, 48, 0.6);
 }
 
-/* ===== Neon Backdrop (Max Headroom stripes) ===== */
+/* ===== Wireframe Backdrop (Max Headroom radiating lines sunburst) ===== */
 
-.neon-backdrop {
+.wireframe-backdrop {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -307,70 +307,89 @@
   background: #000;
 }
 
-.neon-stripes {
+/* Radiating lines — converging to a vanishing point.
+   Matches the iconic Max Headroom look: thick bright lines on black,
+   cyan/teal in upper half, yellow/gold in lower half.
+   Vanishing point sits lower (near avatar's shoulders). */
+.wireframe-backdrop__rays {
   position: absolute;
-  inset: -50%;
+  top: -30%;
+  left: -50%;
   width: 200%;
   height: 200%;
-}
-
-.neon-stripes--cyan {
-  background: repeating-linear-gradient(
-    0deg,
-    transparent 0px,
-    transparent 12px,
-    rgba(0, 255, 255, 0.12) 12px,
-    rgba(0, 255, 255, 0.12) 14px
+  background: repeating-conic-gradient(
+    from 0deg at 50% 45%,
+    transparent 0deg,
+    transparent 3deg,
+    rgb(0, 210, 210) 3deg,
+    rgb(0, 210, 210) 4.2deg,
+    transparent 4.2deg,
+    transparent 7deg
   );
-  animation: stripe-drift-1 12s linear infinite;
-}
-
-.neon-stripes--magenta {
-  background: repeating-linear-gradient(
-    -15deg,
-    transparent 0px,
-    transparent 18px,
-    rgba(255, 0, 255, 0.1) 18px,
-    rgba(255, 0, 255, 0.1) 20px
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0%,
+    black 43%,
+    transparent 47%,
+    transparent 100%
   );
-  animation: stripe-drift-2 18s linear infinite;
+  mask-image: linear-gradient(to bottom, black 0%, black 43%, transparent 47%, transparent 100%);
+  animation: rays-rotate 90s linear infinite;
+  pointer-events: none;
 }
 
-.neon-stripes--green {
-  background: repeating-linear-gradient(
-    8deg,
-    transparent 0px,
-    transparent 24px,
-    rgba(0, 255, 80, 0.08) 24px,
-    rgba(0, 255, 80, 0.08) 26px
+/* Gold/yellow rays on the lower half */
+.wireframe-backdrop__rays::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-conic-gradient(
+    from 0deg at 50% 45%,
+    transparent 0deg,
+    transparent 3deg,
+    rgb(210, 170, 0) 3deg,
+    rgb(210, 170, 0) 4.2deg,
+    transparent 4.2deg,
+    transparent 7deg
   );
-  animation: stripe-drift-3 25s linear infinite;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 53%,
+    black 57%,
+    black 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0%, transparent 53%, black 57%, black 100%);
 }
 
-@keyframes stripe-drift-1 {
+/* Subtle pulsing glow from vanishing point */
+.wireframe-backdrop__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 55%, rgba(0, 200, 200, 0.08) 0%, transparent 50%);
+  animation: glow-pulse 4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.wireframe-backdrop--static .wireframe-backdrop__rays {
+  animation: none;
+}
+
+@keyframes rays-rotate {
   0% {
-    transform: translateY(0);
+    transform: rotate(0deg);
   }
   100% {
-    transform: translateY(14px);
+    transform: rotate(360deg);
   }
 }
 
-@keyframes stripe-drift-2 {
+@keyframes glow-pulse {
   0% {
-    transform: translateY(0) rotate(-15deg);
+    opacity: 0.5;
   }
   100% {
-    transform: translateY(20px) rotate(-15deg);
-  }
-}
-
-@keyframes stripe-drift-3 {
-  0% {
-    transform: translateY(0) rotate(8deg);
-  }
-  100% {
-    transform: translateY(-26px) rotate(8deg);
+    opacity: 1;
   }
 }
 
@@ -783,9 +802,11 @@
     display: none;
   }
 
-  .neon-stripes--cyan,
-  .neon-stripes--magenta,
-  .neon-stripes--green {
+  .wireframe-backdrop__rays {
+    animation: none;
+  }
+
+  .wireframe-backdrop__glow {
     animation: none;
   }
 
