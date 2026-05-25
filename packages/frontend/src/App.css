@@ -26,6 +26,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  cursor: default;
 }
 
 /* ===== Chat Bar (input below TV frame) ===== */
@@ -64,6 +65,7 @@
   width: max(108vw, calc(108vh * 1536 / 1024));
   height: auto;
   flex-shrink: 0;
+  cursor: default;
 }
 
 /* TV frame image — the image IS the cabinet AND the mask.
@@ -817,6 +819,11 @@
 
 /* Mobile landscape — short viewport, TV oversized */
 @media (max-height: 500px) {
+  .tv-wrapper {
+    /* Show top frame on landscape (bottom crops instead) */
+    align-items: flex-start;
+  }
+
   .chat-bar {
     margin-top: -10px;
     padding: 0.2rem 1rem 0.3rem;
