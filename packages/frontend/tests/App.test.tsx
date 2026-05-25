@@ -73,11 +73,15 @@ vi.mock('../src/hooks/useIsMobile', () => ({
   isMobileQuery: () => false,
 }));
 
-vi.mock('../src/config/timing', () => ({
+vi.mock('../src/config/constants', () => ({
   GREETING_DISPLAY_MS: 200,
   TUNING_DURATION_MS: 0,
   SETTLING_DURATION_MS: 0,
   TUNE_IN_GLITCH_PATTERN: [],
+  BACKGROUND_CYCLE_MS: 5000,
+  BACKGROUND_FRAME_COUNT: 8,
+  BACKGROUND_ASSET_BASE: '/background/max-grid',
+  DEFAULT_AVATAR_THEME: 'retro',
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({

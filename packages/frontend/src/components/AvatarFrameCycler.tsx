@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { DEFAULT_AVATAR_THEME } from '../config/constants';
 
 export type AvatarFrame = 'idle' | 'talk-1' | 'talk-2' | 'glitch' | 'blink' | 'laugh' | 'side-eye';
 export type AvatarTheme = 'retro' | 'pop-art' | 'cartoon';
@@ -25,7 +26,7 @@ interface AvatarFrameCyclerProps {
   forceFrame?: AvatarFrame;
 }
 
-function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps) {
+function useAvatarFrame({ isMouthOpen, theme = DEFAULT_AVATAR_THEME }: AvatarFrameCyclerProps) {
   const [isGlitching, setIsGlitching] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
   const [isLaughing, setIsLaughing] = useState(false);
@@ -138,7 +139,9 @@ function useAvatarFrame({ isMouthOpen, theme = 'retro' }: AvatarFrameCyclerProps
 export function AvatarFrameCycler({ isMouthOpen, theme, forceFrame }: AvatarFrameCyclerProps) {
   const { src, frame } = useAvatarFrame({ isMouthOpen, theme });
   const displayFrame = forceFrame ?? frame;
-  const displaySrc = forceFrame ? `/avatar/${theme ?? 'retro'}/${forceFrame}.png` : src;
+  const displaySrc = forceFrame
+    ? `/avatar/${theme ?? DEFAULT_AVATAR_THEME}/${forceFrame}.png`
+    : src;
 
   return (
     <img

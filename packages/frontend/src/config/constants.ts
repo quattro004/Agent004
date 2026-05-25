@@ -1,6 +1,14 @@
 /** Duration (ms) to display greeting text before transitioning to normal state. */
 export const GREETING_DISPLAY_MS = 15_000;
 
+/** Default avatar theme applied when no explicit theme prop is passed. */
+export const DEFAULT_AVATAR_THEME = 'retro' as const;
+
+/** Background cycler configuration. */
+export const BACKGROUND_CYCLE_MS = 5_000;
+export const BACKGROUND_FRAME_COUNT = 8;
+export const BACKGROUND_ASSET_BASE = '/background/max-grid';
+
 /**
  * Power-on tune-in sequence durations.
  * - TUNING: full-screen static + audible white noise.

@@ -39,8 +39,9 @@ describe('AvatarFrameCycler', () => {
   });
 
   describe('theme support', () => {
-    it('should default to retro theme', () => {
+    it('should default to the theme from config (DEFAULT_AVATAR_THEME)', () => {
       render(<AvatarFrameCycler isMouthOpen={false} />);
+      // DEFAULT_AVATAR_THEME is 'retro' in real config
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/idle.png');
     });
 

@@ -88,7 +88,7 @@ vi.mock('../src/hooks/useIsMobile', () => ({
 }));
 
 // Use short durations so tests run quickly but still exercise transitions.
-vi.mock('../src/config/timing', () => ({
+vi.mock('../src/config/constants', () => ({
   GREETING_DISPLAY_MS: 200,
   TUNING_DURATION_MS: 60,
   SETTLING_DURATION_MS: 300,
@@ -97,6 +97,10 @@ vi.mock('../src/config/timing', () => ({
     { frame: 'idle', durationMs: 20 },
     { frame: 'glitch', durationMs: 30 },
   ],
+  BACKGROUND_CYCLE_MS: 5000,
+  BACKGROUND_FRAME_COUNT: 8,
+  BACKGROUND_ASSET_BASE: '/background/max-grid',
+  DEFAULT_AVATAR_THEME: 'retro',
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CrtFrame } from './components/CrtFrame';
 import { AvatarFrameCycler } from './components/AvatarFrameCycler';
+import { BackgroundCycler } from './components/BackgroundCycler';
 import { BroadcastText } from './components/BroadcastText';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
 import { TextInput } from './components/TextInput';
@@ -16,7 +17,7 @@ import {
   TUNING_DURATION_MS,
   SETTLING_DURATION_MS,
   TUNE_IN_GLITCH_PATTERN,
-} from './config/timing';
+} from './config/constants';
 import { resolveWsUrl } from './config/wsUrl';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
@@ -216,6 +217,7 @@ export function App() {
     <div id="max-height-app" className="crt-fallback">
       <div className="tv-wrapper">
         <CrtFrame panel={controlPanel} footer={footerControls}>
+          {showSceneContent && <BackgroundCycler />}
           {showAvatar && (
             <AvatarFrameCycler
               isMouthOpen={isMouthOpen}
