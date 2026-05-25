@@ -77,7 +77,6 @@ export function App() {
   const audioRef = useRef(createUseAudio(audioChainRef.current));
   const greetingRef = useRef(createUseGreeting(audioChainRef.current));
   const isMobile = useIsMobile();
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const sessionId = useConnectionStore((s) => s.sessionId) ?? 'pending';
   const { sendMessage } = useWebSocket({
@@ -125,13 +124,6 @@ export function App() {
   useEffect(() => {
     audioChainRef.current.setVolume(volume);
   }, [volume]);
-
-  // Auto-focus the text input after greeting finishes so users can type immediately
-  useEffect(() => {
-    if (isGreetingDone) {
-      inputRef.current?.focus({ preventScroll: true });
-    }
-  }, [isGreetingDone]);
 
   useEffect(() => {
     return () => {
@@ -258,7 +250,7 @@ export function App() {
         </CrtFrame>
       </div>
       <div className="chat-bar">
-        <TextInput ref={inputRef} onSubmit={handleSend} disabled={!isTvOn} />
+        <TextInput onSubmit={handleSend} disabled={!isTvOn} />
       </div>
     </div>
   );
