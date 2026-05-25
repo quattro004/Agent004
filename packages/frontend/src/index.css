@@ -22,6 +22,7 @@ body {
 #root {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
 }
 
 /* Keyboard focus indicators — CRT cyan glow */

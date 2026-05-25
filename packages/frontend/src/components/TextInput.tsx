@@ -1,4 +1,4 @@
-import React, { useState, type KeyboardEvent, type ChangeEvent } from 'react';
+import React, { useState, forwardRef, type KeyboardEvent, type ChangeEvent } from 'react';
 
 export interface TextInputProps {
   onSubmit: (text: string) => void;
@@ -6,7 +6,10 @@ export interface TextInputProps {
   maxLength?: number;
 }
 
-export function TextInput({ onSubmit, disabled = false, maxLength = 2000 }: TextInputProps) {
+export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
+  { onSubmit, disabled = false, maxLength = 2000 },
+  ref,
+) {
   const [value, setValue] = useState('');
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -22,6 +25,7 @@ export function TextInput({ onSubmit, disabled = false, maxLength = 2000 }: Text
 
   return (
     <input
+      ref={ref}
       data-testid="text-input"
       className="text-input"
       type="text"
@@ -34,4 +38,4 @@ export function TextInput({ onSubmit, disabled = false, maxLength = 2000 }: Text
       aria-label="Message input"
     />
   );
-}
+});

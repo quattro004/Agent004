@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { createRef } from 'react';
 import { TextInput } from '../../src/components/TextInput';
 
 describe('TextInput', () => {
@@ -46,5 +47,19 @@ describe('TextInput', () => {
     render(<TextInput onSubmit={() => {}} maxLength={10} />);
     const input = screen.getByTestId('text-input') as HTMLInputElement;
     expect(input.maxLength).toBe(10);
+  });
+
+  it('forwards a ref to the underlying input element', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<TextInput ref={ref} onSubmit={() => {}} />);
+    expect(ref.current).toBeInstanceOf(HTMLInputElement);
+    expect(ref.current?.getAttribute('data-testid')).toBe('text-input');
+  });
+
+  it('can be focused programmatically via forwarded ref', () => {
+    const ref = createRef<HTMLInputElement>();
+    render(<TextInput ref={ref} onSubmit={() => {}} />);
+    ref.current?.focus();
+    expect(document.activeElement).toBe(ref.current);
   });
 });
