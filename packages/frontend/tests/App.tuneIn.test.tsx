@@ -48,10 +48,6 @@ vi.mock('../src/components/SessionStateOverlay', () => ({
     state ? <div data-testid="session-state-overlay">{state}</div> : null,
 }));
 
-vi.mock('../src/effects/WireframeBackdrop', () => ({
-  WireframeBackdrop: () => <div data-testid="wireframe-backdrop" />,
-}));
-
 vi.mock('../src/components/TvKnob', () => ({
   TvKnob: ({ onToggle, isOn }: { onToggle: () => void; isOn: boolean }) => (
     <button data-testid="tv-knob" onClick={onToggle} data-is-on={isOn}>
@@ -257,7 +253,6 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
     });
 
     expect(screen.queryByTestId('avatar-frame')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('wireframe-backdrop')).not.toBeInTheDocument();
     expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
   });
 

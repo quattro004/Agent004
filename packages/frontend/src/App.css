@@ -297,102 +297,6 @@
     0 0 12px rgba(255, 85, 48, 0.6);
 }
 
-/* ===== Wireframe Backdrop (Max Headroom radiating lines sunburst) ===== */
-
-.wireframe-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  background: #000;
-}
-
-/* Radiating lines — converging to a vanishing point.
-   Matches the iconic Max Headroom look: thick bright lines on black,
-   cyan/teal in upper half, yellow/gold in lower half.
-   Vanishing point sits lower (near avatar's shoulders). */
-.wireframe-backdrop__rays {
-  position: absolute;
-  top: -30%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: repeating-conic-gradient(
-    from 0deg at 50% 45%,
-    transparent 0deg,
-    transparent 3deg,
-    rgb(0, 210, 210) 3deg,
-    rgb(0, 210, 210) 4.2deg,
-    transparent 4.2deg,
-    transparent 7deg
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    black 0%,
-    black 43%,
-    transparent 47%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(to bottom, black 0%, black 43%, transparent 47%, transparent 100%);
-  animation: rays-rotate 90s linear infinite;
-  pointer-events: none;
-}
-
-/* Gold/yellow rays on the lower half */
-.wireframe-backdrop__rays::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-conic-gradient(
-    from 0deg at 50% 45%,
-    transparent 0deg,
-    transparent 3deg,
-    rgb(210, 170, 0) 3deg,
-    rgb(210, 170, 0) 4.2deg,
-    transparent 4.2deg,
-    transparent 7deg
-  );
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    transparent 53%,
-    black 57%,
-    black 100%
-  );
-  mask-image: linear-gradient(to bottom, transparent 0%, transparent 53%, black 57%, black 100%);
-}
-
-/* Subtle pulsing glow from vanishing point */
-.wireframe-backdrop__glow {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 55%, rgba(0, 200, 200, 0.08) 0%, transparent 50%);
-  animation: glow-pulse 4s ease-in-out infinite alternate;
-  pointer-events: none;
-}
-
-.wireframe-backdrop--static .wireframe-backdrop__rays {
-  animation: none;
-}
-
-@keyframes rays-rotate {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes glow-pulse {
-  0% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
 /* ===== Footer Overlay (input bar on TV cabinet base) ===== */
 
 .crt-footer-overlay {
@@ -766,14 +670,6 @@
 
   .signal-lost .static-noise {
     display: none;
-  }
-
-  .wireframe-backdrop__rays {
-    animation: none;
-  }
-
-  .wireframe-backdrop__glow {
-    animation: none;
   }
 
   .text-input {

@@ -258,9 +258,8 @@ test.describe('TV Experience', () => {
   });
 
   test('clicking power button turns on TV and shows screen content', async ({ page }) => {
-    // Before turning on: avatar and backdrop should NOT be visible
+    // Before turning on: avatar should NOT be visible
     await expect(page.getByTestId('avatar-svg')).not.toBeVisible();
-    await expect(page.getByTestId('wireframe-backdrop')).not.toBeVisible();
 
     // Click the power button
     const powerBtn = page.getByRole('button', { name: /turn on/i });
@@ -269,33 +268,6 @@ test.describe('TV Experience', () => {
     // After turning on: knob has .on class
     const knob = page.locator('.tv-knob');
     await expect(knob).toHaveClass(/on/);
-
-    // Wireframe backdrop appears during settling/on phase
-    await expect(page.getByTestId('wireframe-backdrop')).toBeVisible({ timeout: 5000 });
-  });
-
-  test('wireframe backdrop is visible inside CRT screen after power on', async ({ page }) => {
-    const powerBtn = page.getByRole('button', { name: /turn on/i });
-    await powerBtn.click();
-
-    // Wait for settling/on state — backdrop should be inside the CRT screen
-    const backdrop = page.getByTestId('wireframe-backdrop');
-    await expect(backdrop).toBeVisible({ timeout: 5000 });
-
-    // Backdrop should contain the radiating rays element
-    const rays = backdrop.locator('.wireframe-backdrop__rays');
-    await expect(rays).toBeVisible();
-
-    // Backdrop should be positioned within the CRT screen bounds
-    const screen = page.locator('.crt-screen');
-    const screenBox = await screen.boundingBox();
-    const backdropBox = await backdrop.boundingBox();
-    expect(screenBox).not.toBeNull();
-    expect(backdropBox).not.toBeNull();
-
-    // Backdrop should fill the screen area (within tolerance)
-    expect(backdropBox!.x).toBeGreaterThanOrEqual(screenBox!.x - 2);
-    expect(backdropBox!.y).toBeGreaterThanOrEqual(screenBox!.y - 2);
   });
 
   test('power button hit area is above the frame layer', async ({ page }) => {

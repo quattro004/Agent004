@@ -7,11 +7,9 @@ import { TextInput } from './components/TextInput';
 import { TuningOverlay } from './components/TuningOverlay';
 import { TvKnob } from './components/TvKnob';
 import { VolumeKnob } from './components/VolumeKnob';
-import { WireframeBackdrop } from './effects/WireframeBackdrop';
 import { useWebSocket } from './hooks/useWebSocket';
 import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting } from './hooks/useGreeting';
-import { useIsMobile } from './hooks/useIsMobile';
 import { createAudioChain } from './audio/audioChain';
 import {
   GREETING_DISPLAY_MS,
@@ -75,7 +73,6 @@ export function App() {
   const audioChainRef = useRef(createAudioChain());
   const audioRef = useRef(createUseAudio(audioChainRef.current));
   const greetingRef = useRef(createUseGreeting(audioChainRef.current));
-  const isMobile = useIsMobile();
 
   const sessionId = useConnectionStore((s) => s.sessionId) ?? 'pending';
   const { sendMessage } = useWebSocket({
@@ -219,7 +216,6 @@ export function App() {
     <div id="max-height-app" className="crt-fallback">
       <div className="tv-wrapper">
         <CrtFrame panel={controlPanel} footer={footerControls}>
-          {showSceneContent && <WireframeBackdrop isMobile={isMobile} />}
           {showAvatar && (
             <AvatarFrameCycler
               isMouthOpen={isMouthOpen}
