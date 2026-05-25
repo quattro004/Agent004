@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { CrtFrame } from './components/CrtFrame';
 import { AvatarFrameCycler } from './components/AvatarFrameCycler';
 import { BroadcastText } from './components/BroadcastText';
-import { BufferingOverlay } from './components/BufferingOverlay';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
 import { TextInput } from './components/TextInput';
 import { TuningOverlay } from './components/TuningOverlay';
@@ -88,8 +87,6 @@ export function App() {
   const tokens = useConversationStore((s) => s.currentResponseText);
   const fullText = useConversationStore((s) => (s.isStreaming ? null : s.currentResponseText));
   const isMouthOpen = useVoiceStore((s) => s.isMouthOpen);
-  const isStreaming = useConversationStore((s) => s.isStreaming);
-  const isConnected = useConnectionStore((s) => s.isWebSocketReady);
   const currentTurnIndex = useConversationStore((s) => s.currentTurnIndex);
 
   const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
@@ -214,14 +211,16 @@ export function App() {
   const footerControls = null; // TextInput moved below CrtFrame
 
   const displayText = greetingText ?? tokens;
-  const showBuffering = isGreetingDone && !isConnected;
+  const overlayState = toOverlayState(sessionState, isGreetingDone);
+  // Hide avatar when a session overlay is active (e.g., "PLEASE STAND BY")
+  const showAvatar = showSceneContent && !overlayState;
 
   return (
     <div id="max-height-app" className="crt-fallback">
       <div className="tv-wrapper">
         <CrtFrame panel={controlPanel} footer={footerControls}>
           {showSceneContent && <WireframeBackdrop isMobile={isMobile} />}
-          {showSceneContent && (
+          {showAvatar && (
             <AvatarFrameCycler
               isMouthOpen={isMouthOpen}
               forceFrame={
@@ -237,8 +236,7 @@ export function App() {
               fullText={greetingText ? null : fullText}
             />
           )}
-          {isTvOn && <BufferingOverlay isConnecting={showBuffering} isThinking={isStreaming} />}
-          {isTvOn && <SessionStateOverlay state={toOverlayState(sessionState, isGreetingDone)} />}
+          {isTvOn && <SessionStateOverlay state={overlayState} />}
           {isSettling && (
             <div
               data-testid="tune-in-glitch"

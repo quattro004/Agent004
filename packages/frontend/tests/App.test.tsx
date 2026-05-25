@@ -32,16 +32,6 @@ vi.mock('../src/components/BroadcastText', () => ({
   ),
 }));
 
-vi.mock('../src/components/BufferingOverlay', () => ({
-  BufferingOverlay: ({
-    isConnecting,
-    isThinking,
-  }: {
-    isConnecting: boolean;
-    isThinking: boolean;
-  }) => (isConnecting || isThinking ? <div data-testid="buffering-overlay" /> : null),
-}));
-
 vi.mock('../src/components/SessionStateOverlay', () => ({
   SessionStateOverlay: ({ state }: { state: string | null }) =>
     state ? <div data-testid="session-state-overlay">{state}</div> : null,
@@ -485,43 +475,6 @@ describe('App — Greeting Flow', () => {
 
     // SIGNAL_LOST should be suppressed during greeting
     expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
-  });
-
-  it('should suppress buffering overlay during greeting', async () => {
-    const { useConnectionStore } = await import('../src/stores/connectionStore');
-    const connStore = useConnectionStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-    };
-    connStore._setState({ isWebSocketReady: false });
-
-    const { App } = await import('../src/App');
-    render(<App />);
-
-    await powerOnTv();
-
-    // Buffering overlay should NOT show during greeting
-    expect(screen.queryByTestId('buffering-overlay')).not.toBeInTheDocument();
-  });
-
-  it('should show buffering overlay after greeting completes if not connected', async () => {
-    const { useConnectionStore } = await import('../src/stores/connectionStore');
-    const connStore = useConnectionStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-    };
-    connStore._setState({ isWebSocketReady: false });
-
-    const { App } = await import('../src/App');
-    render(<App />);
-
-    await powerOnTv();
-
-    // Wait for greeting display duration to elapse (mocked to 200ms)
-    await vi.waitFor(
-      () => {
-        expect(screen.getByTestId('buffering-overlay')).toBeInTheDocument();
-      },
-      { timeout: 2000 },
-    );
   });
 
   it('should show SIGNAL_LOST after greeting completes', async () => {

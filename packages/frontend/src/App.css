@@ -608,36 +608,6 @@
   display: none;
 }
 
-/* ===== Buffering Overlay ===== */
-
-.buffering-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  z-index: 5;
-}
-
-.buffering-message {
-  color: #00ffff;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: clamp(14px, 3vw, 20px);
-  text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
-  animation: buffering-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes buffering-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
-}
-
 /* ===== Session State Overlay (non-SIGNAL_LOST) ===== */
 
 .session-state-overlay {
@@ -792,10 +762,6 @@
   .on-air-indicator {
     animation: none;
     opacity: 1;
-  }
-
-  .buffering-message {
-    animation: none;
   }
 
   .signal-lost .static-noise {

@@ -43,16 +43,6 @@ vi.mock('../src/components/BroadcastText', () => ({
   ),
 }));
 
-vi.mock('../src/components/BufferingOverlay', () => ({
-  BufferingOverlay: ({
-    isConnecting,
-    isThinking,
-  }: {
-    isConnecting: boolean;
-    isThinking: boolean;
-  }) => (isConnecting || isThinking ? <div data-testid="buffering-overlay" /> : null),
-}));
-
 vi.mock('../src/components/SessionStateOverlay', () => ({
   SessionStateOverlay: ({ state }: { state: string | null }) =>
     state ? <div data-testid="session-state-overlay">{state}</div> : null,
