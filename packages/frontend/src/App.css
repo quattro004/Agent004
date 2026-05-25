@@ -821,9 +821,9 @@
 /* Mobile landscape — short viewport, TV oversized */
 @media (max-height: 500px) {
   .tv-wrapper {
-    /* Center the bezel vertically so the screen area (middle of frame)
-       is most visible; top black band and bottom base get cropped equally */
-    align-items: center;
+    /* Anchor bezel to top of wrapper — bottom (wooden base) gets cropped,
+       keeping the screen area and avatar head fully visible */
+    align-items: flex-start;
   }
 
   .chat-bar {
@@ -835,8 +835,9 @@
 /* Mobile landscape with narrow height (phones in landscape orientation) */
 @media (orientation: landscape) and (max-height: 500px) {
   .crt-bezel {
-    /* Increase bezel scale so the TV fully fills the viewport (immersive crop) */
-    width: max(140vw, calc(140vh * 1536 / 1024));
+    /* Scale bezel large enough to overflow the wrapper so no dead space
+       appears below the TV, but not so large that the head gets cropped */
+    width: max(130vw, calc(130vh * 1536 / 1024));
   }
 
   .chat-bar {
