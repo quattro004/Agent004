@@ -13,7 +13,7 @@ export interface AudioChain {
   getIsMouthOpen(): boolean;
   triggerStutter(): void;
   triggerStaticBurst(): void;
-  playStatic(durationMs: number): void;
+  playStatic(durationMs?: number): void;
   stopStatic(): void;
   dispose(): void;
 }
@@ -163,7 +163,7 @@ export function createAudioChain(): AudioChain {
       staticNode?.port.postMessage({ type: 'burst' });
     },
 
-    playStatic(durationMs: number) {
+    playStatic(durationMs?: number) {
       if (!ctx || !gainNode) return;
 
       // Stop any previous static noise (and cancel its pending auto-stop timer)
@@ -196,15 +196,17 @@ export function createAudioChain(): AudioChain {
       source.start();
       staticSource = source;
 
-      staticStopTimer = setTimeout(() => {
-        try {
-          source.stop();
-        } catch {
-          // Already stopped; ignore.
-        }
-        if (staticSource === source) staticSource = null;
-        staticStopTimer = null;
-      }, durationMs);
+      if (durationMs !== undefined) {
+        staticStopTimer = setTimeout(() => {
+          try {
+            source.stop();
+          } catch {
+            // Already stopped; ignore.
+          }
+          if (staticSource === source) staticSource = null;
+          staticStopTimer = null;
+        }, durationMs);
+      }
     },
 
     stopStatic() {

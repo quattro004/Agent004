@@ -75,7 +75,8 @@ vi.mock('../src/hooks/useIsMobile', () => ({
 
 vi.mock('../src/config/constants', () => ({
   GREETING_DISPLAY_MS: 200,
-  TUNING_DURATION_MS: 0,
+  TUNING_MIN_MS: 0,
+  TUNING_MAX_MS: 0,
   SETTLING_DURATION_MS: 0,
   TUNE_IN_GLITCH_PATTERN: [],
   BACKGROUND_CYCLE_MS: 5000,
@@ -88,14 +89,21 @@ vi.mock('../src/hooks/useAudio', () => ({
   createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 }));
 
-const { mockPlayGreeting, mockStopGreeting } = vi.hoisted(() => ({
+const { mockPlayGreeting, mockPreloadGreeting, mockStopGreeting } = vi.hoisted(() => ({
   mockPlayGreeting: vi.fn().mockResolvedValue({ id: 'g-001', text: 'Hello!' }),
+  mockPreloadGreeting: vi.fn().mockResolvedValue({
+    id: 'g-001',
+    text: 'Hello!',
+    audioBuffer: {} as AudioBuffer,
+    durationMs: 1800,
+  }),
   mockStopGreeting: vi.fn(),
 }));
 
 vi.mock('../src/hooks/useGreeting', () => ({
   createUseGreeting: vi.fn().mockReturnValue({
     playGreeting: mockPlayGreeting,
+    preloadGreeting: mockPreloadGreeting,
     stopGreeting: mockStopGreeting,
   }),
 }));
@@ -245,6 +253,41 @@ describe('App — TV Power Lifecycle', () => {
     // After powering transition completes, content should appear
     await vi.waitFor(() => {
       expect(screen.getByTestId('avatar-frame')).toBeInTheDocument();
+    });
+  });
+
+  it('keeps the greeting text visible until greeting playback completes', async () => {
+    const { App } = await import('../src/App');
+    let resolveCompletion!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    mockPlayGreeting.mockResolvedValueOnce({
+      id: 'g-001',
+      text: 'Signal acquired.',
+      completion,
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByTestId('tv-knob'));
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('broadcast-text')).toHaveTextContent('Signal acquired.');
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+
+    expect(screen.getByTestId('broadcast-text')).toHaveTextContent('Signal acquired.');
+
+    await act(async () => {
+      resolveCompletion();
+      await completion;
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
     });
   });
 

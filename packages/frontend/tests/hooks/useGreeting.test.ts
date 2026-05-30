@@ -29,12 +29,15 @@ vi.mock('../../src/services/greetingSelector', () => ({
 }));
 
 // Mock browserTts
-const mockBrowserSpeak = vi.fn();
-const mockBrowserIsAvailable = vi.fn();
+const { mockBrowserIsAvailable, mockBrowserSpeak, mockBrowserStop } = vi.hoisted(() => ({
+  mockBrowserIsAvailable: vi.fn(),
+  mockBrowserSpeak: vi.fn(),
+  mockBrowserStop: vi.fn(),
+}));
 vi.mock('../../src/services/browserTts', () => ({
   speak: (...args: unknown[]) => mockBrowserSpeak(...args),
   isAvailable: () => mockBrowserIsAvailable(),
-  stop: vi.fn(),
+  stop: mockBrowserStop,
 }));
 
 // Mock fetch globally
@@ -45,6 +48,14 @@ describe('useGreeting', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockFetch.mockReset();
+    mockSelectGreeting.mockReset();
+    mockPushGreeting.mockReset();
+    mockSetSpeaking.mockReset();
+    mockSetMouthOpen.mockReset();
+    mockBrowserIsAvailable.mockReset();
+    mockBrowserSpeak.mockReset();
+    mockBrowserStop.mockReset();
 
     // Stub globals each test (clearAllMocks doesn't restore stubs)
     vi.stubGlobal('fetch', mockFetch);
@@ -65,9 +76,12 @@ describe('useGreeting', () => {
       init: vi.fn().mockResolvedValue(undefined),
       play: vi.fn(),
       stop: vi.fn(),
+      setVolume: vi.fn(),
       getIsMouthOpen: vi.fn().mockReturnValue(false),
       triggerStutter: vi.fn(),
       triggerStaticBurst: vi.fn(),
+      playStatic: vi.fn(),
+      stopStatic: vi.fn(),
       dispose: vi.fn(),
     };
   });
@@ -80,6 +94,53 @@ describe('useGreeting', () => {
     const { createUseGreeting } = await import('../../src/hooks/useGreeting');
     expect(createUseGreeting).toBeDefined();
     expect(typeof createUseGreeting).toBe('function');
+  });
+
+  it('should preload greeting audio without playing it', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const greetingEntry = {
+      id: 'g-010',
+      archetype: 'TV_PRESENTER_INTRO' as const,
+      text: 'Signal acquired.',
+      audioPath: 'audio/g-010.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/g-010.mp4',
+      weight: 1.0,
+      tags: [],
+    };
+
+    const manifestData = {
+      version: '1.0.0',
+      voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+      greetings: [greetingEntry],
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(manifestData)),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      });
+
+    mockSelectGreeting.mockReturnValue(greetingEntry);
+
+    const greeting = createUseGreeting(mockAudioChain);
+    const preloaded = await greeting.preloadGreeting();
+
+    expect(preloaded).toEqual(
+      expect.objectContaining({
+        id: 'g-010',
+        text: 'Signal acquired.',
+        audioBuffer: expect.any(Object),
+        durationMs: 3000,
+      }),
+    );
+    expect(mockAudioChain.play).not.toHaveBeenCalled();
+    expect(mockPushGreeting).not.toHaveBeenCalled();
   });
 
   it('should fetch /greetings/manifest.json on first playGreeting call', async () => {
@@ -193,7 +254,7 @@ describe('useGreeting', () => {
     const greeting = createUseGreeting(mockAudioChain);
     const result = await greeting.playGreeting();
 
-    expect(result).toEqual({ id: 'g-003', text: 'And now a word from our sponsor... me!' });
+    expect(result).toMatchObject({ id: 'g-003', text: 'And now a word from our sponsor... me!' });
   });
 
   it('should return null gracefully on fetch failure', async () => {
@@ -285,7 +346,181 @@ describe('useGreeting', () => {
     const greeting = createUseGreeting(mockAudioChain);
     const result = await greeting.playGreeting();
 
-    expect(result).toEqual({ id: 'g-004', text: 'G-G-Good evening!' });
+    expect(result).toMatchObject({ id: 'g-004', text: 'G-G-Good evening!' });
     expect(mockBrowserSpeak).toHaveBeenCalledWith('G-G-Good evening!');
+  });
+
+  it('should reuse a preloaded audio buffer without refetching or decoding again', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const preloaded = {
+      id: 'g-011',
+      text: 'Instant playback.',
+      audioBuffer: {} as AudioBuffer,
+      durationMs: 1800,
+    };
+
+    const greeting = createUseGreeting(mockAudioChain);
+    const result = await greeting.playGreeting(preloaded);
+
+    expect(result).toMatchObject({ id: 'g-011', text: 'Instant playback.' });
+    expect(mockAudioChain.play).toHaveBeenCalledWith(preloaded.audioBuffer);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('should return a completion promise for browser TTS fallback', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const greetingEntry = {
+      id: 'g-014',
+      archetype: 'TV_PRESENTER_INTRO' as const,
+      text: 'Text should stay up until I finish.',
+      audioPath: 'audio/g-014.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/g-014.mp4',
+      weight: 1.0,
+      tags: [],
+    };
+
+    const manifestData = {
+      version: '1.0.0',
+      voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+      greetings: [greetingEntry],
+    };
+
+    let resolveSpeech!: () => void;
+    const speechCompletion = new Promise<void>((resolve) => {
+      resolveSpeech = resolve;
+    });
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(manifestData)),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      });
+
+    mockSelectGreeting.mockReturnValue(greetingEntry);
+    mockBrowserSpeak.mockReturnValueOnce(speechCompletion);
+
+    const greeting = createUseGreeting(mockAudioChain);
+    const result = await greeting.playGreeting();
+
+    expect(result).toMatchObject({
+      id: 'g-014',
+      text: 'Text should stay up until I finish.',
+    });
+    expect(result?.completion).toBeDefined();
+
+    let didComplete = false;
+    void result?.completion?.then(() => {
+      didComplete = true;
+    });
+
+    await Promise.resolve();
+    expect(didComplete).toBe(false);
+
+    resolveSpeech();
+    await result?.completion;
+    expect(didComplete).toBe(true);
+  });
+
+  it('should preload a text-only fallback when greeting audio fetch fails', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const greetingEntry = {
+      id: 'g-012',
+      archetype: 'TV_PRESENTER_INTRO' as const,
+      text: 'Audio fallback ready.',
+      audioPath: 'audio/g-012.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/g-012.mp4',
+      weight: 1.0,
+      tags: [],
+    };
+
+    const manifestData = {
+      version: '1.0.0',
+      voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+      greetings: [greetingEntry],
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(manifestData)),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      });
+
+    mockSelectGreeting.mockReturnValue(greetingEntry);
+
+    const greeting = createUseGreeting(mockAudioChain);
+    const preloaded = await greeting.preloadGreeting();
+
+    expect(preloaded).toEqual(
+      expect.objectContaining({
+        id: 'g-012',
+        text: 'Audio fallback ready.',
+        audioBuffer: null,
+        durationMs: 3000,
+      }),
+    );
+    expect(mockAudioChain.play).not.toHaveBeenCalled();
+  });
+
+  it('should fall back to the normal fetch path when playGreeting receives null preloaded audio', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const greetingEntry = {
+      id: 'g-013',
+      archetype: 'TV_PRESENTER_INTRO' as const,
+      text: 'Late preload fallback.',
+      audioPath: 'audio/g-013.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/g-013.mp4',
+      weight: 1.0,
+      tags: [],
+    };
+
+    const manifestData = {
+      version: '1.0.0',
+      voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+      greetings: [greetingEntry],
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(manifestData)),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      });
+
+    mockSelectGreeting.mockReturnValue(greetingEntry);
+
+    const greeting = createUseGreeting(mockAudioChain);
+    const result = await greeting.playGreeting(null);
+
+    expect(result).toMatchObject({ id: 'g-013', text: 'Late preload fallback.' });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockAudioChain.play).toHaveBeenCalled();
+  });
+
+  it('stopGreeting should cancel browser TTS fallback', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const greeting = createUseGreeting(mockAudioChain);
+    greeting.stopGreeting();
+
+    expect(mockBrowserStop).toHaveBeenCalled();
+    expect(mockAudioChain.stop).toHaveBeenCalled();
   });
 });

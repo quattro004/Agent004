@@ -417,6 +417,19 @@ describe('audioChain — static noise (tune-in)', () => {
     expect(noiseSource.stop).toHaveBeenCalled();
   });
 
+  it('keeps playing static until stopStatic is called when no duration is provided', async () => {
+    vi.useFakeTimers();
+    const { noiseSource } = makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.playStatic();
+    vi.advanceTimersByTime(5000);
+    expect(noiseSource.stop).not.toHaveBeenCalled();
+    chain.stopStatic();
+    expect(noiseSource.stop).toHaveBeenCalledTimes(1);
+  });
+
   it('stopStatic stops the noise source immediately and cancels the auto-stop timer', async () => {
     vi.useFakeTimers();
     const { noiseSource } = makeMockChainWithBuffers();

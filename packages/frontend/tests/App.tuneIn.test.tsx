@@ -90,7 +90,8 @@ vi.mock('../src/hooks/useIsMobile', () => ({
 // Use short durations so tests run quickly but still exercise transitions.
 vi.mock('../src/config/constants', () => ({
   GREETING_DISPLAY_MS: 200,
-  TUNING_DURATION_MS: 60,
+  TUNING_MIN_MS: 60,
+  TUNING_MAX_MS: 200,
   SETTLING_DURATION_MS: 300,
   TUNE_IN_GLITCH_PATTERN: [
     { frame: 'glitch', durationMs: 30 },
@@ -107,14 +108,23 @@ vi.mock('../src/hooks/useAudio', () => ({
   createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 }));
 
-const { mockPlayGreeting, mockStopGreeting } = vi.hoisted(() => ({
-  mockPlayGreeting: vi.fn().mockResolvedValue({ id: 'g-001', text: 'Hello!' }),
-  mockStopGreeting: vi.fn(),
-}));
+const { defaultPreloadedGreeting, mockPlayGreeting, mockPreloadGreeting, mockStopGreeting } =
+  vi.hoisted(() => ({
+    defaultPreloadedGreeting: {
+      id: 'g-001',
+      text: 'Hello!',
+      audioBuffer: {} as AudioBuffer,
+      durationMs: 1800,
+    },
+    mockPlayGreeting: vi.fn().mockResolvedValue({ id: 'g-001', text: 'Hello!' }),
+    mockPreloadGreeting: vi.fn(),
+    mockStopGreeting: vi.fn(),
+  }));
 
 vi.mock('../src/hooks/useGreeting', () => ({
   createUseGreeting: vi.fn().mockReturnValue({
     playGreeting: mockPlayGreeting,
+    preloadGreeting: mockPreloadGreeting,
     stopGreeting: mockStopGreeting,
   }),
 }));
@@ -220,6 +230,8 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
   beforeEach(async () => {
     vi.clearAllMocks();
     mockPlayGreeting.mockResolvedValue({ id: 'g-001', text: 'Hello!' });
+    mockPreloadGreeting.mockResolvedValue(defaultPreloadedGreeting);
+    mockAudioInit.mockResolvedValue(undefined);
 
     const { useConnectionStore } = await import('../src/stores/connectionStore');
     (
@@ -234,17 +246,47 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
     });
   });
 
-  it('shows TuningOverlay and starts static audio immediately after power-on click', async () => {
+  function createDeferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it('shows TuningOverlay immediately after power-on click while audio init is still pending', async () => {
     const { App } = await import('../src/App');
+    const initDeferred = createDeferred<void>();
+    mockAudioInit.mockReturnValueOnce(initDeferred.promise);
     render(<App />);
 
     fireEvent.click(screen.getByTestId('tv-knob'));
 
-    // During tuning phase: overlay visible, static audio started.
     await vi.waitFor(() => {
       expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();
     });
-    expect(mockPlayStatic).toHaveBeenCalledWith(60);
+    expect(mockPlayStatic).not.toHaveBeenCalled();
+  });
+
+  it('starts static audio after audio init resolves, without a fixed duration', async () => {
+    const { App } = await import('../src/App');
+    const initDeferred = createDeferred<void>();
+    mockAudioInit.mockReturnValueOnce(initDeferred.promise);
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+
+    await act(async () => {
+      initDeferred.resolve();
+      await initDeferred.promise;
+    });
+
+    await vi.waitFor(() => {
+      expect(mockPlayStatic).toHaveBeenCalledTimes(1);
+    });
+    expect(mockPlayStatic).toHaveBeenCalledWith();
   });
 
   it('does NOT render avatar, neon backdrop, or broadcast text during tuning', async () => {
@@ -287,6 +329,36 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
     });
   });
 
+  it('waits past the minimum tuning interval until preload resolves before entering settling', async () => {
+    const { App } = await import('../src/App');
+    const preloadDeferred = createDeferred<typeof defaultPreloadedGreeting | null>();
+    mockPreloadGreeting.mockReturnValueOnce(preloadDeferred.promise);
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+
+    await vi.waitFor(() => {
+      expect(mockPlayStatic).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 90));
+    });
+
+    expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();
+    expect(screen.queryByTestId('tune-in-glitch')).not.toBeInTheDocument();
+
+    await act(async () => {
+      preloadDeferred.resolve(defaultPreloadedGreeting);
+      await preloadDeferred.promise;
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.queryByTestId('tuning-overlay')).not.toBeInTheDocument();
+      expect(screen.getByTestId('tune-in-glitch')).toBeInTheDocument();
+    });
+  });
+
   it('forces the avatar to glitch.png at least once during settling', async () => {
     const { App } = await import('../src/App');
     render(<App />);
@@ -322,8 +394,43 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
     await vi.waitFor(() => {
       expect(screen.getByTestId('tv-knob').getAttribute('data-is-on')).toBe('true');
       expect(screen.queryByTestId('tune-in-glitch')).not.toBeInTheDocument();
-      expect(mockPlayGreeting).toHaveBeenCalled();
+      expect(mockPlayGreeting).toHaveBeenCalledWith(defaultPreloadedGreeting);
     });
+  });
+
+  it('falls back to the maximum tuning timeout when preload never resolves', async () => {
+    const { App } = await import('../src/App');
+    const pendingPreload = createDeferred<typeof defaultPreloadedGreeting | null>();
+    mockPreloadGreeting.mockReturnValueOnce(pendingPreload.promise);
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+
+    await vi.waitFor(() => {
+      expect(mockPlayStatic).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();
+
+    await vi.waitFor(
+      () => {
+        expect(screen.queryByTestId('tuning-overlay')).not.toBeInTheDocument();
+        expect(mockStopStatic).toHaveBeenCalled();
+      },
+      { timeout: 500 },
+    );
+
+    await vi.waitFor(
+      () => {
+        expect(screen.getByTestId('tv-knob').getAttribute('data-is-on')).toBe('true');
+        expect(mockPlayGreeting).toHaveBeenCalledWith(null);
+      },
+      { timeout: 700 },
+    );
   });
 
   it('power-off mid-tuning calls stopStatic and resets to off state', async () => {
@@ -344,6 +451,32 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
     });
     // Greeting must not have started — we aborted before the on state.
     expect(mockPlayGreeting).not.toHaveBeenCalled();
+  });
+
+  it('does not start static audio if power is toggled off before audio init resolves', async () => {
+    const { App } = await import('../src/App');
+    const initDeferred = createDeferred<void>();
+    mockAudioInit.mockReturnValueOnce(initDeferred.promise);
+    render(<App />);
+
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();
+    });
+
+    fireEvent.click(knob);
+
+    await act(async () => {
+      initDeferred.resolve();
+      await initDeferred.promise;
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockPlayStatic).not.toHaveBeenCalled();
   });
 
   it('initializes the audio chain on power-on (user gesture)', async () => {

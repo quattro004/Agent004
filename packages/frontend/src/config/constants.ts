@@ -14,7 +14,8 @@ export const BACKGROUND_ASSET_BASE = '/background/max-grid';
  * - TUNING: full-screen static + audible white noise.
  * - SETTLING: brief avatar glitch flashes while Max's "signal" locks in.
  */
-export const TUNING_DURATION_MS = 3000;
+export const TUNING_MIN_MS = 5000;
+export const TUNING_MAX_MS = 8000;
 export const SETTLING_DURATION_MS = 900;
 
 /**
