@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { DEFAULT_AVATAR_THEME } from '../config/constants';
+import { DEFAULT_AVATAR_THEME, type AvatarTheme } from '../config/constants';
+
+export type { AvatarTheme } from '../config/constants';
 
 export type AvatarFrame = 'idle' | 'talk-1' | 'talk-2' | 'glitch' | 'blink' | 'laugh' | 'side-eye';
-export type AvatarTheme = 'retro' | 'pop-art' | 'cartoon';
 
 const ALL_FRAMES: AvatarFrame[] = [
   'idle',

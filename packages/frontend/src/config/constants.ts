@@ -1,8 +1,18 @@
 /** Duration (ms) to display greeting text before transitioning to normal state. */
 export const GREETING_DISPLAY_MS = 15_000;
 
+export const AVATAR_THEMES = ['retro', 'pop-art', 'cartoon'] as const;
+
+export type AvatarTheme = (typeof AVATAR_THEMES)[number];
+
+export function nextTheme(theme: AvatarTheme): AvatarTheme {
+  const currentIndex = AVATAR_THEMES.indexOf(theme);
+  const nextIndex = (currentIndex + 1) % AVATAR_THEMES.length;
+  return AVATAR_THEMES[nextIndex];
+}
+
 /** Default avatar theme applied when no explicit theme prop is passed. */
-export const DEFAULT_AVATAR_THEME = 'retro' as const;
+export const DEFAULT_AVATAR_THEME = AVATAR_THEMES[0];
 
 /** Background cycler configuration. */
 export const BACKGROUND_CYCLE_MS = 5_000;

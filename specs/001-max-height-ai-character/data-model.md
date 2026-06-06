@@ -20,9 +20,10 @@ A person interacting with Max. Identified by a guest Cognito identity and a loca
 | `firstSeenAt` | ISO 8601 timestamp | Immutable after creation | First TV-on gesture |
 | `lastSeenAt` | ISO 8601 timestamp | Updated each session | Used for memory retention window |
 | `greetingHistory` | string[] | Max 20 entries | Last N greeting IDs to enforce no-repeat-within-3 |
+| `avatarThemeIndex` | number (0–2) | Optional, defaults to `0` | Index into `AVATAR_THEMES` tuple. Persisted in `localStorage` as `'avatarThemeIndex'`. Survives TV power off/on cycles. |
 | `rateLimitCounters` | RateLimitState | See below | Per-visitor rate limit tracking |
 
-**Storage**: `actorId`, `displayAlias`, `greetingHistory` in browser localStorage. `cognitoIdentityId` managed by AWS SDK. Rate limit counters in localStorage with server-side enforcement via session metadata.
+**Storage**: `actorId`, `displayAlias`, `greetingHistory`, `avatarThemeIndex` in browser localStorage. `cognitoIdentityId` managed by AWS SDK. Rate limit counters in localStorage with server-side enforcement via session metadata.
 
 ### Session
 

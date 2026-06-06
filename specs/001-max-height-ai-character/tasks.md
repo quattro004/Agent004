@@ -203,6 +203,25 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 ---
 
+## Phase 3 Extension: Channel Knob (FR-032)
+
+**Goal**: Add the interactive CHANNEL knob — advances Max's avatar theme through `retro → pop-art → cartoon → retro` and replays a fresh greeting on each click. Disabled while TV is off; theme persists across power cycles.
+
+**Independent Test**: Power on the TV, click the CHANNEL knob, verify avatar theme advances and a fresh greeting plays with no static/tuning rerun. Verify knob is inert when TV is off. Reload page, verify previous theme is restored.
+
+> **NOTE**: Write test tasks first (T140, T142, T144), confirm they FAIL for the intended reason, then implement.
+
+- [ ] T140 [P] [US1] Write Vitest tests for `AVATAR_THEMES` constant and `nextTheme` helper in `packages/frontend/tests/config/constants.test.ts` — assert `AVATAR_THEMES` equals `['retro', 'pop-art', 'cartoon']` as a readonly tuple; assert `nextTheme('retro') === 'pop-art'`, `nextTheme('pop-art') === 'cartoon'`, `nextTheme('cartoon') === 'retro'` (wrap); assert `DEFAULT_AVATAR_THEME === AVATAR_THEMES[0]`
+- [ ] T141 [US1] Implement `AVATAR_THEMES` (`as const` tuple), `AvatarTheme` type, and `nextTheme` pure helper in `packages/frontend/src/config/constants.ts`; update `AvatarFrameCycler.tsx` to import `AvatarTheme` from `constants.ts` and re-export it (backward compat — no call-site changes required)
+- [ ] T142 [P] [US1] Write Vitest + React Testing Library tests for `ChannelKnob` component in `packages/frontend/tests/components/ChannelKnob.test.tsx` — assert: button renders with `aria-label` matching `/channel/i`; root element has class `channel-knob-wrapper` containing `.channel-knob` button; `onChannelChange` callback is called on click when enabled; `onChannelChange` is NOT called when `disabled=true`; `disabled` attribute is set on the button when `disabled=true`; no LED bar or readout element is rendered (mirrors VolumeKnob invisible-hit-area pattern without the LED readout)
+- [ ] T143 [US1] Implement `ChannelKnob` component in `packages/frontend/src/components/ChannelKnob.tsx` — invisible hit-area button (no readout, no LED), props `{ onChannelChange: () => void; disabled: boolean }`, mirroring `VolumeKnob` structure; `aria-label="Channel"`, `className="channel-knob"` inside `div.channel-knob-wrapper`
+- [ ] T144 [P] [US1] Write Vitest tests for channel-change App integration in `packages/frontend/tests/App.channel.test.tsx` — mock `useGreeting` and `AvatarFrameCycler` (surface `data-theme` attribute); after power-on reaches `on` state: (a) assert `AvatarFrameCycler` initially receives `theme="retro"`; (b) click channel knob → assert theme advances to `"pop-art"`; (c) assert `stopGreeting` was called before the new `playGreeting` invocation; (d) assert `playGreeting` is called again (greeting replay); (e) second click → `"cartoon"`; third click → wraps to `"retro"`; (f) assert channel knob is disabled when `tvPower === 'off'`
+- [ ] T145 [US1] Wire `ChannelKnob` into `App.tsx` — add `themeIndex` state (initialised from `localStorage.getItem('avatarThemeIndex')` or `0`; persisted on change); derive `currentTheme = AVATAR_THEMES[themeIndex]`; pass `theme={currentTheme}` to `AvatarFrameCycler`; add `greetingNonce` state and add it to the greeting `useEffect` deps `[isTvOn, greetingNonce]`; implement `handleChannelChange`: call `greetingRef.current.stopGreeting()`, reset `isGreetingDone` and `greetingText` to initial values, advance `themeIndex` via `nextTheme`, bump `greetingNonce`; add `<ChannelKnob onChannelChange={handleChannelChange} disabled={tvPower === 'off'} />` to `controlPanel` alongside `TvKnob` and `VolumeKnob`
+- [ ] T146 [P] [US1] Add `.channel-knob-wrapper` and `.channel-knob` CSS in `packages/frontend/src/App.css` — extend `.crt-panel` bottom boundary downward to cover the painted CHANNEL knob (approximately `bottom: 36%` — measure from `TV-frame.png` alpha if needed; painted coords per `docs/plan.md`: switch cy≈0.28, volume cy≈0.41, channel knob below volume); add `channel-knob-wrapper` position and `channel-knob` hit-area sizing consistent with `volume-knob-wrapper`/`volume-knob` pattern; verify no drift against existing `panel-alignment.spec.ts`
+- [ ] T147 [P] [US1] Write Playwright E2E tests for channel knob in `tests/e2e/tv-channel.spec.ts` — (a) power on, wait for `.tv-knob.on` + avatar visible; assert `[data-testid=avatar-frame]` src contains `/avatar/retro/`; (b) assert channel button is disabled before power-on; (c) intercept next `/greetings/*.mp3` network request; click channel knob; assert request fires (fresh greeting replayed) **and** avatar src → `/avatar/pop-art/`; (d) second click → `/avatar/cartoon/`; (e) third click wraps → `/avatar/retro/`; also add channel-knob alignment assertion in `tests/e2e/panel-alignment.spec.ts` (knob hit area within ±5px of painted knob centre across 1280×800 and 390×844 viewports); assert no static/tuning overlay appears during channel change
+
+---
+
 ## Phase 4: User Story 2 — Mobile Visitor on iOS Safari (Priority: P2) [MVP]
 
 **Goal**: Full functional parity on iOS Safari and mobile browsers — audio plays on tap, effects are reduced, and voice input works via press-and-hold mic.
@@ -530,10 +549,11 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 
 | Metric | Value |
 |--------|-------|
-| **Total tasks** | 130 |
+| **Total tasks** | 138 |
 | **Phase 1 — Setup** | 9 tasks |
 | **Phase 2 — Foundational** | 18 tasks (incl. observability, Lambda handler, tests) |
 | **Phase 3 — US1: First Visit (P1 MVP)** | 47 tasks (incl. 5 test tasks + personality gate + 4 tool tasks; web search T116 deferred to V1) |
+| **Phase 3 Extension — Channel Knob (FR-032)** | 8 tasks (T140–T147; 4 test tasks + 4 implementation tasks) |
 | **Phase 4 — US2: iOS/Mobile (P2 MVP)** | 9 tasks (incl. 2 test tasks) |
 | **Phase 5 — US3: Text-Only (P2 MVP)** | 4 tasks (incl. 1 test task) |
 | **SC-003 First-Laugh Gate** | 1 task (manual, after Phase 5) |
@@ -541,8 +561,8 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 | **Phase 7 — US5: PWA/Offline (P3 V1)** | 6 tasks (incl. 1 test task) |
 | **Phase 8 — Polish** | 15 tasks (incl. 3 E2E Playwright, 3 operational readiness) |
 | **Phase 9 — Web Speech API Enhancements** | 9 tasks (5 STT + 4 TTS fallback) |
-| **Test tasks embedded in phases** | 26 total (19 Vitest/Jest + 4 Playwright + 1 CDK alarm test + 2 eval gates + 1 manual) |
-| **MVP tasks (Phases 1–5 + SC-003)** | 89 tasks |
+| **Test tasks embedded in phases** | 30 total (23 Vitest/Jest + 5 Playwright + 1 CDK alarm test + 2 eval gates + 1 manual) |
+| **MVP tasks (Phases 1–5 + Phase 3 Ext + SC-003)** | 97 tasks |
 | **V1 additional (Phases 6–9)** | 41 tasks |
 | **Max parallel tasks (Phase 3)** | ~20 simultaneous |
 
@@ -569,4 +589,5 @@ US2 (mobile) and US3 (text-only) add platform parity but US1 is independently de
 - **Web search V1 deferral**: T116 moved from Phase 3 (MVP) to Phase 6 (V1) — provider/format TBD; reduces MVP scope and eliminates unresolved format dependency
 - **SC-003 gate** (T119): Manual first-laugh test added after Phase 5 checkpoint per analysis remediation C1
 - **SC-007 gate** (T120/T121): Memory golden-set evaluation added in Phase 6 per analysis remediation C2
+- **Channel knob** (iteration 2026-06-07): T140–T147 add CHANNEL knob theme cycling (FR-032); theme state persisted via `avatarThemeIndex` in localStorage; greeting replay reuses `useGreeting` hook via `greetingNonce` increment; `AVATAR_THEMES`/`nextTheme` canonicalised into `config/constants.ts`
 - Stop at any checkpoint to validate story independently

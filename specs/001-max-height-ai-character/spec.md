@@ -96,6 +96,15 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 **Tasks removed**: —
 **Tasks marked complete**: —
 
+### Iteration 2026-06-07: CHANNEL knob — theme cycling + greeting-only replay
+
+**Change**: Add an interactive CHANNEL knob that advances Max's avatar theme through the `retro → pop-art → cartoon → retro` cycle and replays a fresh greeting on each click — no static/tuning rerun, disabled while TV is off, theme persists across power cycles.
+**Scope**: Feature-wide
+**Artifacts updated**: spec.md, plan.md, tasks.md, data-model.md
+**Tasks added**: T140, T141, T142, T143, T144, T145, T146, T147
+**Tasks removed**: —
+**Tasks marked complete**: —
+
 ---
 
 ## Personas
@@ -125,6 +134,7 @@ A desktop visitor (Max fan or newcomer) lands on the page and sees a CRT televis
 2. **Given** Max has greeted and the visitor is silent for 4–10 seconds, **When** no input is received, **Then** Max delivers exactly one in-character idle nudge. No further post-greeting nudges follow. Mid-session idle re-engagement per `docs/max-personality-bible.md` §5.1 operates independently at 90–120s timescales.
 3. **Given** a visitor asks a factual question that no tool can answer (e.g., "What's the capital of France?"), **When** Max responds, **Then** the reply is characteristically evasive and editorial — never a straight factual answer — and includes at least one stutter. **Given** a visitor asks about news or weather, **When** Max responds using tool data, **Then** the reply reports the factual tool results accurately but in Max's editorial/stuttering persona — never fabricating data.
 4. **Given** a visitor sends any input, **When** Max processes it, **Then** the reply begins within 1.5 seconds (P95) of the user finishing input.
+5. **Given** the TV is on and Max has greeted, **When** the visitor clicks the CHANNEL knob, **Then** (a) Max's avatar theme advances to the next theme in the cycle (`retro → pop-art → cartoon → retro`, wrapping), (b) a fresh greeting from the pre-generated pool begins playing immediately with no static or tuning animation, (c) the new theme remains active if the TV is subsequently powered off and back on.
 
 ---
 
@@ -261,6 +271,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 - **FR-029** [MVP]: Max MUST have access to a news tool that retrieves current news headlines or summaries. When invoked, Max MUST report the factual news content as returned by the tool, presented in his editorial/stuttering persona. Max MUST NOT fabricate news.
 - **FR-030** [MVP]: Max MUST have access to a weather tool that retrieves current weather data for a requested location. When invoked, Max MUST report the factual weather data as returned by the tool, presented in his editorial/stuttering persona. Max MUST NOT fabricate weather information.
 - **FR-031** [V1]: Max MUST have access to a web search tool that retrieves search results for a user query. The delivery format and provider of web search results is an implementation detail to be determined. When invoked, Max MUST report the factual search results as returned by the tool, presented in his editorial/stuttering persona.
+- **FR-032** [MVP]: The page MUST present an interactive CHANNEL knob as an invisible hit area over the painted knob in `TV-frame.png`. Clicking it MUST (1) advance Max's avatar theme to the next value in the cycle `retro → pop-art → cartoon → retro` (wrapping), and (2) replay a fresh greeting as if the TV just powered on — theme swaps immediately and a new greeting audio track plays from the pre-generated pool; the static/tuning sequence MUST NOT re-run. The knob MUST be disabled when `tvPower === 'off'`. The selected theme MUST persist across TV power off/on cycles (stored in `localStorage`).
 
 ### Key Entities
 

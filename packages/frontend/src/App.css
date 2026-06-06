@@ -117,12 +117,12 @@
 .crt-panel {
   position: absolute;
   /* Position over TV-frame.png control strip.
-     Aligned to the frame's ON/OFF switch and volume knob area.
+     Aligned to the frame's ON/OFF switch, volume knob, and painted CHANNEL knob.
      Right panel opaque area: 71.8%–93.0%, center ~82.4%.
-     Panel spans 18%–58% of bezel height (height = 40% of bezel). */
+     Panel spans 18%–64% of bezel height (height = 46% of bezel). */
   right: 13.3%;
   top: 18%;
-  bottom: 42%;
+  bottom: 36%;
   width: 11%;
   pointer-events: auto;
   z-index: 6;
@@ -132,14 +132,15 @@
    anchor to the bezel image (which has fixed aspect ratio) rather than to the
    viewport. This eliminates vertical drift on window resize.
 
-   Painted positions (bezel coords): ON/OFF switch cy ≈ 0.28, brass knob cy ≈ 0.41.
-   Panel spans 0.18–0.58 → switch at 25% of panel, knob at 57.5% of panel. */
+   Painted positions (bezel coords): ON/OFF switch cy ≈ 0.28, brass knob cy ≈ 0.41,
+   CHANNEL knob cy ≈ 0.58.
+   Panel spans 0.18–0.64 → switch at ~21.8% of panel, knob at ~50%, channel at ~77%. */
 
 .tv-knob-wrapper {
   position: absolute;
   left: 0;
   right: 0;
-  top: 25%;
+  top: 21.8%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
@@ -148,15 +149,23 @@
 }
 
 /* The volume button sits at the top of this wrapper with the LED bar below.
-   We want the BUTTON center (not the wrapper center) at 57.5% of panel.
-   Button height ≈ 55% × 88% = 48.4% of panel width = ~20% of panel height
-   (at the bezel's ~1.5:1 aspect ratio), so offset the wrapper top by
-   half the button height to land the button center on the painted knob. */
+   The taller panel shifts the hit-area upward so the button center lands
+   around 50% of the bezel height. */
 .volume-knob-wrapper {
   position: absolute;
   left: 0;
   right: 0;
-  top: 47.5%;
+  top: 40.1%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.channel-knob-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 77.1%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -246,6 +255,29 @@
 }
 
 .volume-knob:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.channel-knob {
+  width: 55%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  appearance: none;
+  padding: 0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.channel-knob:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.channel-knob:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

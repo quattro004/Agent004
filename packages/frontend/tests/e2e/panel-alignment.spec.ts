@@ -7,13 +7,15 @@ import { test, expect } from '@playwright/test';
  * Measured painted positions (from PNG analysis):
  *   ON/OFF switch toggle: vertical center ~22% of bezel height
  *   VOLUME brass knob:    vertical center ~49% of bezel height
- *   Right panel center:   horizontal ~82% of bezel width
+ *   CHANNEL knob:         vertical center ~58% of bezel height
+ *   Right panel center:   horizontal ~81% of bezel width
  */
 
 const PAINTED = {
   switch: { cy: 0.28, tol: 0.04 },
   volume: { cy: 0.41, tol: 0.015 },
-  panelCx: 0.82,
+  channel: { cy: 0.58, tolPx: 5 },
+  panelCx: 0.8115,
   panelTol: 0.03,
 };
 
@@ -55,6 +57,23 @@ test.describe('Panel control alignment', () => {
     expect(cyRel).toBeLessThanOrEqual(PAINTED.volume.cy + PAINTED.volume.tol);
     expect(cxRel).toBeGreaterThanOrEqual(PAINTED.panelCx - PAINTED.panelTol);
     expect(cxRel).toBeLessThanOrEqual(PAINTED.panelCx + PAINTED.panelTol);
+  });
+
+  test('ChannelKnob centers over painted channel knob', async ({ page }) => {
+    const bezel = page.getByTestId('crt-bezel');
+    const knob = page.locator('.channel-knob');
+    await expect(bezel).toBeVisible();
+    await expect(knob).toBeVisible();
+
+    const bezelBox = (await bezel.boundingBox())!;
+    const knobBox = (await knob.boundingBox())!;
+    const cyPx = knobBox.y + knobBox.height / 2 - bezelBox.y;
+    const cxPx = knobBox.x + knobBox.width / 2 - bezelBox.x;
+    const expectedCyPx = bezelBox.height * PAINTED.channel.cy;
+    const expectedCxPx = bezelBox.width * PAINTED.panelCx;
+
+    expect(Math.abs(cyPx - expectedCyPx)).toBeLessThanOrEqual(PAINTED.channel.tolPx);
+    expect(Math.abs(cxPx - expectedCxPx)).toBeLessThanOrEqual(PAINTED.channel.tolPx);
   });
 
   // Regression: the LED bar / knob must stay anchored to the painted brass knob
@@ -103,6 +122,32 @@ test.describe('Panel control alignment', () => {
       // loose enough to allow minor styling tweaks.
       expect(cyRel).toBeGreaterThanOrEqual(0.44);
       expect(cyRel).toBeLessThanOrEqual(0.5);
+    });
+  }
+
+  const CHANNEL_VIEWPORTS = [
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ];
+
+  for (const vp of CHANNEL_VIEWPORTS) {
+    test(`ChannelKnob stays anchored at viewport ${vp.width}x${vp.height}`, async ({ page }) => {
+      await page.setViewportSize(vp);
+      await page.goto('/');
+      const bezel = page.getByTestId('crt-bezel');
+      const knob = page.locator('.channel-knob');
+      await expect(bezel).toBeVisible();
+      await expect(knob).toBeVisible();
+
+      const bezelBox = (await bezel.boundingBox())!;
+      const knobBox = (await knob.boundingBox())!;
+      const cyPx = knobBox.y + knobBox.height / 2 - bezelBox.y;
+      const cxPx = knobBox.x + knobBox.width / 2 - bezelBox.x;
+      const expectedCyPx = bezelBox.height * PAINTED.channel.cy;
+      const expectedCxPx = bezelBox.width * PAINTED.panelCx;
+
+      expect(Math.abs(cyPx - expectedCyPx)).toBeLessThanOrEqual(PAINTED.channel.tolPx);
+      expect(Math.abs(cxPx - expectedCxPx)).toBeLessThanOrEqual(PAINTED.channel.tolPx);
     });
   }
 

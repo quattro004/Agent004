@@ -83,6 +83,11 @@ vi.mock('../src/config/constants', () => ({
   BACKGROUND_FRAME_COUNT: 8,
   BACKGROUND_ASSET_BASE: '/background/max-grid',
   DEFAULT_AVATAR_THEME: 'retro',
+  AVATAR_THEMES: ['retro', 'pop-art', 'cartoon'],
+  nextTheme: (theme: 'retro' | 'pop-art' | 'cartoon') => {
+    const themes = ['retro', 'pop-art', 'cartoon'] as const;
+    return themes[(themes.indexOf(theme) + 1) % themes.length];
+  },
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({

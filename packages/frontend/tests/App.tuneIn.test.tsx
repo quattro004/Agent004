@@ -102,6 +102,11 @@ vi.mock('../src/config/constants', () => ({
   BACKGROUND_FRAME_COUNT: 8,
   BACKGROUND_ASSET_BASE: '/background/max-grid',
   DEFAULT_AVATAR_THEME: 'retro',
+  AVATAR_THEMES: ['retro', 'pop-art', 'cartoon'],
+  nextTheme: (theme: 'retro' | 'pop-art' | 'cartoon') => {
+    const themes = ['retro', 'pop-art', 'cartoon'] as const;
+    return themes[(themes.indexOf(theme) + 1) % themes.length];
+  },
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({
@@ -367,9 +372,12 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
 
     // Wait into the settling window and observe that the avatar is forced
     // to the glitch frame at some point (so the user actually sees Max glitch).
-    await vi.waitFor(() => {
-      expect(screen.getByTestId('avatar-frame').getAttribute('data-frame')).toBe('glitch');
-    });
+    await vi.waitFor(
+      () => {
+        expect(screen.getByTestId('avatar-frame').getAttribute('data-frame')).toBe('glitch');
+      },
+      { interval: 10 },
+    );
   });
 
   it('does NOT play the greeting while in settling phase', async () => {

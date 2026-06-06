@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CrtFrame } from './components/CrtFrame';
 import { AvatarFrameCycler } from './components/AvatarFrameCycler';
+import { ChannelKnob } from './components/ChannelKnob';
 import { BackgroundCycler } from './components/BackgroundCycler';
 import { BroadcastText } from './components/BroadcastText';
 import { SessionStateOverlay, type OverlayState } from './components/SessionStateOverlay';
@@ -13,6 +14,8 @@ import { createUseAudio } from './hooks/useAudio';
 import { createUseGreeting, type PreloadedGreeting } from './hooks/useGreeting';
 import { createAudioChain } from './audio/audioChain';
 import {
+  AVATAR_THEMES,
+  nextTheme,
   GREETING_DISPLAY_MS,
   TUNING_MIN_MS,
   TUNING_MAX_MS,
@@ -35,6 +38,7 @@ if (!wsResolution.connect) {
   );
 }
 const WS_URL = wsResolution.url || 'ws://invalid';
+const THEME_STORAGE_KEY = 'avatarThemeIndex';
 
 /**
  * TV power states:
@@ -47,6 +51,18 @@ export type TvPowerState = 'off' | 'tuning' | 'settling' | 'on';
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readStoredThemeIndex(): number {
+  const storedValue = localStorage.getItem(THEME_STORAGE_KEY);
+  if (storedValue === null) return 0;
+
+  const parsedValue = Number.parseInt(storedValue, 10);
+  if (!Number.isInteger(parsedValue) || parsedValue < 0 || parsedValue >= AVATAR_THEMES.length) {
+    return 0;
+  }
+
+  return parsedValue;
 }
 
 /** Map domain SessionState to the overlay subset (null if no overlay needed). */
@@ -74,7 +90,9 @@ export function App() {
   // flashes have an avatar to overlay.
   const showSceneContent = isSettling || isTvOn;
   const [volume, setVolume] = useState(0.5);
+  const [themeIndex, setThemeIndex] = useState<number>(() => readStoredThemeIndex());
   const [greetingText, setGreetingText] = useState<string | null>(null);
+  const [greetingNonce, setGreetingNonce] = useState(0);
   const [isGreetingDone, setIsGreetingDone] = useState(false);
   const audioChainRef = useRef(createAudioChain());
   const audioRef = useRef(createUseAudio(audioChainRef.current));
@@ -95,6 +113,7 @@ export function App() {
   const fullText = useConversationStore((s) => (s.isStreaming ? null : s.currentResponseText));
   const isMouthOpen = useVoiceStore((s) => s.isMouthOpen);
   const currentTurnIndex = useConversationStore((s) => s.currentTurnIndex);
+  const currentTheme = AVATAR_THEMES[themeIndex];
 
   const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
 
@@ -131,7 +150,11 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [isTvOn]);
+  }, [isTvOn, greetingNonce]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEY, String(themeIndex));
+  }, [themeIndex]);
 
   // Apply volume changes to the audio chain (no-op until init resolves)
   useEffect(() => {
@@ -246,6 +269,20 @@ export function App() {
     }
   }, [tvPower]);
 
+  const handleChannelChange = useCallback(() => {
+    if (tvPower === 'off') return;
+
+    greetingRef.current.stopGreeting();
+    preloadedGreetingRef.current = null;
+    setIsGreetingDone(false);
+    setGreetingText(null);
+    setThemeIndex((currentIndex) => {
+      const currentTheme = AVATAR_THEMES[currentIndex] ?? AVATAR_THEMES[0];
+      return AVATAR_THEMES.indexOf(nextTheme(currentTheme));
+    });
+    setGreetingNonce((current) => current + 1);
+  }, [tvPower]);
+
   const handleSend = useCallback(
     (text: string) => {
       if (!text.trim() || !isActive) return;
@@ -260,6 +297,7 @@ export function App() {
   const controlPanel = (
     <>
       <TvKnob onToggle={handlePowerToggle} isOn={isTvOn} />
+      <ChannelKnob onChannelChange={handleChannelChange} disabled={tvPower === 'off'} />
       <VolumeKnob volume={volume} onVolumeChange={setVolume} disabled={tvPower === 'off'} />
     </>
   );
@@ -279,6 +317,7 @@ export function App() {
           {showAvatar && (
             <AvatarFrameCycler
               isMouthOpen={isMouthOpen}
+              theme={currentTheme}
               forceFrame={
                 isSettling && glitchStep < TUNE_IN_GLITCH_PATTERN.length
                   ? TUNE_IN_GLITCH_PATTERN[glitchStep].frame

@@ -88,7 +88,9 @@ specs/001-max-height-ai-character/
 packages/
   frontend/              # React 19 + Vite 8 SPA
   ├── src/
-  │   ├── components/    # React components (CRT, Avatar, MicButton, TextInput, TVKnob)
+  │   ├── App.tsx        # SPA root — `themeIndex` state (persisted to localStorage as `avatarThemeIndex`), `greetingNonce` state (greeting effect deps: `[isTvOn, greetingNonce]`), `handleChannelChange` handler (advances theme, stops greeting, resets greeting state, bumps nonce)
+  │   ├── components/    # React components (CRT, Avatar, MicButton, TextInput, TvKnob, VolumeKnob, ChannelKnob)
+  │   ├── config/        # App constants — `AVATAR_THEMES` (`as const` tuple `['retro','pop-art','cartoon']`), `AvatarTheme` type (re-exported from `AvatarFrameCycler` for backward compat), `nextTheme(t: AvatarTheme): AvatarTheme` cycle helper; VITE_* env vars
   │   ├── hooks/         # Custom hooks (useWebSocket, useAudio, useSpeechRecognition)
   │   ├── stores/        # Zustand stores (connection, conversation, voice, visitor)
   │   ├── services/      # Polly TTS client, greeting selector, rate limiter
