@@ -216,16 +216,23 @@ vi.mock('../src/stores/conversationStore', () => {
 
 vi.mock('../src/stores/voiceStore', () => ({
   useVoiceStore: Object.assign(
-    (selector?: (s: Record<string, boolean>) => unknown) => {
-      const state = { isSpeaking: false, isMouthOpen: false, isMicActive: false };
+    (selector?: (s: Record<string, boolean | unknown>) => unknown) => {
+      const state = {
+        isSpeaking: false,
+        isMouthOpen: false,
+        isMicActive: false,
+        isGreeting: false,
+      };
       return selector ? selector(state) : state;
     },
     {
       getState: () => ({
         isSpeaking: false,
         isMouthOpen: false,
+        isGreeting: false,
         setSpeaking: vi.fn(),
         setMouthOpen: vi.fn(),
+        setGreeting: vi.fn(),
       }),
     },
   ),

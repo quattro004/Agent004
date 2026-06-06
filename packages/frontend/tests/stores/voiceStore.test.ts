@@ -52,4 +52,27 @@ describe('voiceStore', () => {
     expect(state.isMouthOpen).toBe(false);
     expect(state.isMicActive).toBe(false);
   });
+
+  it('should initialize isGreeting as false', () => {
+    const state = useVoiceStore.getState();
+    expect(state.isGreeting).toBe(false);
+  });
+
+  it('should toggle greeting state via setGreeting', () => {
+    const store = useVoiceStore.getState();
+    store.setGreeting(true);
+    expect(useVoiceStore.getState().isGreeting).toBe(true);
+
+    store.setGreeting(false);
+    expect(useVoiceStore.getState().isGreeting).toBe(false);
+  });
+
+  it('should clear isGreeting on reset', () => {
+    const store = useVoiceStore.getState();
+    store.setGreeting(true);
+    expect(useVoiceStore.getState().isGreeting).toBe(true);
+
+    store.reset();
+    expect(useVoiceStore.getState().isGreeting).toBe(false);
+  });
 });

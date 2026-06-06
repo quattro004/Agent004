@@ -145,10 +145,12 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
           stopMouthPolling();
           useVoiceStore.getState().setSpeaking(false);
           useVoiceStore.getState().setMouthOpen(false);
+          useVoiceStore.getState().setGreeting(false);
         });
 
       if (greeting.audioBuffer) {
         useVoiceStore.getState().setSpeaking(true);
+        useVoiceStore.getState().setGreeting(true);
         audioChain.play(greeting.audioBuffer);
         startMouthPolling();
         return {
@@ -160,6 +162,7 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
 
       if (greeting.text && browserTtsAvailable()) {
         useVoiceStore.getState().setSpeaking(true);
+        useVoiceStore.getState().setGreeting(true);
         return {
           id: greeting.id,
           text: greeting.text,
@@ -187,6 +190,7 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
     stopMouthPolling();
     useVoiceStore.getState().setSpeaking(false);
     useVoiceStore.getState().setMouthOpen(false);
+    useVoiceStore.getState().setGreeting(false);
   }
 
   return { preloadGreeting, playGreeting, stopGreeting };

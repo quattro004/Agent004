@@ -12,11 +12,13 @@ vi.mock('../../src/stores/visitorStore', () => ({
 // Mock voiceStore
 const mockSetSpeaking = vi.fn();
 const mockSetMouthOpen = vi.fn();
+const mockSetGreeting = vi.fn();
 vi.mock('../../src/stores/voiceStore', () => ({
   useVoiceStore: Object.assign(() => ({ isSpeaking: false }), {
     getState: () => ({
       setSpeaking: mockSetSpeaking,
       setMouthOpen: mockSetMouthOpen,
+      setGreeting: mockSetGreeting,
     }),
   }),
 }));
@@ -53,6 +55,7 @@ describe('useGreeting', () => {
     mockPushGreeting.mockReset();
     mockSetSpeaking.mockReset();
     mockSetMouthOpen.mockReset();
+    mockSetGreeting.mockReset();
     mockBrowserIsAvailable.mockReset();
     mockBrowserSpeak.mockReset();
     mockBrowserStop.mockReset();
@@ -522,5 +525,172 @@ describe('useGreeting', () => {
 
     expect(mockBrowserStop).toHaveBeenCalled();
     expect(mockAudioChain.stop).toHaveBeenCalled();
+  });
+
+  describe('isGreeting state tracking', () => {
+    it('should set isGreeting=true when MP3 greeting starts playing', async () => {
+      const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+      const greetingEntry = {
+        id: 'g-audio-001',
+        archetype: 'TV_PRESENTER_INTRO' as const,
+        text: 'Hello from audio!',
+        audioPath: 'audio/g-audio-001.mp3',
+        audioDurationMs: 2000,
+        videoPath: 'video/g-audio-001.mp4',
+        weight: 1.0,
+        tags: [],
+      };
+
+      const manifestData = {
+        version: '1.0.0',
+        voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+        greetings: [greetingEntry],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify(manifestData)),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+        });
+
+      mockSelectGreeting.mockReturnValue(greetingEntry);
+
+      const greeting = createUseGreeting(mockAudioChain);
+      await greeting.playGreeting();
+
+      // setGreeting(true) should be called when playing MP3
+      expect(mockSetGreeting).toHaveBeenCalledWith(true);
+    });
+
+    it('should set isGreeting=true when TTS fallback greeting starts playing', async () => {
+      const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+      const greetingEntry = {
+        id: 'g-tts-001',
+        archetype: 'TV_PRESENTER_INTRO' as const,
+        text: 'Hello from TTS!',
+        audioPath: 'audio/g-tts-001.mp3',
+        audioDurationMs: 2000,
+        videoPath: 'video/g-tts-001.mp4',
+        weight: 1.0,
+        tags: [],
+      };
+
+      const manifestData = {
+        version: '1.0.0',
+        voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+        greetings: [greetingEntry],
+      };
+
+      // Mock audio fetch to fail, so it falls back to TTS
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify(manifestData)),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+        });
+
+      mockSelectGreeting.mockReturnValue(greetingEntry);
+      mockBrowserSpeak.mockResolvedValue(undefined);
+
+      const greeting = createUseGreeting(mockAudioChain);
+      await greeting.playGreeting();
+
+      // setGreeting(true) should be called when playing TTS
+      expect(mockSetGreeting).toHaveBeenCalledWith(true);
+    });
+
+    it('should set isGreeting=false when greeting playback completes', async () => {
+      const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+      const greetingEntry = {
+        id: 'g-complete-001',
+        archetype: 'TV_PRESENTER_INTRO' as const,
+        text: 'Brief greeting.',
+        audioPath: 'audio/g-complete-001.mp3',
+        audioDurationMs: 500,
+        videoPath: 'video/g-complete-001.mp4',
+        weight: 1.0,
+        tags: [],
+      };
+
+      const manifestData = {
+        version: '1.0.0',
+        voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+        greetings: [greetingEntry],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify(manifestData)),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+        });
+
+      mockSelectGreeting.mockReturnValue(greetingEntry);
+
+      const greeting = createUseGreeting(mockAudioChain);
+      const result = await greeting.playGreeting();
+
+      expect(mockSetGreeting).toHaveBeenCalledWith(true);
+
+      // Wait for completion promise to resolve
+      await result?.completion;
+
+      expect(mockSetGreeting).toHaveBeenCalledWith(false);
+    });
+
+    it('should set isGreeting=false when stopGreeting is called', async () => {
+      const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+      const greetingEntry = {
+        id: 'g-stop-001',
+        archetype: 'TV_PRESENTER_INTRO' as const,
+        text: 'Should be stopped.',
+        audioPath: 'audio/g-stop-001.mp3',
+        audioDurationMs: 5000,
+        videoPath: 'video/g-stop-001.mp4',
+        weight: 1.0,
+        tags: [],
+      };
+
+      const manifestData = {
+        version: '1.0.0',
+        voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+        greetings: [greetingEntry],
+      };
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(JSON.stringify(manifestData)),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+        });
+
+      mockSelectGreeting.mockReturnValue(greetingEntry);
+
+      const greeting = createUseGreeting(mockAudioChain);
+      await greeting.playGreeting();
+
+      expect(mockSetGreeting).toHaveBeenCalledWith(true);
+
+      greeting.stopGreeting();
+
+      expect(mockSetGreeting).toHaveBeenCalledWith(false);
+    });
   });
 });

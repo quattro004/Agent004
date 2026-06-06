@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { DEFAULT_AVATAR_THEME, type AvatarTheme } from '../config/constants';
+import {
+  DEFAULT_AVATAR_THEME,
+  getRandomTalkFrameIndex,
+  getRandomTalkFrameIntervalMs,
+  type AvatarTheme,
+} from '../config/constants';
 
 export type { AvatarTheme } from '../config/constants';
 
@@ -25,20 +30,49 @@ interface AvatarFrameCyclerProps {
    * tune-in glitch flashes.
    */
   forceFrame?: AvatarFrame;
+  /**
+   * When true, runs a timed animation that alternates between talk-1 and talk-2
+   * every randomized interval (200-300ms), overriding mouth-open detection.
+   * Typically used during greeting playback.
+   */
+  talking?: boolean;
 }
 
-function useAvatarFrame({ isMouthOpen, theme = DEFAULT_AVATAR_THEME }: AvatarFrameCyclerProps) {
+function useAvatarFrame({
+  isMouthOpen,
+  theme = DEFAULT_AVATAR_THEME,
+  talking,
+}: AvatarFrameCyclerProps) {
   const [isGlitching, setIsGlitching] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
   const [isLaughing, setIsLaughing] = useState(false);
   const [isSideEye, setIsSideEye] = useState(false);
-  const [talkToggle, setTalkToggle] = useState(false);
+  const [talkFrameIndex, setTalkFrameIndex] = useState(-1); // -1=unset, 0=talk-1, 1=talk-2
+  const [isTalking, setIsTalking] = useState(false);
   const prevMouthOpenRef = useRef(false);
 
-  // Alternate talk frames on each false→true mouth transition
+  // Timed talking animation during greeting: randomize between talk-1 and talk-2 every interval
+  useEffect(() => {
+    if (!talking) {
+      setIsTalking(false);
+      return;
+    }
+
+    setIsTalking(true);
+    setTalkFrameIndex(getRandomTalkFrameIndex());
+    const intervalId = setInterval(() => {
+      setTalkFrameIndex(getRandomTalkFrameIndex());
+    }, getRandomTalkFrameIntervalMs());
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [talking]);
+
+  // Advance talk frames on each false→true mouth transition
   useEffect(() => {
     if (isMouthOpen && !prevMouthOpenRef.current) {
-      setTalkToggle((prev) => !prev);
+      setTalkFrameIndex(getRandomTalkFrameIndex());
     }
     prevMouthOpenRef.current = isMouthOpen;
   }, [isMouthOpen]);
@@ -121,12 +155,14 @@ function useAvatarFrame({ isMouthOpen, theme = DEFAULT_AVATAR_THEME }: AvatarFra
   }, [theme]);
 
   // Derive visible frame from independent state flags (priority order)
-  const talkFrame: AvatarFrame = talkToggle ? 'talk-1' : 'talk-2';
+  // For unset (-1), default to talk-1
+  const talkFrames: AvatarFrame[] = ['talk-1', 'talk-2'];
+  const talkFrame: AvatarFrame = talkFrameIndex < 0 ? 'talk-1' : talkFrames[talkFrameIndex];
   const frame: AvatarFrame = isGlitching
     ? 'glitch'
     : isBlinking
       ? 'blink'
-      : isMouthOpen
+      : isTalking || isMouthOpen
         ? talkFrame
         : isLaughing
           ? 'laugh'
@@ -137,8 +173,13 @@ function useAvatarFrame({ isMouthOpen, theme = DEFAULT_AVATAR_THEME }: AvatarFra
   return { src: `/avatar/${theme}/${frame}.png`, frame };
 }
 
-export function AvatarFrameCycler({ isMouthOpen, theme, forceFrame }: AvatarFrameCyclerProps) {
-  const { src, frame } = useAvatarFrame({ isMouthOpen, theme });
+export function AvatarFrameCycler({
+  isMouthOpen,
+  theme,
+  forceFrame,
+  talking,
+}: AvatarFrameCyclerProps) {
+  const { src, frame } = useAvatarFrame({ isMouthOpen, theme, talking });
   const displayFrame = forceFrame ?? frame;
   const displaySrc = forceFrame
     ? `/avatar/${theme ?? DEFAULT_AVATAR_THEME}/${forceFrame}.png`

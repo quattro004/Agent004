@@ -101,6 +101,7 @@ export function App() {
   const powerSequenceIdRef = useRef(0);
   const powerOnAbortRef = useRef<AbortController | null>(null);
   const tvPowerRef = useRef<TvPowerState>('off');
+  const prevTvPowerRef = useRef<TvPowerState>('off');
 
   const sessionId = useConnectionStore((s) => s.sessionId) ?? 'pending';
   const { sendMessage } = useWebSocket({
@@ -112,6 +113,7 @@ export function App() {
   const tokens = useConversationStore((s) => s.currentResponseText);
   const fullText = useConversationStore((s) => (s.isStreaming ? null : s.currentResponseText));
   const isMouthOpen = useVoiceStore((s) => s.isMouthOpen);
+  const isGreeting = useVoiceStore((s) => s.isGreeting);
   const currentTurnIndex = useConversationStore((s) => s.currentTurnIndex);
   const currentTheme = AVATAR_THEMES[themeIndex];
 
@@ -190,6 +192,15 @@ export function App() {
     }
   }, [sessionState, isTvOn]);
 
+  // Stop greeting audio on every transition to TV off
+  useEffect(() => {
+    if (prevTvPowerRef.current !== 'off' && tvPower === 'off') {
+      greetingRef.current.stopGreeting();
+      audioChainRef.current.stopStatic();
+    }
+    prevTvPowerRef.current = tvPower;
+  }, [tvPower]);
+
   const handlePowerToggle = useCallback(() => {
     if (tvPower === 'off') {
       const sequenceId = powerSequenceIdRef.current + 1;
@@ -261,7 +272,6 @@ export function App() {
       powerOnAbortRef.current = null;
       preloadedGreetingRef.current = null;
       audioChainRef.current.stopStatic();
-      greetingRef.current.stopGreeting();
       tvPowerRef.current = 'off';
       setTvPower('off');
       setIsGreetingDone(false);
@@ -318,6 +328,7 @@ export function App() {
             <AvatarFrameCycler
               isMouthOpen={isMouthOpen}
               theme={currentTheme}
+              talking={isGreeting}
               forceFrame={
                 isSettling && glitchStep < TUNE_IN_GLITCH_PATTERN.length
                   ? TUNE_IN_GLITCH_PATTERN[glitchStep].frame

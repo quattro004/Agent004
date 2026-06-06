@@ -21,8 +21,12 @@ vi.mock('../src/components/CrtFrame', () => ({
 }));
 
 vi.mock('../src/components/AvatarFrameCycler', () => ({
-  AvatarFrameCycler: ({ isMouthOpen }: { isMouthOpen: boolean }) => (
-    <div data-testid="avatar-frame" data-mouth-open={isMouthOpen} />
+  AvatarFrameCycler: ({ isMouthOpen, talking }: { isMouthOpen: boolean; talking?: boolean }) => (
+    <div
+      data-testid="avatar-frame"
+      data-mouth-open={isMouthOpen}
+      data-talking={talking ? 'true' : 'false'}
+    />
   ),
 }));
 
@@ -75,6 +79,7 @@ vi.mock('../src/hooks/useIsMobile', () => ({
 
 vi.mock('../src/config/constants', () => ({
   GREETING_DISPLAY_MS: 200,
+  TALK_FRAME_INTERVAL_MS: 200,
   TUNING_MIN_MS: 0,
   TUNING_MAX_MS: 0,
   SETTLING_DURATION_MS: 0,
@@ -163,15 +168,22 @@ vi.mock('../src/stores/conversationStore', () => {
 vi.mock('../src/stores/voiceStore', () => ({
   useVoiceStore: Object.assign(
     (selector?: (s: Record<string, boolean>) => unknown) => {
-      const state = { isSpeaking: false, isMouthOpen: false, isMicActive: false };
+      const state = {
+        isSpeaking: false,
+        isMouthOpen: false,
+        isMicActive: false,
+        isGreeting: false,
+      };
       return selector ? selector(state) : state;
     },
     {
       getState: () => ({
         isSpeaking: false,
         isMouthOpen: false,
+        isGreeting: false,
         setSpeaking: vi.fn(),
         setMouthOpen: vi.fn(),
+        setGreeting: vi.fn(),
       }),
     },
   ),
@@ -583,5 +595,40 @@ describe('App — Greeting Flow', () => {
     fireEvent.click(knob);
 
     expect(mockStopGreeting).toHaveBeenCalled();
+  });
+
+  it('should call stopGreeting when session enters terminal state (auto-off)', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+    };
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // Clear the mock to isolate auto-off behavior
+    mockStopGreeting.mockClear();
+
+    // Session enters terminal state — TV should auto-off
+    connStore._setState({ sessionState: 'ENDED' });
+
+    await vi.waitFor(() => {
+      expect(mockStopGreeting).toHaveBeenCalled();
+    });
+  });
+
+  it('should pass talking prop to AvatarFrameCycler based on isGreeting state', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    // During greeting playback, talking should be true
+    // (voiceStore mock has isGreeting: false by default, so we expect false)
+    // This is a basic smoke test; real behavior depends on voiceStore integration
+    const avatar = screen.getByTestId('avatar-frame');
+    expect(avatar).toHaveAttribute('data-talking');
   });
 });

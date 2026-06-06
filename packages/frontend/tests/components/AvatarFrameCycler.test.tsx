@@ -63,19 +63,24 @@ describe('AvatarFrameCycler', () => {
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/talk-1.png');
     });
 
-    it('should alternate between talk-1 and talk-2 on successive mouth opens', () => {
+    it('should keep using talk frames on successive mouth opens (no idle in-talk)', () => {
       const { rerender } = render(<AvatarFrameCycler isMouthOpen={false} />);
 
-      // First open → talk-1
+      // First open → talk-1 (initial state)
       rerender(<AvatarFrameCycler isMouthOpen={true} />);
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/talk-1.png');
 
-      // Close then open → talk-2
+      // Close then open → talk frame
       rerender(<AvatarFrameCycler isMouthOpen={false} />);
       rerender(<AvatarFrameCycler isMouthOpen={true} />);
-      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/talk-2.png');
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/talk-1.png');
 
-      // Close then open → talk-1 again
+      // Close then open → talk frame
+      rerender(<AvatarFrameCycler isMouthOpen={false} />);
+      rerender(<AvatarFrameCycler isMouthOpen={true} />);
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/talk-1.png');
+
+      // Close then open → talk frame
       rerender(<AvatarFrameCycler isMouthOpen={false} />);
       rerender(<AvatarFrameCycler isMouthOpen={true} />);
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('src', '/avatar/retro/talk-1.png');
@@ -340,6 +345,112 @@ describe('AvatarFrameCycler', () => {
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'glitch');
       rerender(<AvatarFrameCycler isMouthOpen={false} />);
       expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'idle');
+    });
+  });
+
+  describe('timed talking animation', () => {
+    it('should show talk-1 at first interval when talking is true', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} talking={true} />);
+      // Initially, should start with talk-1
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+    });
+
+    it('should keep showing a talk frame while talking is true', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} talking={true} />);
+
+      act(() => {
+        vi.advanceTimersByTime(200); // randomized interval (Math.random mock -> minimum)
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+    });
+
+    it('should stop cycling when talking becomes false', () => {
+      const { rerender } = render(<AvatarFrameCycler isMouthOpen={false} talking={true} />);
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+
+      rerender(<AvatarFrameCycler isMouthOpen={false} talking={false} />);
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'idle');
+
+      // Advance timer should not change frame anymore
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'idle');
+    });
+
+    it('should not enter idle while talking remains true', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} talking={true} />);
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+    });
+
+    it('should still show glitch when glitch is active, even with talking true', () => {
+      // Math.random=0 → glitch at 3000ms
+      render(<AvatarFrameCycler isMouthOpen={false} talking={true} />);
+
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+
+      // Glitch should override
+      act(() => {
+        vi.advanceTimersByTime(2800);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'glitch');
+    });
+
+    it('should resume talking animation when glitch ends', () => {
+      render(<AvatarFrameCycler isMouthOpen={false} talking={true} />);
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'glitch');
+
+      // Glitch ends after 100ms
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(screen.getByTestId('avatar-frame')).toHaveAttribute('data-frame', 'talk-1');
+    });
+
+    it('should clear interval on unmount when talking is active', () => {
+      const { unmount } = render(<AvatarFrameCycler isMouthOpen={false} talking={true} />);
+
+      expect(() => {
+        unmount();
+        act(() => {
+          vi.advanceTimersByTime(10000);
+        });
+      }).not.toThrow();
     });
   });
 });

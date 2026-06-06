@@ -1,6 +1,23 @@
 /** Duration (ms) to display greeting text before transitioning to normal state. */
 export const GREETING_DISPLAY_MS = 15_000;
 
+/** Min/max interval (ms) for randomized frame swaps in timed talking animation during greeting. */
+const TALK_FRAME_INTERVAL_MIN_MS = 200;
+const TALK_FRAME_INTERVAL_MAX_MS = 300;
+
+/** Returns a random interval between TALK_FRAME_INTERVAL_MIN_MS and TALK_FRAME_INTERVAL_MAX_MS (inclusive). */
+export function getRandomTalkFrameIntervalMs(): number {
+  return (
+    Math.floor(Math.random() * (TALK_FRAME_INTERVAL_MAX_MS - TALK_FRAME_INTERVAL_MIN_MS + 1)) +
+    TALK_FRAME_INTERVAL_MIN_MS
+  );
+}
+
+/** Returns a random talking frame index: 0 -> talk-1, 1 -> talk-2. */
+export function getRandomTalkFrameIndex(): 0 | 1 {
+  return Math.random() < 0.5 ? 0 : 1;
+}
+
 export const AVATAR_THEMES = ['retro', 'pop-art', 'cartoon'] as const;
 
 export type AvatarTheme = (typeof AVATAR_THEMES)[number];
