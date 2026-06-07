@@ -101,6 +101,22 @@
   z-index: 1;
 }
 
+/* Scanline overlay via repeating gradient */
+.crt-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
 /* CRT glass reflection — convex barrel curvature */
 .crt-screen::after {
   content: '';

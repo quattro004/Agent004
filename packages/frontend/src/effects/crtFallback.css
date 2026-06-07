@@ -9,22 +9,6 @@
   overflow: hidden;
 }
 
-/* Scanline overlay via repeating gradient */
-.crt-fallback::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.15) 0px,
-    rgba(0, 0, 0, 0.15) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-  pointer-events: none;
-  z-index: 10;
-}
-
 /* Vignette overlay */
 .crt-fallback::after {
   content: '';
@@ -106,7 +90,7 @@
     animation: none;
   }
 
-  .crt-fallback::before {
+  .crt-screen::before {
     opacity: 0.5;
   }
 }
