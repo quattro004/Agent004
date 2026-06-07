@@ -1,188 +1,108 @@
-# Audio Plan — Max Height Greeting Audio
+# Audio Plan — Max Height Greeting MP3 Generation
 
-## Goal
+## Problem & Approach
 
-Bring Max Height's greeting sequence to life with pre-generated MP3 audio files that play through the existing audio chain and drive mouth animation on the avatar.
+The greeting **playback** pipeline is already fully built; it just lacks the 16 MP3 files. We will generate them **once** with Amazon Polly (Matthew / neural) using **hand-tuned per-greeting SSML**, commit them as static assets, auto-calibrate the manifest durations, align the spec to drop/defer video, and finish the few audio-dependent UI refinements.
 
----
+**Budget reality (shoestring):** generating all 16 via Polly Neural is a **one-time cost of ~1¢** (≈2,600 chars total; free-tier eligible). Because the MP3s are committed static assets, there is **zero ongoing/runtime cost**. The expensive talking-head mp4s are replaced by the existing avatar images — that is the big saving. We may revisit cheap mp4s later (the spec keeps the door open).
 
-## Current State (What's Already Built)
+## Current State (verified)
 
-The greeting audio pipeline is **fully wired** — it just needs MP3 files:
+| Component                                                        | Status                                                                     | Location                                                      |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Greeting selector (weighted / no-repeat / time-of-day)          | ✅ Built                                                                    | `src/services/greetingSelector.ts`                           |
+| Greeting playback + mouth polling                               | ✅ Built                                                                    | `src/hooks/useGreeting.ts`                                   |
+| Audio chain (worklets, analyser, `setVolume`)                   | ✅ Built                                                                    | `src/audio/audioChain.ts`                                    |
+| Polly TTS (SSML wrap, neural / Matthew / mp3 / 24k)             | ✅ Built (browser, conversation)                                            | `src/services/pollyTts.ts`                                   |
+| Manifest (16 greetings, `audioPath` / `audioDurationMs` / `videoPath`) | ✅ Present                                                            | `public/greetings/manifest.json`                            |
+| Volume knob UI → store → `audioChain.setVolume`                 | ✅ **Already wired**                                                        | `components/VolumeKnob.tsx`, `App.tsx:92,161-164,311`        |
+| Audio-driven greeting timing                                    | ✅ **Already uses `audioDurationMs`**; `GREETING_DISPLAY_MS` is text-only fallback | `App.tsx:143`, `useGreeting.ts:159`                  |
+| **16 greeting MP3 files**                                       | ❌ **Missing**                                                              | `public/greetings/audio/` (does not exist)                  |
+| **Generation script**                                           | ❌ **Missing**                                                              | n/a                                                          |
+| `@aws-sdk/client-polly` dependency                              | ✅ Present                                                                  | `packages/frontend/package.json`                            |
+| `tsx` runner                                                    | ✅ In monorepo (agent pkg)                                                  | `packages/agent`                                            |
+| Greeting-manifest file-existence validation                     | ❌ None (only re-engagement, pattern-only)                                  | —                                                            |
 
-| Layer | Status | Location |
-|-------|--------|----------|
-| **Greeting manifest** | ✅ 16 entries with `audioPath`, `audioDurationMs` | `public/greetings/manifest.json` |
-| **Greeting selector** | ✅ Weighted random, no-repeat, time-of-day | `src/services/greetingSelector.ts` |
-| **Audio playback hook** | ✅ Fetches MP3 → decodes → plays via audioChain | `src/hooks/useGreeting.ts` |
-| **Mouth polling** | ✅ 50ms interval drives `voiceStore.setMouthOpen()` | `src/hooks/useGreeting.ts:28-34` |
-| **Avatar mouth sync** | ✅ `AvatarFrameCycler` reads `isMouthOpen` → talk frames | `src/components/AvatarFrameCycler.tsx` |
-| **Audio chain** | ✅ Web Audio API pipeline with analyser node for mouth detection | `src/audio/audioChain.ts` |
-| **Graceful fallback** | ✅ If MP3 fetch returns 404, text-only greeting plays | `src/hooks/useGreeting.ts:62` |
+**Implication:** committing audio-only assets will NOT break `pnpm run validate`. The spec/contract still _describe_ video as required, so we align them (non-blocking).
 
-**Once MP3 files exist at the manifest paths, audio + mouth animation activates automatically.**
+## Decisions
 
----
+- **Provider:** Amazon Polly is the **sole** generation method — Matthew, neural, mp3, 24 kHz (reuse existing config). No other TTS provider (ElevenLabs, manual recording, browser TTS) is in scope.
+- **SSML:** Hand-tuned per greeting (breaks, prosody, emphasis, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML.
+- **Duration calibration:** Auto-measure each MP3 and rewrite `audioDurationMs` (within the contract's ±500 ms / 1000–15000 ms bounds).
+- **Spec:** Update via speckit iterate to make video **optional/deferred** (not deleted) — avatar images are the MVP visual; mp4s are a future "if cheap" add.
+- **Extra scope:** mouth-threshold tuning + audio-driven timing refinement (tail buffer); volume knob is already wired → verify only.
 
-## Phase 1: Generate Greeting MP3s
+## Phases & Tasks
 
-### Voice Requirements
+### Phase 0 — Spec alignment (speckit iterate) — _non-blocking, do first for accuracy_
 
-From the manifest's `voiceConfig`:
-```json
-{
-  "voiceId": "Matthew",
-  "engine": "neural",
-  "ssmlPitch": "+10%",
-  "ssmlRate": "105%"
-}
-```
+- Run `/speckit.iterate.define` then `/speckit.iterate.apply` to:
+  - Make `videoPath` **optional** in `contracts/greeting-manifest.md` schema; change video build-time validation to conditional/deferred.
+  - Update `data-model.md` (Greeting.videoPath optional) and `spec.md` FR-002 wording (avatar images as current visual; video deferred).
+  - Document the "avatar images now, mp4s later if cost-effective" decision.
+  - Note the parallel re-engagement manifest (same videoPath pattern) as a follow-up, not in this change unless trivial.
+- Keep existing `videoPath` entries in the manifest as forward-looking placeholders; validation must not require the files to exist.
 
-**Character voice traits** (from personality bible):
-- Energetic, slightly manic TV presenter cadence
-- Deliberate stutter on certain consonants (marked with hyphens in text: "l-l-ladies", "b-broadcasting")
-- Pitch rises at dramatic moments, drops conspiratorially for asides
-- Rapid-fire delivery with sudden pauses for effect
+### Phase 1 — Author hand-tuned SSML (TDD)
 
-### Option A: Amazon Polly (Recommended — lowest friction)
+- Create `packages/frontend/scripts/greetingSsml.ts` exporting `Record<greetingId, string>` (full `<speak>…</speak>` per greeting), authored from the manifest text + personality bible (stutters already hyphenated, e.g. "L-l-ladies").
+- **RED→GREEN:** coverage test — every manifest greeting id has an SSML entry, no orphan keys, each value is a single well-formed `<speak>` root.
 
-AWS Polly is already in the tech stack (used for conversation TTS via `synthesizeTurn`). Use the same voice for greeting consistency.
+### Phase 2 — Generation script (TDD)
 
-**Steps:**
-1. Write a generation script at `scripts/generate-greetings.ts`
-2. For each of the 16 greetings in the manifest:
-   - Wrap text in SSML with `<prosody pitch="+10%" rate="105%">`
-   - Add `<break>` tags at stutter points and dramatic pauses
-   - Call Polly `synthesizeSpeech` with engine `neural`, voice `Matthew`
-   - Save output as `packages/frontend/public/greetings/audio/greeting-{NNN}.mp3`
-3. Verify `audioDurationMs` in manifest matches actual file durations (adjust if needed)
+- Add dev tooling to `packages/frontend`: `tsx` (run) + `music-metadata` (measure mp3 duration, pure-JS). Add script `"generate:greetings": "tsx scripts/generate-greetings.ts"`. _(Dep additions flagged for constitution review.)_
+- Isolate the script from the browser build: own `tsconfig.scripts.json` (Node libs), excluded from the app `tsc -b` project so `validate` stays green.
+- **Pure units first (RED→GREEN→REFACTOR):**
+  - `buildGreetingSsml(text, customSsml?)` — returns custom SSML or `wrapInSsml(text)` fallback (reuse `pollyTts.wrapInSsml`).
+  - `calibrateDurations(manifest, measuredMsById)` — clamp to [1000, 15000], round, return updated manifest; preserve unrelated fields/order.
+  - `measureMp3DurationMs(buffer)` — thin wrapper over `music-metadata` (parser injectable for tests).
+  - SSML-coverage guard reused from Phase 1.
+- **Orchestration:** read manifest → for each greeting synth via Polly (`SynthesizeSpeechCommand`, neural / Matthew / mp3 / 24k, `TextType:'ssml'`; client injectable + mocked in tests like `pollyTts.test.ts`) → write `public/greetings/audio/greeting-NNN.mp3` → measure → rewrite manifest durations. Flags: `--dry-run`, `--only <id>`. Uses default AWS credential chain (local profile/env) — no new infra, no deployed resources.
 
-**Estimated cost:** 16 greetings × ~100 chars each ≈ 1,600 chars → well within Polly free tier (5M chars/month for 12 months).
+### Phase 3 — Generate & commit assets
 
-**SSML example for greeting-001:**
-```xml
-<speak>
-  <prosody pitch="+10%" rate="105%">
-    <prosody rate="slow">L-l-ladies</prosody> and gentlemen,
-    and viewers at home and in the walls
-    <break time="300ms"/>
-    — Max Height, coming to you
-    <prosody rate="fast">live from the labyrinth of</prosody>
-    television<break time="100ms"/>-vision<break time="100ms"/>-vision.
-    <break time="500ms"/>
-    What'll it be?
-  </prosody>
-</speak>
-```
+- Run `pnpm --filter @max-height/frontend generate:greetings` with local AWS creds (`polly:SynthesizeSpeech`, neural + Matthew).
+- Verify: 16 files in `public/greetings/audio/`, each small (~<100 KB; no Git LFS), manifest `audioDurationMs` updated. Listen to each for character/quality.
 
-### Option B: ElevenLabs / External TTS
+### Phase 4 — Playback verification & audio-dependent tuning (TDD where logic exists)
 
-If a more expressive or custom voice is desired:
-- ElevenLabs offers voice cloning from samples (NOT from Matt Frewer — constitution P4)
-- Generate 16 MP3s via their API or web UI
-- Place files at the same paths
+- **Mouth threshold:** make `MOUTH_THRESHOLD` tunable; QA against real Polly audio and pick a value; add a boundary test for `getIsMouthOpen` with synthetic FFT data.
+- **Audio-driven timing refinement:** add a small tail buffer (e.g. +750–1000 ms) after audio completion before `isGreetingDone`, so Max's last word isn't clipped; keep text-only/TTS fallback timing sensible. TDD in `useGreeting.test.ts` / App tests.
+- **Volume knob:** already wired — verify it affects greeting audio; _optional_ enhancement: persist volume to `localStorage` (mirror theme persistence) with a test.
 
-### Option C: Manual Recording
+### Phase 5 — Validate & finalize
 
-Record a human voice actor performing the lines. Most authentic but highest effort.
+- `pnpm run validate` (lint → format:check → typecheck → build → test) must pass; confirm the generation script is excluded from the app build/typecheck.
+- Confirm this document reflects the final reality (video deferred; volume/timing done).
 
----
+## Cost & Dependency Notes
 
-## Phase 2: File Placement & Naming
+- **Cost:** ~1¢ one-time, free-tier eligible; zero runtime cost (static assets).
+- **Deps:** `tsx` (already in monorepo), `music-metadata` (pure JS, build-time only) — flag for dep-hygiene review.
+- **Credentials:** local AWS dev creds only; no CDK/infra changes, nothing deployed.
 
-All 16 MP3 files go in:
-```
-packages/frontend/public/greetings/audio/
-├── greeting-001.mp3
-├── greeting-002.mp3
-├── ...
-└── greeting-016.mp3
-```
+## Risks / Considerations
 
-These paths match the `audioPath` fields already in `manifest.json`.
+- Keep the Node script out of the browser `tsconfig`/Vite build to avoid breaking `validate` (dedicated tsconfig + excluded from app project).
+- TDD is mandatory (constitution): write failing tests first for every pure unit and behavior change.
+- SSML must stay valid Polly SSML; balance theatrical breaks against the 15 s manifest duration ceiling.
+- Re-running the script is idempotent and overwrites assets + recalibrates durations.
 
-**File format requirements:**
-- Format: MP3 (browser-universal decoding via Web Audio API)
-- Sample rate: 22050 Hz or 24000 Hz (Polly neural default)
-- Bit rate: 128 kbps (good quality, small file size)
-- Target size: 50-100 KB per greeting (6-8.5 seconds each)
+## Out of Scope (this plan)
 
----
+- Generating mp4 talking-head videos (deferred; avatar images cover the visual).
+- Re-engagement audio assets (separate manifest; parallel future task).
+- Conversation/runtime TTS changes (already implemented via `pollyTts.ts`).
 
-## Phase 3: Duration Calibration
+## Next Steps (todo list)
 
-The manifest has `audioDurationMs` for each greeting. After generating MP3s:
-
-1. Measure actual durations (e.g., with ffprobe or a script)
-2. Update `audioDurationMs` in `manifest.json` to match
-3. Consider switching `GREETING_DISPLAY_MS` to use `audioDurationMs` when audio is available:
-   - Currently: fixed 15,000ms text-only display
-   - Future: `audioDurationMs + 1000ms` buffer when audio exists
-   - Fallback: keep 15,000ms if MP3 fetch fails (404)
-
----
-
-## Phase 4: Mouth Animation Tuning
-
-The mouth sync pipeline (`audioChain.getIsMouthOpen()`) uses an analyser node to detect audio amplitude. Once real MP3s play:
-
-1. **Test mouth sensitivity** — the amplitude threshold may need tuning for Polly's output
-2. **Adjust poll rate** — currently 50ms (~20Hz), which should be sufficient for natural-looking talk frame cycling
-3. **Verify talk frame alternation** — `AvatarFrameCycler` alternates between `talk-1` and `talk-2` on each mouth-open transition. Confirm this looks natural with real audio
-4. **Laugh/side-eye timing** — these fire on random timers independent of audio. Verify they don't create jarring conflicts with talk frames (glitch > blink > talk > laugh > side-eye is the priority chain)
-
----
-
-## Phase 5: Volume Knob Integration
-
-The CRT TV frame has a volume knob UI element (right panel). Wire it to control greeting audio volume:
-
-1. Add a `volume` state to `voiceStore` (0.0–1.0, default 0.8)
-2. Connect volume knob UI to the store
-3. Pass volume to `audioChain.setVolume()` (or gain node)
-4. Apply to both greeting audio and future conversation TTS
-
----
-
-## Phase 6: Greeting-to-Conversation Transition
-
-When the backend comes online during or after the greeting:
-
-1. **During greeting:** Let the greeting finish playing (don't interrupt)
-2. **After greeting:** Transition smoothly — short pause, then conversation mode activates
-3. **Backend never connects:** After greeting ends, show "SIGNAL LOST" / color bars (already implemented)
-
-This logic is already partially built in `App.tsx` via `isGreetingDone` gating.
-
----
-
-## Implementation Order
-
-| Step | Task | Depends On |
-|------|------|------------|
-| 1 | Write `scripts/generate-greetings.ts` Polly script | AWS credentials |
-| 2 | Generate 16 MP3 files | Step 1 |
-| 3 | Place MP3s in `public/greetings/audio/` | Step 2 |
-| 4 | Verify audio plays on TV power-on | Step 3 |
-| 5 | Calibrate `audioDurationMs` in manifest | Step 3 |
-| 6 | Tune mouth animation threshold | Step 4 |
-| 7 | Switch greeting duration to audio-driven | Step 5 |
-| 8 | Wire volume knob | Step 4 |
-
----
-
-## Testing Strategy
-
-- **Unit tests:** Mock `fetch` to return a real (tiny) MP3 ArrayBuffer, verify `audioChain.play()` is called
-- **Integration tests:** Verify mouth polling starts/stops, voiceStore updates
-- **Manual QA:** Listen to each greeting, verify mouth sync looks natural, check volume knob
-- **Fallback test:** Delete an MP3, verify text-only greeting still works (existing behavior)
-
----
-
-## Notes
-
-- The audio chain already handles `AudioContext` lifecycle (user gesture requirement for autoplay). The TV power button click satisfies this.
-- Max Height's stutters should be **in the audio**, not added by post-processing. SSML `<break>` tags give precise control.
-- Keep MP3 files out of git LFS for now (16 files × ~75KB = ~1.2MB total — well under threshold).
-- Future enhancement: generate multiple takes per greeting and randomly select variants for more variety.
+1. **spec-video-optional** — Phase 0 spec/contract update (video optional/deferred).
+2. **author-ssml** — Phase 1 hand-tuned SSML module + coverage test.
+3. **gen-script-pure** — Phase 2 pure units (build SSML, calibrate, measure) via TDD.
+4. **gen-script-orchestrate** — Phase 2 Polly synth + manifest rewrite + tooling/deps/tsconfig.
+5. **generate-assets** — Phase 3 run script, commit 16 MP3s, QA.
+6. **tune-mouth-threshold** — Phase 4 mouth threshold tuning + test.
+7. **audio-driven-timing** — Phase 4 tail-buffer timing refinement + tests.
+8. **verify-volume** — Phase 4 verify volume knob (optional localStorage persistence).
+9. **validate-finalize** — Phase 5 `pnpm run validate` + docs update.
