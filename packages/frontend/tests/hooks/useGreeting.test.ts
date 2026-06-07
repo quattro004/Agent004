@@ -69,10 +69,12 @@ describe('useGreeting', () => {
     const mockAudioBuffer = {} as AudioBuffer;
     vi.stubGlobal(
       'AudioContext',
-      vi.fn().mockImplementation(() => ({
-        decodeAudioData: vi.fn().mockResolvedValue(mockAudioBuffer),
-        close: vi.fn().mockResolvedValue(undefined),
-      })),
+      vi.fn(function () {
+        return {
+          decodeAudioData: vi.fn().mockResolvedValue(mockAudioBuffer),
+          close: vi.fn().mockResolvedValue(undefined),
+        };
+      }),
     );
 
     mockAudioChain = {

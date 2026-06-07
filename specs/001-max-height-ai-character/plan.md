@@ -15,8 +15,8 @@ MVP delivers text + voice + personality + 2D placeholder avatar (SVG with binary
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.8.x on Node.js 24 LTS  
-**Primary Dependencies**: React 19.x, Vite 8.x, React Three Fiber 9.x, Zustand 5.x, `@strands-agents/sdk` (latest stable), `@aws/agentcore-cli` 0.9.1, AWS CDK 2.250+, `@aws-sdk/client-polly` v3
+**Language/Version**: TypeScript 6.0.x on Node.js 24 LTS  
+**Primary Dependencies**: React 19.2.x, Vite 8.x, React Three Fiber 9.x, Zustand 5.x, `@strands-agents/sdk` 1.4.0, `@aws/agentcore-cli` 0.9.1, AWS CDK 2.258.x, `@aws-sdk/client-polly` v3
 **Storage**: AgentCore Memory (semantic + summary + user preferences strategies), browser localStorage (visitor state, greeting history, rate limits), S3 + CloudFront (static assets)  
 **Testing**: Vitest + React Testing Library (frontend/agent), Jest + CDK assertions (infra), Playwright (E2E), AgentCore Evaluations (personality golden set)  
 **Target Platform**: Modern browsers — Chrome/Edge last 2, Safari 16+, iOS 16+, Firefox last 2, Android Chrome last 2  

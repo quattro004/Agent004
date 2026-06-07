@@ -26,12 +26,14 @@ describe('useWebSocket – enabled gate', () => {
   const originalWebSocket = globalThis.WebSocket;
 
   beforeEach(() => {
-    MockWebSocket = vi.fn().mockImplementation(() => ({
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      close: vi.fn(),
-      readyState: 0,
-    }));
+    MockWebSocket = vi.fn(function () {
+      return {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        close: vi.fn(),
+        readyState: 0,
+      };
+    });
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
   });
 

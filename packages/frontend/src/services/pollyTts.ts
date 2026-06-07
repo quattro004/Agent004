@@ -168,3 +168,13 @@ async function synthesizeVisemesSafe(ssml: string): Promise<VisemeMark[] | null>
     return null;
   }
 }
+
+// --- Testing Support ---
+
+/**
+ * Reset the Polly client singleton. Used only for testing.
+ * @internal
+ */
+export function __resetPollyClient() {
+  pollyClient = null;
+}

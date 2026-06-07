@@ -130,10 +130,12 @@ describe('useAudio', () => {
     const mockClose = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal(
       'AudioContext',
-      vi.fn().mockImplementation(() => ({
-        decodeAudioData: mockDecodeAudioData,
-        close: mockClose,
-      })),
+      vi.fn(function () {
+        return {
+          decodeAudioData: mockDecodeAudioData,
+          close: mockClose,
+        };
+      }),
     );
 
     const audio = createUseAudio(mockAudioChain);

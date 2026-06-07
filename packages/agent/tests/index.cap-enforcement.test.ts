@@ -15,13 +15,17 @@ vi.mock('@strands-agents/sdk', () => {
       content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
     },
   });
-  const Agent = vi.fn().mockImplementation(() => ({ invoke: invokeMock }));
+  const Agent = vi.fn(function () {
+    return { invoke: invokeMock };
+  });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
   return { Agent, tool, __invokeMock: invokeMock };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
-  BedrockModel: vi.fn().mockImplementation((cfg) => ({ ...cfg })),
+  BedrockModel: vi.fn(function (cfg) {
+    return { ...cfg };
+  }),
 }));
 
 vi.mock('../src/tools/newsTool.js', () => ({ newsToolSchema: {}, fetchNews: vi.fn() }));

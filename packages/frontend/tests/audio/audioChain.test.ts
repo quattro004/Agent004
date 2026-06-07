@@ -28,14 +28,18 @@ describe('audioChain — iOS AudioContext unlock', () => {
       close: vi.fn(),
     };
 
-    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: { postMessage: vi.fn() },
-    }));
+    const MockAudioWorkletNode = vi.fn(function () {
+      return {
+        connect: vi.fn(),
+        port: { postMessage: vi.fn() },
+      };
+    });
 
     vi.stubGlobal(
       'AudioContext',
-      vi.fn(() => mockAudioContext),
+      vi.fn(function () {
+        return mockAudioContext;
+      }),
     );
     vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
 
@@ -69,14 +73,15 @@ describe('audioChain — iOS AudioContext unlock', () => {
       close: vi.fn(),
     };
 
-    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: { postMessage: vi.fn() },
-    }));
+    const MockAudioWorkletNode = vi.fn(function () {
+      return { connect: vi.fn(), port: { postMessage: vi.fn() } };
+    });
 
     vi.stubGlobal(
       'AudioContext',
-      vi.fn(() => mockAudioContext),
+      vi.fn(function () {
+        return mockAudioContext;
+      }),
     );
     vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
 
@@ -119,14 +124,15 @@ describe('audioChain — iOS AudioContext unlock', () => {
       close: vi.fn(),
     };
 
-    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: { postMessage: vi.fn() },
-    }));
+    const MockAudioWorkletNode = vi.fn(function () {
+      return { connect: vi.fn(), port: { postMessage: vi.fn() } };
+    });
 
     vi.stubGlobal(
       'AudioContext',
-      vi.fn(() => mockAudioContext),
+      vi.fn(function () {
+        return mockAudioContext;
+      }),
     );
     vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
 
@@ -168,12 +174,13 @@ describe('audioChain — iOS AudioContext unlock', () => {
       close: vi.fn(),
     };
 
-    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: { postMessage: vi.fn() },
-    }));
+    const MockAudioWorkletNode = vi.fn(function () {
+      return { connect: vi.fn(), port: { postMessage: vi.fn() } };
+    });
 
-    const audioContextCtor = vi.fn(() => mockAudioContext);
+    const audioContextCtor = vi.fn(function () {
+      return mockAudioContext;
+    });
     vi.stubGlobal('AudioContext', audioContextCtor);
     vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
 
@@ -209,14 +216,15 @@ describe('audioChain — iOS AudioContext unlock', () => {
       close: vi.fn(),
     };
 
-    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: { postMessage: vi.fn() },
-    }));
+    const MockAudioWorkletNode = vi.fn(function () {
+      return { connect: vi.fn(), port: { postMessage: vi.fn() } };
+    });
 
     vi.stubGlobal(
       'AudioContext',
-      vi.fn(() => mockAudioContext),
+      vi.fn(function () {
+        return mockAudioContext;
+      }),
     );
     vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
 
@@ -252,13 +260,14 @@ describe('audioChain — volume control', () => {
       destination: {},
       close: vi.fn(),
     };
-    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: { postMessage: vi.fn() },
-    }));
+    const MockAudioWorkletNode = vi.fn(function () {
+      return { connect: vi.fn(), port: { postMessage: vi.fn() } };
+    });
     vi.stubGlobal(
       'AudioContext',
-      vi.fn(() => mockAudioContext),
+      vi.fn(function () {
+        return mockAudioContext;
+      }),
     );
     vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
     return { gainParam, gainNode, mockAudioContext };
@@ -354,13 +363,14 @@ describe('audioChain — static noise (tune-in)', () => {
       destination: {},
       close: vi.fn(),
     };
-    const MockAudioWorkletNode = vi.fn().mockImplementation(() => ({
-      connect: vi.fn(),
-      port: { postMessage: vi.fn() },
-    }));
+    const MockAudioWorkletNode = vi.fn(function () {
+      return { connect: vi.fn(), port: { postMessage: vi.fn() } };
+    });
     vi.stubGlobal(
       'AudioContext',
-      vi.fn(() => mockAudioContext),
+      vi.fn(function () {
+        return mockAudioContext;
+      }),
     );
     vi.stubGlobal('AudioWorkletNode', MockAudioWorkletNode);
     return { gainNode, noiseSource, noiseBuffer, sampleData, mockAudioContext };

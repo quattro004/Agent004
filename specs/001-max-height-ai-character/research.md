@@ -2,7 +2,7 @@
 
 **Feature**: 001-max-height-ai-character
 **Date**: 2026-04-20
-**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-04-22 with Node.js 24 LTS upgrade (Node 20 EOL April 30, 2026), TypeScript pinned to 5.8.x for MVP stability, Vite patch bump. Previously updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, version refresh, and spec clarification session 2.
+**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-06-07 with dependency upgrade to latest stable (TS 6.0.3, React 19.2.7, CDK 2.258.0, Strands SDK 1.4.0, Vitest 4.1.8 security fix). Previously updated 2026-04-22 with Node.js 24 LTS upgrade (Node 20 EOL April 30, 2026), TypeScript pinned to 5.8.x for MVP stability, Vite patch bump. Previously updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, version refresh, and spec clarification session 2.
 
 ---
 
@@ -29,14 +29,14 @@
 
 | Package | Version | Notes |
 |---------|---------|-------|
-| React | 19.x (19.2.5) | Latest stable |
-| Vite | 8.x (8.0.9) | Rolldown bundler (Rust-based) |
-| TypeScript | 5.8.x (5.8.2) | Latest stable 5.x — TS 6.0 available but deferred to post-MVP for ecosystem maturity |
-| Zustand | 5.x (5.0.12) | Latest stable |
+| React | 19.x (19.2.7) | Latest stable |
+| Vite | 8.x (8.0.16) | Rolldown bundler (Rust-based) |
+| TypeScript | 6.0.x (6.0.3) | Latest stable — upgrade from 5.8.x (post-MVP adoption) |
+| Zustand | 5.x (5.0.14) | Latest stable |
 | React Three Fiber | 9.x | R3F v9 = React 19 compatible; used in MVP for CRT shader + wireframe backdrop |
-| `@strands-agents/sdk` | Latest stable | TypeScript, production-ready |
+| `@strands-agents/sdk` | 1.4.0 | Latest stable (upgraded from 1.0.0-rc.5) |
 | `@aws/agentcore-cli` | 0.9.1 | GA, recommended for new projects |
-| AWS CDK | 2.x (2.250.0) | Latest stable |
+| AWS CDK | 2.x (2.258.0) | Latest stable (upgraded from 2.250.0) |
 | Node.js | 24 LTS (24.15.0) | Active LTS through April 2028 — Node 20 EOL April 30, 2026. Strands TS SDK requires Node 20+; 22 confirmed, 24 expected compatible. |
 
 ### Cost Model (Claude Haiku 4.5 + Polly Neural)

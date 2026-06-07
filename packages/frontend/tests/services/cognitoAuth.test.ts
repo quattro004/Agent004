@@ -8,9 +8,11 @@ import {
 
 // Mock the AWS SDK
 vi.mock('@aws-sdk/client-cognito-identity', () => ({
-  CognitoIdentityClient: vi.fn().mockImplementation(() => ({
-    send: vi.fn(),
-  })),
+  CognitoIdentityClient: vi.fn(function () {
+    return {
+      send: vi.fn(),
+    };
+  }),
   GetIdCommand: vi.fn(),
   GetCredentialsForIdentityCommand: vi.fn(),
 }));

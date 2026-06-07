@@ -26,14 +26,16 @@ describe('browserTts', () => {
       configurable: true,
     });
     Object.defineProperty(globalThis, 'SpeechSynthesisUtterance', {
-      value: vi.fn().mockImplementation((text: string) => ({
-        text,
-        voice: null,
-        pitch: 1,
-        rate: 1,
-        onend: null,
-        onerror: null,
-      })),
+      value: vi.fn(function (text: string) {
+        return {
+          text,
+          voice: null,
+          pitch: 1,
+          rate: 1,
+          onend: null,
+          onerror: null,
+        };
+      }),
       writable: true,
       configurable: true,
     });

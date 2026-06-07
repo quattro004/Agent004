@@ -2,20 +2,24 @@ import { describe, it, expect, vi } from 'vitest';
 
 // Mock the SDK to avoid real AWS calls
 vi.mock('@strands-agents/sdk', () => {
-  const Agent = vi.fn().mockImplementation((config) => ({
-    config,
-    invoke: vi.fn().mockResolvedValue({
-      lastMessage: {
-        content: [{ type: 'textBlock', text: 'Hello from Max Height!' }],
-      },
-    }),
-  }));
+  const Agent = vi.fn(function (config) {
+    return {
+      config,
+      invoke: vi.fn().mockResolvedValue({
+        lastMessage: {
+          content: [{ type: 'textBlock', text: 'Hello from Max Height!' }],
+        },
+      }),
+    };
+  });
   const tool = vi.fn().mockImplementation((config) => ({ ...config, __tool: true }));
   return { Agent, tool };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => {
-  const BedrockModel = vi.fn().mockImplementation((config) => ({ ...config, __model: true }));
+  const BedrockModel = vi.fn(function (config) {
+    return { ...config, __model: true };
+  });
   return { BedrockModel };
 });
 

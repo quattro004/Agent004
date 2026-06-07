@@ -12,7 +12,7 @@
 | Node.js | 24 LTS | [nodejs.org](https://nodejs.org/) |
 | pnpm | 11+ | `npm install -g pnpm@11.0.8` |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
-| AWS CDK CLI | 2.250+ | `npm install -g aws-cdk` |
+| AWS CDK CLI | 2.258+ | `npm install -g aws-cdk` |
 | AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |
 | Docker | 24+ | [docker.com](https://www.docker.com/) |
 
@@ -215,7 +215,7 @@ Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/
 | Problem | Solution |
 |---------|----------|
 | `zod` peer dependency error | Add `"overrides": { "zod": "^4.3.6" }` to root `package.json`, then `pnpm install`. |
-| CDK bootstrap error | Ensure CDK CLI ≥ 2.250.0 and correct AWS region |
+| CDK bootstrap error | Ensure CDK CLI ≥ 2.258.0 and correct AWS region |
 | Polly "not authorized" | Check Cognito guest role has `polly:SynthesizeSpeech` |
 | WebSocket connection fails | Verify presigned URL generation, check Cognito identity pool |
 | Agent cold start > 5s | Check container image size (target < 200MB) |

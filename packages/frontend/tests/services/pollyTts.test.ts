@@ -1,21 +1,38 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { synthesizeTurn, wrapInSsml, truncateText } from '../../src/services/pollyTts';
+import {
+  synthesizeTurn,
+  wrapInSsml,
+  truncateText,
+  __resetPollyClient,
+} from '../../src/services/pollyTts';
 
 // Mock the @aws-sdk/client-polly module
-const mockSend = vi.fn();
+const { mockSend, mockSynthesizeSpeechCommand } = vi.hoisted(() => {
+  const mockCmd = vi.fn(function (params) {
+    return {
+      ...params,
+      _type: 'SynthesizeSpeechCommand',
+    };
+  });
+  return {
+    mockSend: vi.fn(),
+    mockSynthesizeSpeechCommand: mockCmd,
+  };
+});
+
 vi.mock('@aws-sdk/client-polly', () => ({
-  PollyClient: vi.fn().mockImplementation(() => ({
-    send: mockSend,
-  })),
-  SynthesizeSpeechCommand: vi.fn().mockImplementation((params) => ({
-    ...params,
-    _type: 'SynthesizeSpeechCommand',
-  })),
+  PollyClient: vi.fn(function () {
+    return {
+      send: mockSend,
+    };
+  }),
+  SynthesizeSpeechCommand: mockSynthesizeSpeechCommand,
 }));
 
 describe('pollyTts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetPollyClient();
   });
 
   describe('wrapInSsml', () => {
@@ -48,6 +65,17 @@ describe('pollyTts', () => {
   });
 
   describe('synthesizeTurn', () => {
+    it('should create SynthesizeSpeechCommand for audio', async () => {
+      const audioBlob = new Uint8Array([1, 2, 3, 4]);
+      mockSend.mockResolvedValueOnce({
+        AudioStream: { transformToByteArray: () => Promise.resolve(audioBlob) },
+      });
+
+      await synthesizeTurn('Hello');
+
+      expect(mockSynthesizeSpeechCommand).toHaveBeenCalled();
+    });
+
     it('should make dual Promise.all calls for audio and viseme', async () => {
       const audioBlob = new Uint8Array([1, 2, 3, 4]);
       const visemeData = '{"time":0,"type":"viseme","value":"p"}\n';
