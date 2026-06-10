@@ -341,7 +341,7 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 - [ ] T102 [P] Implement Content Security Policy headers in packages/infra/lib/frontend-stack.ts (CloudFront response headers policy: script-src self, connect-src for WebSocket endpoint + Polly + Cognito, img-src self + data:, style-src self unsafe-inline for CRT effects, media-src self for greeting audio)
 - [ ] T103 [P] Add robots.txt and meta noindex in packages/frontend/public/robots.txt (Disallow: /) and packages/frontend/index.html (<meta name="robots" content="noindex, nofollow">) for unlisted URL per spec §Security
-- [ ] T104 [P] Create CI pipeline in .github/workflows/ci.yml (steps: checkout, Node 24 setup, pnpm install --frozen-lockfile, pnpm run lint, pnpm run typecheck, pnpm test for all packages — Vitest frontend+agent, Jest infra, pnpm run build, greeting manifest validation, pnpm audit per constitution P6)
+- [x] T104 [P] Create CI pipeline in .github/workflows/ci.yml (steps: checkout, Node 24 setup, pnpm install --frozen-lockfile, pnpm run lint, pnpm run typecheck, pnpm test for all packages — Vitest frontend+agent, Jest infra, pnpm run build, greeting manifest validation, pnpm audit per constitution P6)
 
 ### Performance + Validation
 
