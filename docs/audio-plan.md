@@ -58,12 +58,45 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
   - `calibrateDurations(manifest, measuredMsById)` — clamp to [1000, 15000], round, return updated manifest; preserve unrelated fields/order.
   - `measureMp3DurationMs(buffer)` — thin wrapper over `music-metadata` (parser injectable for tests).
   - SSML-coverage guard reused from Phase 1.
-- **Orchestration:** read manifest → for each greeting synth via Polly (`SynthesizeSpeechCommand`, neural / Matthew / mp3 / 24k, `TextType:'ssml'`; client injectable + mocked in tests like `pollyTts.test.ts`) → write `public/greetings/audio/greeting-NNN.mp3` → measure → rewrite manifest durations. Flags: `--dry-run`, `--only <id>`. Uses default AWS credential chain (local profile/env) — no new infra, no deployed resources.
+- **Orchestration:** read manifest → for each greeting synth via Polly (`SynthesizeSpeechCommand`, neural / Matthew / mp3 / 24k, `TextType:'ssml'`; client injectable + mocked in tests like `pollyTts.test.ts`) → write `public/greetings/audio/greeting-NNN.mp3` → measure → rewrite manifest durations. Flags: `--dry-run`, `--only <id>`. No new infra, no deployed resources.
+  - **Region:** don't hardcode a region in the `PollyClient` — let it resolve from the environment/profile (`AWS_REGION` or the active profile) so the Phase 3 credential setup drives it.
 
 ### Phase 3 — Generate & commit assets
 
-- Run `pnpm --filter @max-height/frontend generate:greetings` with local AWS creds (`polly:SynthesizeSpeech`, neural + Matthew).
-- Verify: 16 files in `public/greetings/audio/`, each small (~<100 KB; no Git LFS), manifest `audioDurationMs` updated. Listen to each for character/quality.
+Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with a session token) carrying `polly:SynthesizeSpeech` — **no long-lived IAM user keys (`AKIA…`) on disk, ever**. We use **IAM Identity Center (SSO)**: you log in via the browser, and the AWS SDK derives short-lived `ASIA` credentials from the SSO session — there is no long-lived key to bootstrap from. This is the no-long-lived-key path from the AWS guide [Use temporary credentials with AWS resources](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_use-resources.html). (The guide's local STS-`AssumeRole` examples quietly bootstrap from an `AKIA` IAM user; SSO avoids that.) Starting state assumed: an AWS account exists, but **nothing is configured locally**.
+
+- **One-time setup in AWS (console)**
+  - Enable **IAM Identity Center** (choose a region).
+  - Create an Identity Center **user** for yourself.
+  - Create a **permission set** (e.g. `MaxHeightPolly`) whose policy grants `polly:SynthesizeSpeech`, scoped to the generation Region for least privilege:
+    ```json
+    { "Effect": "Allow", "Action": "polly:SynthesizeSpeech", "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "us-west-2" } } }
+    ```
+    This is the only permission the script needs. Identity Center materializes the permission set as a managed role, so a separate hand-made role is **not** required.
+  - **Assign** your user → your AWS account → the `MaxHeightPolly` permission set.
+
+- **One-time setup on the laptop**
+  - Install the **AWS CLI v2** — required here for the browser login (`aws sso login`), not as a runtime dependency of the script.
+  - `aws configure sso` — enter the SSO start URL + region, pick the account + `MaxHeightPolly` permission set, set region `us-west-2`, and name the profile `max-height`. This writes only SSO config (no secret keys) to `~/.aws/config`.
+
+- **Each session — get temporary creds and run**
+  - `aws sso login --profile max-height` (opens the browser; caches a short-lived SSO token — no `AKIA` key on disk).
+  - Point the SDK at the profile and run in the same shell (Windows `cmd`: `SET AWS_PROFILE=max-height`; PowerShell: `$env:AWS_PROFILE="max-height"`):
+    `pnpm --filter @max-height/frontend generate:greetings`
+  - The SDK derives `ASIA` temporary credentials from the SSO session automatically; the script does not call `AssumeRole` in code.
+  - When the SSO session expires, re-run `aws sso login --profile max-height`. The generate script is idempotent, so re-running is safe.
+
+- **Verify**
+  - `aws sts get-caller-identity` should show the Identity Center role session (an assumed-role ARN), and the active credentials should be `ASIA…`.
+
+- **Region & STS notes**
+  - Keep the profile on an **enabled-by-default** Region (we use `us-west-2`, where Polly is available and STS is always active). With a region set, the SDK uses the **regional STS endpoint** automatically (AWS-recommended over the global endpoint) — no extra config.
+  - Only relevant if you ever switch to an **opt-in** Region (e.g. Hong Kong): you must enable that Region (and thus STS) for the account first, or the SSO/STS calls will fail.
+  - The SSO permission-set session (default ~1h) easily covers this one-shot generation; if it lapses, just re-run `aws sso login --profile max-height`.
+
+- Verify output: 16 files in `public/greetings/audio/`, each small (~<100 KB; no Git LFS), manifest `audioDurationMs` updated. Listen to each for character/quality.
+- **Commit** the 16 generated MP3s in `public/greetings/audio/` together with the updated `public/greetings/manifest.json` (recalibrated `audioDurationMs`) as static assets.
 
 ### Phase 4 — Playback verification & audio-dependent tuning (TDD where logic exists)
 
@@ -80,12 +113,12 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 
 - **Cost:** ~1¢ one-time, free-tier eligible; zero runtime cost (static assets).
 - **Deps:** `tsx` (already in monorepo), `music-metadata` (pure JS, build-time only) — flag for dep-hygiene review.
-- **Credentials:** local AWS dev creds only; no CDK/infra changes, nothing deployed.
+- **Credentials:** use **IAM Identity Center (SSO)** temporary `ASIA` credentials (`aws sso login`) for generation — no long-lived `AKIA` keys on disk; no CDK/infra changes, nothing deployed.
 
 ## Risks / Considerations
 
 - Keep the Node script out of the browser `tsconfig`/Vite build to avoid breaking `validate` (dedicated tsconfig + excluded from app project).
-- TDD is mandatory (constitution): write failing tests first for every pure unit and behavior change.
+- TDD is mandatory (constitution) for code: write failing tests first for every pure unit and behavior change. Don't need TDD for non-code related items like asset generation, documentation updates, simple UI CSS styling tweaks etc.
 - SSML must stay valid Polly SSML; balance theatrical breaks against the 15 s manifest duration ceiling.
 - Re-running the script is idempotent and overwrites assets + recalibrates durations.
 
