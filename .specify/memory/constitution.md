@@ -1,23 +1,28 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.1.0 → 1.2.0
-  Bump rationale : MINOR — Technology Stack table amended (LLM
-                   row changed from specific model to tier-based;
-                   IaC row updated to include AgentCore CLI).
+  Version change : 1.2.0 → 1.3.0
+  Bump rationale : MINOR — Added P11 (Credential & Secret
+                   Hygiene) and a corresponding Quality Gate #7.
 
   Modified principles : None.
 
-  Modified sections:
-    - Technology Stack table (LLM row, IaC row).
+  Added:
+    - P11 Credential & Secret Hygiene.
+    - Quality Gate #7 (Credential gate).
 
-  Added/Removed : None.
+  Modified sections:
+    - Core Principles (new P11).
+    - Quality Gates (new gate #7).
 
   Templates requiring updates:
-    ✅ plan.md — updated; spec.md and tasks template unaffected.
+    ✅ quickstart.md — local credential guidance updated to
+       IAM Identity Center (SSO), temporary credentials.
+    ✅ contracts/polly-tts.md — runtime IAM scoped by
+       aws:RequestedRegion.
 
-  Follow-up TODOs : plan.md and research.md already reference
-    Claude Haiku 4.5 as the specific model.
+  Follow-up TODOs : Review remaining IAM statements (Cognito
+    guest role in cognito-stack.ts) for region scoping.
 -->
 
 # Max Height Constitution
@@ -151,6 +156,24 @@ eyes. Automated tests are the substitute for code review
 confidence. They also protect against personality and behavior
 regressions that traces alone cannot catch.
 
+### P11. Credential & Secret Hygiene
+
+- Local/developer AWS access MUST use **temporary**
+  credentials via IAM Identity Center (SSO). Long-lived IAM
+  user access keys (`AKIA…`) MUST NOT be written to disk or
+  committed.
+- Runtime access MUST use scoped temporary credentials
+  (Cognito guest), consistent with P7.
+- IAM permissions MUST follow least privilege — scoped by
+  action and, where supported, by `aws:RequestedRegion` and
+  service conditions (e.g., `polly:Engine`, `polly:VoiceId`).
+- Application secrets (API keys) MUST live in SSM
+  SecureString or environment variables, never in source.
+
+**Rationale**: A solo project has no security team. Temporary,
+least-privilege, region-scoped credentials limit the blast
+radius if a laptop, token, or repository is compromised.
+
 ## Technology Stack
 
 | Layer | Technology |
@@ -200,6 +223,10 @@ The following gates MUST pass before work proceeds past them:
    per P10. Exemptions for trivial glue code MUST be justified
    in the PR description.
 
+7. **Credential gate**: No long-lived AWS keys committed or
+   stored on disk; IAM statements MUST be least-privilege and
+   region-scoped where supported, per P11.
+
 ## Governance
 
 This constitution is the supreme governing document for the
@@ -233,4 +260,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-04-20
+**Version**: 1.3.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-06-13

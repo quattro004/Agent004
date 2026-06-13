@@ -41,8 +41,11 @@ git clone <repo-url>
 cd Agent004
 pnpm install                     # See note below if Zod peer conflict arises
 
-# Configure AWS credentials
-aws configure                    # Or use SSO / env vars
+# Configure AWS credentials — IAM Identity Center (SSO), temporary credentials only.
+# Do NOT use long-lived IAM user access keys (AKIA…) on disk or in the repo. See constitution P11.
+aws configure sso                # one-time: creates an SSO profile (no secret keys written to disk)
+aws sso login --profile <name>   # per session: fetch temporary (ASIA…) credentials
+export AWS_PROFILE=<name>         # point the SDK/CLI at the SSO profile
 
 # Bootstrap CDK (first time only)
 cd packages/infra
@@ -158,7 +161,7 @@ cd packages/frontend && pnpm run test:e2e   # Playwright
 
 | Variable | Description | Required for |
 |----------|-------------|--------------|
-| `AWS_REGION` | Target AWS region | Agent, Infra |
+| `AWS_REGION` | Target AWS region (default `us-west-2`) | Agent, Infra, build scripts |
 | `VITE_WS_ENDPOINT` | WebSocket API URL (set after deploy) | Frontend (prod) |
 | `VITE_COGNITO_IDENTITY_POOL_ID` | Cognito pool ID (set after deploy) | Frontend (prod) |
 | `VITE_MOCK_AGENT` | `true` for local UI dev without backend | Frontend (dev) |

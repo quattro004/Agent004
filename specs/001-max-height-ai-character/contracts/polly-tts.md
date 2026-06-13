@@ -186,10 +186,11 @@ When the $8 soft-degrade threshold is reached and Polly is disabled, the fronten
   "Condition": {
     "StringEquals": {
       "polly:Engine": "neural",
-      "polly:VoiceId": "Matthew"
+      "polly:VoiceId": "Matthew",
+      "aws:RequestedRegion": "us-west-2"
     }
   }
 }
 ```
 
-Scoped to Neural engine + Matthew voice only. Prevents abuse via other voices/engines.
+Scoped to Neural engine + Matthew voice in `us-west-2` only. Prevents abuse via other voices/engines or out-of-region calls.
