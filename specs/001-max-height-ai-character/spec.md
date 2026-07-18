@@ -28,7 +28,7 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 ### Session 2026-04-19
 
 - Q: What is the MVP 2D avatar animation scope? → A: Mouth-open/closed binary state synced to audio playback. Full viseme lip-sync (FR-006 100ms P95) deferred to V1 3D avatar.
-- Q: What is the greeting generation strategy? → A: Pre-generated pool (text + Polly audio + short video/GIF of Max animating) randomly selected on TV-on. LLM initialized in background during greeting playback.
+- Q: What is the greeting generation strategy? → A: Pre-generated pool (text + Polly audio + short video/GIF of Max animating) randomly selected on TV-on. LLM initialized in background during greeting playback. (Update 2026-07-18: the short video/GIF is **deferred** — the avatar image is the current MVP visual; see the 2026-07-18 iteration log.)
 - Q: What is the conversation UI model? → A: Broadcast mode — TV screen shows only Max's current response (text + avatar). No scrollable history. Text input and mic always visible below TV.
 - Q: How does user interruption work? → A: Interrupt stops Max immediately. New input processed. Max may acknowledge interruption in-character. Partial text remains until replaced.
 - Q: What is the transient backend failure retry behavior? → A: One silent auto-retry within 3 seconds. If retry fails, show in-character "signal lost" error. Visitor retries manually by sending another message.
@@ -104,6 +104,17 @@ Scenarios below are tagged `[MVP]` / `[V1]` / `[V1.x]`. MVP ship gate = all `[MV
 **Tasks added**: T140, T141, T142, T143, T144, T145, T146, T147
 **Tasks removed**: —
 **Tasks marked complete**: —
+
+### Iteration 2026-07-18: Greeting video optional / deferred (avatar images now)
+
+**Change**: Make greeting talking-head mp4 videos optional and deferred. The MVP greeting ships with text + pre-synthesized Polly audio + Max's avatar image as the visual; the `videoPath` mp4 becomes a future "if cost-effective" addition rather than a hard requirement. Video is deferred, not removed — the schema still permits `videoPath` and existing manifest entries are kept as forward-looking placeholders.
+**Rationale**: "Avatar images now, mp4s later if cost-effective." Polly greeting audio is a one-time ~1¢ (free-tier-eligible) generation committed as static assets → zero runtime cost. The expensive talking-head mp4s are replaced by existing avatar images for the MVP visual, so `videoPath` stays in the schema as optional/deferred rather than being removed.
+**Scope**: Feature-wide (documentation/spec-only alignment — video deferred, not deleted)
+**Artifacts updated**: spec.md (FR-002, greeting-strategy clarification), contracts/greeting-manifest.md, data-model.md
+**Tasks added**: —
+**Tasks removed**: —
+**Tasks marked complete**: —
+**Forward note**: The re-engagement manifest (`contracts/re-engagement-manifest.md`, added in the 2026-04-30 iteration) carries the same required `videoPath` pattern. Applying the identical optional/deferred treatment there is a **parallel follow-up**, out of scope for this iteration. The historical 2026-04-30 log entry is left unchanged.
 
 ---
 
@@ -239,7 +250,7 @@ Max's on-screen appearance is part of the character, not a later styling decisio
 ### Functional Requirements
 
 - **FR-001**: The page MUST present a CRT television set with a "Turn on the TV" knob as the single entry-point gesture to begin the experience.
-- **FR-002**: Max MUST deliver an unprompted in-character greeting within 2 seconds (P95) of the TV-on gesture, in both voice and on-screen text. Greetings are served from a pre-generated pool of variants (text + pre-synthesized Polly audio + short animated video/GIF of Max's head), randomly selected on TV-on. The LLM agent MUST be initialized in the background during greeting playback, ready for the visitor's first real input.
+- **FR-002**: Max MUST deliver an unprompted in-character greeting within 2 seconds (P95) of the TV-on gesture, in both voice and on-screen text. Greetings are served from a pre-generated pool of variants (text + pre-synthesized Polly audio + Max's avatar image as the current visual). A short animated video/GIF of Max's head is **DEFERRED** — a future "if cost-effective" addition, not a hard requirement — so the greeting pool ships with avatar images rather than talking-head video. Greetings are randomly selected on TV-on. The LLM agent MUST be initialized in the background during greeting playback, ready for the visitor's first real input.
 - **FR-003**: If the visitor is silent after the greeting, Max MUST deliver exactly one idle nudge (in-character) within a randomized 4–10 second window (uniform distribution). No further nudges after this first one. Note: this post-greeting nudge is independent of the mid-session idle re-engagement system defined in `docs/max-personality-bible.md` §5.1, which operates at 90–120s idle timescales.
 - **FR-004**: Max MUST begin replying within 1.5 seconds (P95) of the user finishing input.
 - **FR-005**: Voice audio MUST begin within 2.5 seconds (P95) of input end.

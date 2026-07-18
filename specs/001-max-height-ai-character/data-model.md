@@ -124,6 +124,8 @@ A pre-generated greeting from the pool. Immutable static assets deployed with th
 
 **Storage**: `/public/greetings/manifest.json` + `/public/greetings/audio/*.mp3`
 
+> **Note**: `videoPath` is an **optional/deferred** field in the greeting manifest schema — it is intentionally omitted from the field table above because avatar images are the current MVP visual. Talking-head mp4s are a future, cost-gated ("if cost-effective") addition; the schema still permits `videoPath` and existing manifest entries are kept as forward-looking placeholders. See `contracts/greeting-manifest.md`.
+
 ### GreetingArchetype (enum)
 
 Per personality bible §5:

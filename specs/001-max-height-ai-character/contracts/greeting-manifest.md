@@ -8,7 +8,7 @@
 
 ## Overview
 
-Greetings are pre-generated static assets deployed with the frontend. The manifest file at `/public/greetings/manifest.json` describes the pool. Each greeting includes text, a pre-synthesized MP3 audio file, and a short talking-head video clip of Max animating (per FR-002).
+Greetings are pre-generated static assets deployed with the frontend. The manifest file at `/public/greetings/manifest.json` describes the pool. Each greeting includes text and a pre-synthesized MP3 audio file, with Max's **avatar image** serving as the current MVP visual (per FR-002). A short talking-head video clip (`videoPath`) is an **optional, deferred** future addition — added only if it proves cost-effective — so the mp4 files are not required for the MVP.
 
 ---
 
@@ -22,9 +22,9 @@ public/
       greeting-001.mp3
       greeting-002.mp3
       ...
-    video/
-      greeting-001.mp4
-      greeting-002.mp4
+    video/                     # optional / deferred — not required for MVP
+      greeting-001.mp4         # optional / future
+      greeting-002.mp4         # optional / future
       ...
 ```
 
@@ -70,7 +70,7 @@ public/
   "definitions": {
     "Greeting": {
       "type": "object",
-      "required": ["id", "archetype", "text", "audioPath", "audioDurationMs", "videoPath"],
+      "required": ["id", "archetype", "text", "audioPath", "audioDurationMs"],
       "properties": {
         "id": {
           "type": "string",
@@ -111,7 +111,7 @@ public/
         "videoPath": {
           "type": "string",
           "pattern": "^video/greeting-\\d{3}\\.mp4$",
-          "description": "Relative path to short talking-head video clip"
+          "description": "Optional/deferred: relative path to a short talking-head video clip. Not required for MVP (avatar image is the current visual); the referenced mp4 need not exist. Retained as a forward-looking placeholder for a future 'if cost-effective' addition."
         },
         "weight": {
           "type": "number",
@@ -159,7 +159,7 @@ If all greetings are filtered out (small pool + frequent visits), reset the no-r
 | No repeat within 3 sessions | Filter by visitor's `greetingHistory` | FR-002 |
 | Text length | 40–100 words | data-model.md |
 | Audio exists | `audioPath` must resolve to valid MP3 | Build-time validation |
-| Video exists | `videoPath` must resolve to valid MP4 | Build-time validation |
+| Video exists (CONDITIONAL) | If `videoPath` is present, it SHOULD resolve to a valid MP4; the referenced file is NOT required to exist (video deferred) | Build-time validation (conditional) |
 | Each archetype represented | At least 2 greetings per archetype value | Pool completeness + spec clarification |
 
 ---
@@ -169,7 +169,7 @@ If all greetings are filtered out (small pool + frequent visits), reset the no-r
 A CI step should validate:
 1. `manifest.json` passes the JSON Schema above.
 2. Every `audioPath` resolves to an existing `.mp3` file.
-3. Every `videoPath` resolves to an existing `.mp4` file.
+3. (CONDITIONAL) Only when a `videoPath` is present: it SHOULD point at a valid `.mp4`, but the build MUST NOT fail if the referenced file is absent (video deferred). Greetings without a `videoPath` are skipped by this check.
 4. All 8 archetypes have at least 2 greetings each (16 total minimum).
 5. No duplicate `id` values.
 6. All `audioDurationMs` values are within ±500ms of actual MP3 duration.
