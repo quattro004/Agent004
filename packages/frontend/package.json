@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && tsc -p scripts/tsconfig.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "typecheck:scripts": "tsc -p scripts/tsconfig.json",
+    "generate:greetings": "tsx scripts/generate-greetings.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity": "^3.1063.0",
@@ -23,10 +25,13 @@
     "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/node": "25.9.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "jsdom": "^29.1.1",
+    "music-metadata": "^11.14.0",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
     "vitest": "^4.1.8"

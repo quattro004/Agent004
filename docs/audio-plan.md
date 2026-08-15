@@ -18,9 +18,9 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 | Volume knob UI → store → `audioChain.setVolume`                 | ✅ **Already wired**                                                        | `components/VolumeKnob.tsx`, `App.tsx:92,161-164,311`        |
 | Audio-driven greeting timing                                    | ✅ **Already uses `audioDurationMs`**; `GREETING_DISPLAY_MS` is text-only fallback | `App.tsx:143`, `useGreeting.ts:159`                  |
 | **16 greeting MP3 files**                                       | ❌ **Missing**                                                              | `public/greetings/audio/` (does not exist)                  |
-| **Generation script**                                           | ❌ **Missing**                                                              | n/a                                                          |
+| **Generation script**                                           | ✅ **Built** (Phase 2 complete)                                             | `scripts/generate-greetings.ts`, `scripts/greetingGenCore.ts` |
 | `@aws-sdk/client-polly` dependency                              | ✅ Present                                                                  | `packages/frontend/package.json`                            |
-| `tsx` runner                                                    | ✅ In monorepo (agent pkg)                                                  | `packages/agent`                                            |
+| `tsx` runner                                                    | ✅ In monorepo (agent + frontend)                                           | `packages/agent`, `packages/frontend`                       |
 | Greeting-manifest file-existence validation                     | ❌ None (only re-engagement, pattern-only)                                  | —                                                            |
 
 **Implication:** committing audio-only assets will NOT break `pnpm run validate`. The spec/contract still _describe_ video as required, so we align them (non-blocking).
@@ -35,7 +35,7 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 
 ## Phases & Tasks
 
-### Phase 0 — Spec alignment (speckit iterate) — _non-blocking, do first for accuracy_
+### Phase 0 — Spec alignment (speckit iterate) — _non-blocking, do first for accuracy_ ✅ DONE
 
 - Run `/speckit.iterate.define` then `/speckit.iterate.apply` to:
   - Make `videoPath` **optional** in `contracts/greeting-manifest.md` schema; change video build-time validation to conditional/deferred.
@@ -44,12 +44,12 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
   - Note the parallel re-engagement manifest (same videoPath pattern) as a follow-up, not in this change unless trivial.
 - Keep existing `videoPath` entries in the manifest as forward-looking placeholders; validation must not require the files to exist.
 
-### Phase 1 — Author hand-tuned SSML (TDD)
+### Phase 1 — Author hand-tuned SSML (TDD) ✅ DONE
 
 - Create `packages/frontend/scripts/greetingSsml.ts` exporting `Record<greetingId, string>` (full `<speak>…</speak>` per greeting), authored from the manifest text + personality bible (stutters already hyphenated, e.g. "L-l-ladies").
 - **RED→GREEN:** coverage test — every manifest greeting id has an SSML entry, no orphan keys, each value is a single well-formed `<speak>` root.
 
-### Phase 2 — Generation script (TDD)
+### Phase 2 — Generation script (TDD) ✅ DONE
 
 - Add dev tooling to `packages/frontend`: `tsx` (run) + `music-metadata` (measure mp3 duration, pure-JS). Add script `"generate:greetings": "tsx scripts/generate-greetings.ts"`. _(Dep additions flagged for constitution review.)_
 - Isolate the script from the browser build: own `tsconfig.scripts.json` (Node libs), excluded from the app `tsc -b` project so `validate` stays green.
@@ -61,7 +61,7 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 - **Orchestration:** read manifest → for each greeting synth via Polly (`SynthesizeSpeechCommand`, neural / Matthew / mp3 / 24k, `TextType:'ssml'`; client injectable + mocked in tests like `pollyTts.test.ts`) → write `public/greetings/audio/greeting-NNN.mp3` → measure → rewrite manifest durations. Flags: `--dry-run`, `--only <id>`. No new infra, no deployed resources.
   - **Region:** don't hardcode a region in the `PollyClient` — let it resolve from the environment/profile (`AWS_REGION` or the active profile) so the Phase 3 credential setup drives it.
 
-### Phase 3 — Generate & commit assets
+### Phase 3 — Generate & commit assets ⬅️ NEXT
 
 Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with a session token) carrying `polly:SynthesizeSpeech` — **no long-lived IAM user keys (`AKIA…`) on disk, ever**. We use **IAM Identity Center (SSO)**: you log in via the browser, and the AWS SDK derives short-lived `ASIA` credentials from the SSO session — there is no long-lived key to bootstrap from. This is the no-long-lived-key path from the AWS guide [Use temporary credentials with AWS resources](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_use-resources.html). (The guide's local STS-`AssumeRole` examples quietly bootstrap from an `AKIA` IAM user; SSO avoids that.) Starting state assumed: an AWS account exists, but **nothing is configured locally**.
 
@@ -130,11 +130,11 @@ Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with
 
 ## Next Steps (todo list)
 
-1. **spec-video-optional** — Phase 0 spec/contract update (video optional/deferred).
-2. **author-ssml** — Phase 1 hand-tuned SSML module + coverage test.
-3. **gen-script-pure** — Phase 2 pure units (build SSML, calibrate, measure) via TDD.
-4. **gen-script-orchestrate** — Phase 2 Polly synth + manifest rewrite + tooling/deps/tsconfig.
-5. **generate-assets** — Phase 3 run script, commit 16 MP3s, QA.
+1. ~~**spec-video-optional** — Phase 0 spec/contract update (video optional/deferred).~~ ✅ done
+2. ~~**author-ssml** — Phase 1 hand-tuned SSML module + coverage test.~~ ✅ done
+3. ~~**gen-script-pure** — Phase 2 pure units (build SSML, calibrate, measure) via TDD.~~ ✅ done
+4. ~~**gen-script-orchestrate** — Phase 2 Polly synth + manifest rewrite + tooling/deps/tsconfig.~~ ✅ done
+5. **generate-assets** — Phase 3 run script, commit 16 MP3s, QA. ⬅️ **NEXT**
 6. **tune-mouth-threshold** — Phase 4 mouth threshold tuning + test.
 7. **audio-driven-timing** — Phase 4 tail-buffer timing refinement + tests.
 8. **verify-volume** — Phase 4 verify volume knob (optional localStorage persistence).
