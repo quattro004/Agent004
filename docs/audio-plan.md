@@ -28,7 +28,7 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 ## Decisions
 
 - **Provider:** Amazon Polly is the **sole** generation method — Matthew, neural, mp3, 24 kHz (reuse existing config). No other TTS provider (ElevenLabs, manual recording, browser TTS) is in scope.
-- **SSML:** Hand-tuned per greeting (breaks, prosody, emphasis, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML.
+- **SSML:** Hand-tuned per greeting (breaks, prosody `rate`/`volume`, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML. Note the neural engine supports only `volume`/`rate` on `<prosody>` and rejects `<emphasis>`; Max's raised pitch comes from the `pitch-processor` AudioWorklet at playback, not from SSML.
 - **Duration calibration:** Auto-measure each MP3 and rewrite `audioDurationMs` (within the contract's ±500 ms / 1000–15000 ms bounds).
 - **Spec:** Update via speckit iterate to make video **optional/deferred** (not deleted) — avatar images are the MVP visual; mp4s are a future "if cheap" add.
 - **Extra scope:** mouth-threshold tuning + audio-driven timing refinement (tail buffer); volume knob is already wired → verify only.
@@ -63,7 +63,9 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 
 ### Phase 3 — Generate & commit assets ⬅️ NEXT
 
-Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with a session token) carrying `polly:SynthesizeSpeech` — **no long-lived IAM user keys (`AKIA…`) on disk, ever**. We use **IAM Identity Center (SSO)**: you log in via the browser, and the AWS SDK derives short-lived `ASIA` credentials from the SSO session — there is no long-lived key to bootstrap from. This is the no-long-lived-key path from the AWS guide [Use temporary credentials with AWS resources](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_use-resources.html). (The guide's local STS-`AssumeRole` examples quietly bootstrap from an `AKIA` IAM user; SSO avoids that.) Starting state assumed: an AWS account exists, but **nothing is configured locally**.
+Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with a session token) carrying `polly:SynthesizeSpeech` — **no long-lived IAM user keys (`AKIA…`) on disk, ever**. We use **IAM Identity Center (SSO)**: the AWS SDK reads short-lived `ASIA` credentials from the environment, so there is no long-lived key to bootstrap from and nothing is written to disk. This is the no-long-lived-key path from the AWS guide [Use temporary credentials with AWS resources](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_use-resources.html). (The guide's local STS-`AssumeRole` examples quietly bootstrap from an `AKIA` IAM user; SSO avoids that.) Starting state assumed: an AWS account exists, but **nothing is configured locally**.
+
+**No AWS CLI required.** The script talks to Polly through `@aws-sdk/client-polly`, and the SDK's default credential chain picks up standard environment variables. The CLI would only serve to perform a browser login and cache an SSO token — we copy the same short-lived credentials straight from the Identity Center access portal instead, so there is no extra tool to install or keep updated.
 
 - **One-time setup in AWS (console)**
   - Enable **IAM Identity Center** (choose a region).
@@ -76,24 +78,24 @@ Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with
     This is the only permission the script needs. Identity Center materializes the permission set as a managed role, so a separate hand-made role is **not** required.
   - **Assign** your user → your AWS account → the `MaxHeightPolly` permission set.
 
-- **One-time setup on the laptop**
-  - Install the **AWS CLI v2** — required here for the browser login (`aws sso login`), not as a runtime dependency of the script.
-  - `aws configure sso` — enter the SSO start URL + region, pick the account + `MaxHeightPolly` permission set, set region `us-west-2`, and name the profile `max-height`. This writes only SSO config (no secret keys) to `~/.aws/config`.
-
 - **Each session — get temporary creds and run**
-  - `aws sso login --profile max-height` (opens the browser; caches a short-lived SSO token — no `AKIA` key on disk).
-  - Point the SDK at the profile and run in the same shell (Windows `cmd`: `SET AWS_PROFILE=max-height`; PowerShell: `$env:AWS_PROFILE="max-height"`):
+  - Open the **IAM Identity Center access portal** URL, sign in, expand your account, and choose **Access keys** next to the `MaxHeightPolly` permission set.
+  - Copy the PowerShell block ("Option 1: Set AWS environment variables") and paste it into the shell you will run the script from. It sets three env vars and nothing else:
+    ```powershell
+    $env:AWS_ACCESS_KEY_ID="ASIA..."
+    $env:AWS_SECRET_ACCESS_KEY="..."
+    $env:AWS_SESSION_TOKEN="..."
+    $env:AWS_REGION="us-west-2"
+    ```
+  - Run in that **same** shell (env vars do not persist across shells):
     `pnpm --filter @max-height/frontend generate:greetings`
-  - The SDK derives `ASIA` temporary credentials from the SSO session automatically; the script does not call `AssumeRole` in code.
-  - When the SSO session expires, re-run `aws sso login --profile max-height`. The generate script is idempotent, so re-running is safe.
-
-- **Verify**
-  - `aws sts get-caller-identity` should show the Identity Center role session (an assumed-role ARN), and the active credentials should be `ASIA…`.
+  - These are `ASIA` temporary credentials tied to the permission-set session; the script does not call `AssumeRole` in code, and nothing is written to `~/.aws`.
+  - When the session expires, re-copy the block from the portal. The generate script is idempotent, so re-running is safe.
 
 - **Region & STS notes**
-  - Keep the profile on an **enabled-by-default** Region (we use `us-west-2`, where Polly is available and STS is always active). With a region set, the SDK uses the **regional STS endpoint** automatically (AWS-recommended over the global endpoint) — no extra config.
-  - Only relevant if you ever switch to an **opt-in** Region (e.g. Hong Kong): you must enable that Region (and thus STS) for the account first, or the SSO/STS calls will fail.
-  - The SSO permission-set session (default ~1h) easily covers this one-shot generation; if it lapses, just re-run `aws sso login --profile max-height`.
+  - Keep `AWS_REGION` on an **enabled-by-default** Region (we use `us-west-2`, where neural Matthew is available and STS is always active). With a region set, the SDK uses the **regional STS endpoint** automatically (AWS-recommended over the global endpoint) — no extra config.
+  - Only relevant if you ever switch to an **opt-in** Region (e.g. Hong Kong): you must enable that Region (and thus STS) for the account first, or the STS calls will fail.
+  - The permission-set session (default ~1h) easily covers this one-shot generation.
 
 - Verify output: 16 files in `public/greetings/audio/`, each small (~<100 KB; no Git LFS), manifest `audioDurationMs` updated. Listen to each for character/quality.
 - **Commit** the 16 generated MP3s in `public/greetings/audio/` together with the updated `public/greetings/manifest.json` (recalibrated `audioDurationMs`) as static assets.
@@ -113,7 +115,7 @@ Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with
 
 - **Cost:** ~1¢ one-time, free-tier eligible; zero runtime cost (static assets).
 - **Deps:** `tsx` (already in monorepo), `music-metadata` (pure JS, build-time only) — flag for dep-hygiene review.
-- **Credentials:** use **IAM Identity Center (SSO)** temporary `ASIA` credentials (`aws sso login`) for generation — no long-lived `AKIA` keys on disk; no CDK/infra changes, nothing deployed.
+- **Credentials:** use **IAM Identity Center (SSO)** temporary `ASIA` credentials pasted as env vars from the access portal — no long-lived `AKIA` keys on disk, no AWS CLI install, no CDK/infra changes, nothing deployed.
 
 ## Risks / Considerations
 

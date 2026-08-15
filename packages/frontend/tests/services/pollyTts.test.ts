@@ -36,18 +36,20 @@ describe('pollyTts', () => {
   });
 
   describe('wrapInSsml', () => {
-    it('should wrap text in SSML prosody tags with pitch +10% rate 105%', () => {
+    it('should wrap text in SSML prosody tags with rate 105%', () => {
       const text = 'Hello, welcome to the show!';
       const ssml = wrapInSsml(text);
 
-      expect(ssml).toBe(
-        '<speak><prosody pitch="+10%" rate="105%">Hello, welcome to the show!</prosody></speak>',
-      );
+      expect(ssml).toBe('<speak><prosody rate="105%">Hello, welcome to the show!</prosody></speak>');
     });
 
     it('should handle empty text', () => {
       const ssml = wrapInSsml('');
-      expect(ssml).toBe('<speak><prosody pitch="+10%" rate="105%"></prosody></speak>');
+      expect(ssml).toBe('<speak><prosody rate="105%"></prosody></speak>');
+    });
+
+    it('should omit the pitch attribute, which the neural engine does not support', () => {
+      expect(wrapInSsml('Max Height here.')).not.toContain('pitch');
     });
   });
 
@@ -174,7 +176,7 @@ describe('pollyTts', () => {
       // Verify the command was called with truncated SSML
       const firstCall = mockSend.mock.calls[0][0];
       expect(firstCall.Text.length).toBeLessThanOrEqual(
-        2900 + '<speak><prosody pitch="+10%" rate="105%"></prosody></speak>'.length,
+        2900 + '<speak><prosody rate="105%"></prosody></speak>'.length,
       );
     });
 

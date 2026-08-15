@@ -187,20 +187,27 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 
 ## R4. Amazon Polly Neural Voice Selection
 
-**Decision**: Primary voice: **Matthew** (Neural, US English) — warmest broadcaster tone. SSML `<prosody pitch="+10%" rate="105%">` for slight smugness. Nasal quality via client-side DSP (4–6 kHz EQ boost in AudioWorklet). **Gregory** as alternative if A/B testing reveals better fit.
+**Decision**: Primary voice: **Matthew** (Neural, US English) — warmest broadcaster tone. SSML `<prosody rate="105%">` for slight smugness. Raised pitch and nasal quality via client-side DSP (`pitch-processor` and 4–6 kHz EQ boost in AudioWorklet). **Gregory** as alternative if A/B testing reveals better fit.
 
 **Rationale**:
 - Matthew best matches "broadcaster cadence + slightly smug" requirement.
-- SSML tags fully supported with Neural voices: `<prosody>`, `<break>`, `<emphasis>`, `<say-as>`, `<phoneme>`. Tags do NOT count toward 3,000-character billing limit.
+- SSML support on Neural is **partial**: `<break>`, `<say-as>`, `<phoneme>` are available, but `<prosody>` accepts only `volume` and `rate` (**no `pitch`**) and `<emphasis>` is **not available**. Unsupported SSML in a neural request is rejected by Polly, so pitch is applied at playback instead (see `contracts/polly-tts.md` §SSML Wrapping). Tags do NOT count toward 3,000-character billing limit.
 - Viseme support: 13–14 US English visemes returned via `SpeechMarkTypes: ["viseme"]`. Timing accuracy ±50–100ms (acceptable for 60fps with `VisemeScheduler` compensation).
 - Dual-call architecture confirmed: `Promise.all()` for audio MP3 + viseme JSON. Both billed separately on character count.
-- Cost: $4.00/1M characters Neural. At ~200 chars/response × 2 calls = $0.0016/response. ~$0.05–0.20/month at projected volume.
+- Cost: $16.00/1M characters Neural (Standard is $4.00/1M; Generative $30.00/1M). At ~200 chars/response × 2 calls = $0.0064/response. ~$0.20–0.80/month at projected volume — still comfortably inside the $10/month cap.
 - Browser direct call: `@aws-sdk/client-polly` v3 is ~85KB tree-shaken. No CORS issues with SigV4 signing via Cognito credentials.
 
 **Alternatives considered**:
 - Stephen (Neural): Sharper articulation, less warmth. Better for technical delivery, less for editorial commentary.
 - ElevenLabs: 11.25x more expensive, voice cloning raises IP concerns.
 - Google Cloud TTS: 4x more expensive than Polly Neural.
+
+**Open question — `pitchFactor` value**: the `pitch-processor` worklet ships `pitchFactor = 1.05`
+(+5%), while this section's intent was +10%. The browser-TTS fallback's `pitch = 1.2` is **not** a
+comparable figure (different unit — see `contracts/polly-tts.md` §Browser TTS Fallback). Raising the
+worklet toward 1.10 is gated on replacing its naive per-block resampling, which currently discards
+the tail of every 128-frame block and would drop proportionally more audio at a higher factor.
+Tracked as Phase 4 tuning work alongside `MOUTH_THRESHOLD`.
 
 ---
 

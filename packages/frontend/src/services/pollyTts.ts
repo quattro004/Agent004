@@ -36,7 +36,7 @@ function getClient(): PollyClient {
  * Wrap text in SSML prosody tags with pitch +10% and rate 105%.
  */
 export function wrapInSsml(text: string): string {
-  return `<speak><prosody pitch="+10%" rate="105%">${text}</prosody></speak>`;
+  return `<speak><prosody rate="105%">${text}</prosody></speak>`;
 }
 
 /**

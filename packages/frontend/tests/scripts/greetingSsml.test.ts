@@ -34,4 +34,13 @@ describe('greetingSsml', () => {
       expect(speakOpenTags, `${id}: must contain exactly one <speak> root`).toBe(1);
     }
   });
+
+  it('uses only SSML the neural engine supports', () => {
+    for (const [id, ssml] of Object.entries(greetingSsml)) {
+      expect(ssml, `${id}: neural voices ignore/reject the prosody pitch attribute`).not.toMatch(
+        /pitch\s*=/,
+      );
+      expect(ssml, `${id}: <emphasis> is not available on neural voices`).not.toMatch(/<emphasis/);
+    }
+  });
 });

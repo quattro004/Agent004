@@ -34,13 +34,21 @@ All text sent to Polly is wrapped in SSML. SSML tags do NOT count toward the 3,0
 
 ```xml
 <speak>
-  <prosody pitch="+10%" rate="105%">
+  <prosody rate="105%">
     {response_text}
   </prosody>
 </speak>
 ```
 
-The nasal quality is achieved via client-side DSP (4–6 kHz EQ boost in AudioWorklet), not SSML.
+**Neural engine SSML constraints** — the `neural` engine supports only the `volume` and `rate`
+attributes on `<prosody>`; the `pitch` attribute and the `<emphasis>` tag are **not** supported, and
+unsupported SSML in neural requests is rejected by Polly. Emphasis is therefore expressed as
+`<prosody volume="loud">`, and pacing via `<break>` / `rate`.
+
+Max's raised pitch is **not** an SSML concern: it is applied at playback by the `pitch-processor`
+AudioWorklet (`pitchFactor`, a frequency ratio), which both live Polly audio and the pre-generated
+greeting MP3s are routed through. The nasal quality is likewise achieved via client-side DSP
+(4–6 kHz EQ boost in AudioWorklet), not SSML.
 
 ---
 
@@ -164,7 +172,13 @@ When the $8 soft-degrade threshold is reached and Polly is disabled, the fronten
 3. Any `en` voice.
 4. System default voice.
 
-**Parameters**: `pitch = 1.2`, `rate = 1.05` (approximate Polly's SSML `pitch="+10%" rate="105%"`).
+**Parameters**: `pitch = 1.2`, `rate = 1.05`.
+
+> **Unit note**: `SpeechSynthesisUtterance.pitch` uses a 0–2 scale where `1.0` is the voice default,
+> so `1.2` here is an *approximation* of the character's raised pitch — it is **not** the same unit as
+> the `pitch-processor` AudioWorklet's `pitchFactor`, which is a raw frequency ratio (`1.05` = +5%).
+> The two values must not be copied between paths. See the open question in `research.md` §R4 about
+> reconciling `pitchFactor` with the intended +10%.
 
 **Limitations in fallback mode**:
 - AudioWorklet chain (stutter, pitch shift, static, EQ) is NOT applied — `SpeechSynthesis` outputs directly to speakers.
