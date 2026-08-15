@@ -99,4 +99,5 @@ at `specs/001-max-height-ai-character/plan.md` and its companion artifacts:
 - `specs/001-max-height-ai-character/data-model.md` — entity definitions
 - `specs/001-max-height-ai-character/contracts/` — API and integration contracts
 - `specs/001-max-height-ai-character/quickstart.md` — developer setup guide
+
 <!-- SPECKIT END -->

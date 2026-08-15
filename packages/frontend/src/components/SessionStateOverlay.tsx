@@ -2,12 +2,7 @@ import React from 'react';
 import { StaticNoise } from './StaticNoise';
 
 export type OverlayState =
-  | 'ENDED'
-  | 'BUDGET_CAPPED'
-  | 'RATE_LIMITED'
-  | 'SIGNAL_LOST'
-  | 'ERROR'
-  | null;
+  'ENDED' | 'BUDGET_CAPPED' | 'RATE_LIMITED' | 'SIGNAL_LOST' | 'ERROR' | null;
 
 export interface SessionStateOverlayProps {
   state: OverlayState;

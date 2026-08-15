@@ -40,7 +40,9 @@ describe('pollyTts', () => {
       const text = 'Hello, welcome to the show!';
       const ssml = wrapInSsml(text);
 
-      expect(ssml).toBe('<speak><prosody rate="105%">Hello, welcome to the show!</prosody></speak>');
+      expect(ssml).toBe(
+        '<speak><prosody rate="105%">Hello, welcome to the show!</prosody></speak>',
+      );
     });
 
     it('should handle empty text', () => {
