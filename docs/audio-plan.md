@@ -63,24 +63,39 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 
 ### Phase 3 — Generate & commit assets ⬅️ NEXT
 
-Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with a session token) carrying `polly:SynthesizeSpeech` — **no long-lived IAM user keys (`AKIA…`) on disk, ever**. We use **IAM Identity Center (SSO)**: the AWS SDK reads short-lived `ASIA` credentials from the environment, so there is no long-lived key to bootstrap from and nothing is written to disk. This is the no-long-lived-key path from the AWS guide [Use temporary credentials with AWS resources](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_use-resources.html). (The guide's local STS-`AssumeRole` examples quietly bootstrap from an `AKIA` IAM user; SSO avoids that.) Starting state assumed: an AWS account exists, but **nothing is configured locally**.
+Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with a session token) carrying `polly:SynthesizeSpeech` — **no long-lived IAM user keys (`AKIA…`) on disk, ever** (constitution P11).
 
-**No AWS CLI required.** The script talks to Polly through `@aws-sdk/client-polly`, and the SDK's default credential chain picks up standard environment variables. The CLI would only serve to perform a browser login and cache an SSO token — we copy the same short-lived credentials straight from the Identity Center access portal instead, so there is no extra tool to install or keep updated.
+**Why not IAM Identity Center (SSO)?** _Rejected — it costs $100._ SSO can only grant AWS-account access (permission sets) from an **organization instance**; an *account* instance supports neither permission sets nor account assignment, so it cannot issue the access keys we need. Enabling an organization instance creates an AWS Organization, and the console warns that this "automatically upgrades your account from a free plan to a paid plan with pay-as-you-go pricing and your free tier credits expire immediately" — it also forfeits eligibility for future free-tier credits. Spending the account's $100 credit balance to save ~1¢ of Polly is a direct P2 (Budget Ceiling) violation. Constitution P11 was amended (v1.4.0) to allow the org-free path below.
+
+**Chosen path: AWS CloudShell session export.** Sign in to the console as a least-privilege IAM user that has *no access keys at all*, then export that browser session's temporary credentials into the local shell. No long-lived key is ever created, nothing is written to `~/.aws`, and no AWS CLI install is required locally (CloudShell ships with it).
 
 - **One-time setup in AWS (console)**
-  - Enable **IAM Identity Center** (choose a region).
-  - Create an Identity Center **user** for yourself.
-  - Create a **permission set** (e.g. `MaxHeightPolly`) whose policy grants `polly:SynthesizeSpeech`, scoped to the generation Region for least privilege:
+  - IAM → **Users** → **Create user** `max-height-gen`, with **console access** (password). **Do not create an access key.**
+  - Attach an **inline policy** granting only Polly synthesis, region-scoped for least privilege:
     ```json
-    { "Effect": "Allow", "Action": "polly:SynthesizeSpeech", "Resource": "*",
-      "Condition": { "StringEquals": { "aws:RequestedRegion": "us-west-2" } } }
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": "polly:SynthesizeSpeech",
+          "Resource": "*",
+          "Condition": { "StringEquals": { "aws:RequestedRegion": "us-west-2" } }
+        }
+      ]
+    }
     ```
-    This is the only permission the script needs. Identity Center materializes the permission set as a managed role, so a separate hand-made role is **not** required.
-  - **Assign** your user → your AWS account → the `MaxHeightPolly` permission set.
+  - Also attach the AWS-managed **`AWSCloudShellFullAccess`** policy so the user can open CloudShell.
+  - No role, no permission set, no organization, nothing deployed.
 
 - **Each session — get temporary creds and run**
-  - Open the **IAM Identity Center access portal** URL, sign in, expand your account, and choose **Access keys** next to the `MaxHeightPolly` permission set.
-  - Copy the PowerShell block ("Option 1: Set AWS environment variables") and paste it into the shell you will run the script from. It sets three env vars and nothing else:
+  - Sign in to the console **as `max-height-gen`** (not root), and switch to the **US West (Oregon) / us-west-2** Region.
+  - Open **CloudShell** (the `>_` icon in the top nav) and run:
+    ```bash
+    aws configure export-credentials --format env-no-export
+    ```
+    This prints the session's temporary `ASIA…` credentials. _(Fallback if that command is unavailable: `curl -H "Authorization: $AWS_CONTAINER_AUTHORIZATION_TOKEN" $AWS_CONTAINER_CREDENTIALS_FULL_URI`.)_
+  - Paste the values into the **local PowerShell session** you will run the script from, as env vars only — never `aws configure`, never a file:
     ```powershell
     $env:AWS_ACCESS_KEY_ID="ASIA..."
     $env:AWS_SECRET_ACCESS_KEY="..."
@@ -89,16 +104,17 @@ Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with
     ```
   - Run in that **same** shell (env vars do not persist across shells):
     `pnpm --filter @max-height/frontend generate:greetings`
-  - These are `ASIA` temporary credentials tied to the permission-set session; the script does not call `AssumeRole` in code, and nothing is written to `~/.aws`.
-  - When the session expires, re-copy the block from the portal. The generate script is idempotent, so re-running is safe.
+  - The credentials expire with the CloudShell session; re-export to refresh. The generate script is idempotent, so re-running is safe.
+  - Never paste these values into a chat, issue, or PR transcript (P11).
 
 - **Region & STS notes**
-  - Keep `AWS_REGION` on an **enabled-by-default** Region (we use `us-west-2`, where neural Matthew is available and STS is always active). With a region set, the SDK uses the **regional STS endpoint** automatically (AWS-recommended over the global endpoint) — no extra config.
-  - Only relevant if you ever switch to an **opt-in** Region (e.g. Hong Kong): you must enable that Region (and thus STS) for the account first, or the STS calls will fail.
-  - The permission-set session (default ~1h) easily covers this one-shot generation.
+  - Keep `AWS_REGION` on an **enabled-by-default** Region (we use `us-west-2`, where neural Matthew is available and STS is always active). With a region set, the SDK uses the **regional STS endpoint** automatically.
+  - The inline policy's `aws:RequestedRegion` condition must match whatever Region you generate in — change both together or synthesis will be denied.
 
 - Verify output: 16 files in `public/greetings/audio/`, each small (~<100 KB; no Git LFS), manifest `audioDurationMs` updated. Listen to each for character/quality.
 - **Commit** the 16 generated MP3s in `public/greetings/audio/` together with the updated `public/greetings/manifest.json` (recalibrated `audioDurationMs`) as static assets.
+
+**Pre-flight status (verified):** the generation script, SSML module, `tsx`/`music-metadata`/`@aws-sdk/client-polly` deps and the `generate:greetings` package script are all in place; `--dry-run` resolves all 16 greetings to `audio/greeting-NNN.mp3` (relative paths, correct). Nothing in `.gitignore` excludes the MP3s. **Credentials are the only blocker.**
 
 ### Phase 4 — Playback verification & audio-dependent tuning (TDD where logic exists)
 
@@ -115,7 +131,7 @@ Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with
 
 - **Cost:** ~1¢ one-time, free-tier eligible; zero runtime cost (static assets).
 - **Deps:** `tsx` (already in monorepo), `music-metadata` (pure JS, build-time only) — flag for dep-hygiene review.
-- **Credentials:** use **IAM Identity Center (SSO)** temporary `ASIA` credentials pasted as env vars from the access portal — no long-lived `AKIA` keys on disk, no AWS CLI install, no CDK/infra changes, nothing deployed.
+- **Credentials:** org-free **AWS CloudShell session export** — a least-privilege IAM user with a console password and **no access keys**; temporary `ASIA` credentials pasted as env vars. No long-lived `AKIA` keys, no local AWS CLI install, no CDK/infra changes, nothing deployed. **IAM Identity Center was rejected** because it requires an AWS Organization, which would immediately expire the account's free-tier credits (see Phase 3). Constitution P11 amended to v1.4.0 accordingly.
 
 ## Risks / Considerations
 

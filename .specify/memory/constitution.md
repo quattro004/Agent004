@@ -1,28 +1,46 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.2.0 → 1.3.0
-  Bump rationale : MINOR — Added P11 (Credential & Secret
-                   Hygiene) and a corresponding Quality Gate #7.
+  Version change : 1.3.0 → 1.4.0
+  Bump rationale : MINOR — P11 materially expanded: the
+                   mandated *mechanism* for local temporary
+                   credentials (IAM Identity Center / SSO) is
+                   relaxed to a preference-ordered list. The
+                   underlying requirement — temporary,
+                   least-privilege credentials with no
+                   long-lived AKIA keys on disk — is unchanged
+                   and now applies explicitly to build-time
+                   generation identities.
 
-  Modified principles : None.
+  Modified principles : P11 Credential & Secret Hygiene.
 
-  Added:
-    - P11 Credential & Secret Hygiene.
-    - Quality Gate #7 (Credential gate).
+  Added : None.
 
   Modified sections:
-    - Core Principles (new P11).
-    - Quality Gates (new gate #7).
+    - Core Principles (P11 expanded).
+    - Quality Gates (gate #7 wording aligned with P11).
+
+  Rationale for the P11 change:
+    IAM Identity Center can only issue AWS-account access
+    (permission sets) from an *organization* instance; an
+    account instance supports neither permission sets nor
+    account assignment. Creating an AWS Organization on the
+    free plan expires all remaining free-tier credits
+    immediately and forfeits eligibility for future credits.
+    Mandating SSO therefore carried a real, immediate cost in
+    direct conflict with P2 (Budget Ceiling), so the mechanism
+    is now chosen per-account rather than fixed.
 
   Templates requiring updates:
     ✅ quickstart.md — local credential guidance updated to
-       IAM Identity Center (SSO), temporary credentials.
+       the org-free CloudShell path.
+    ✅ docs/audio-plan.md — Phase 3 credential setup rewritten.
     ✅ contracts/polly-tts.md — runtime IAM scoped by
-       aws:RequestedRegion.
+       aws:RequestedRegion (unchanged, still compliant).
 
   Follow-up TODOs : Review remaining IAM statements (Cognito
     guest role in cognito-stack.ts) for region scoping.
+    Revisit SSO if this account ever joins an organization.
 -->
 
 # Max Height Constitution
@@ -158,21 +176,46 @@ regressions that traces alone cannot catch.
 
 ### P11. Credential & Secret Hygiene
 
-- Local/developer AWS access MUST use **temporary**
-  credentials via IAM Identity Center (SSO). Long-lived IAM
-  user access keys (`AKIA…`) MUST NOT be written to disk or
-  committed.
+- Local/developer AWS access MUST use **temporary** (`ASIA…`)
+  credentials. Long-lived IAM user access keys (`AKIA…`) MUST
+  NOT be written to disk or committed.
+- The *mechanism* for obtaining those temporary credentials is
+  NOT mandated. IAM Identity Center (SSO) can only grant AWS
+  account access from an **organization** instance, and
+  creating an AWS Organization on the free plan expires all
+  remaining free-tier credits immediately — a direct conflict
+  with P2. Acceptable mechanisms, in order of preference:
+  1. **AWS CloudShell session export** — sign in to the console
+     as a least-privilege IAM user (console password only, no
+     access keys) and export that session's temporary
+     credentials into the local shell. No long-lived key is
+     ever created.
+  2. **`sts:AssumeRole`** into a task-scoped role, where the
+     bootstrap access key lives in environment variables only
+     (never `aws configure`, never on disk) and is deleted
+     immediately after use.
+  3. **IAM Identity Center (SSO)** — preferred on any account
+     that already belongs to an AWS Organization.
+- Temporary credentials MUST be supplied to tooling as
+  environment variables only. They MUST NOT be written to
+  `~/.aws`, committed, or pasted into chat, issue, or PR
+  transcripts.
 - Runtime access MUST use scoped temporary credentials
   (Cognito guest), consistent with P7.
 - IAM permissions MUST follow least privilege — scoped by
   action and, where supported, by `aws:RequestedRegion` and
   service conditions (e.g., `polly:Engine`, `polly:VoiceId`).
+  This applies to build-time and one-shot asset-generation
+  identities as much as to runtime roles.
 - Application secrets (API keys) MUST live in SSM
   SecureString or environment variables, never in source.
 
 **Rationale**: A solo project has no security team. Temporary,
 least-privilege, region-scoped credentials limit the blast
-radius if a laptop, token, or repository is compromised.
+radius if a laptop, token, or repository is compromised. The
+guarantee that matters is *short-lived and narrowly scoped* —
+which mechanism delivers it is an account-level detail, and
+pinning it to one product would have cost real money here.
 
 ## Technology Stack
 
@@ -223,9 +266,12 @@ The following gates MUST pass before work proceeds past them:
    per P10. Exemptions for trivial glue code MUST be justified
    in the PR description.
 
-7. **Credential gate**: No long-lived AWS keys committed or
-   stored on disk; IAM statements MUST be least-privilege and
-   region-scoped where supported, per P11.
+7. **Credential gate**: Local AWS access uses temporary
+   (`ASIA…`) credentials supplied via environment variables;
+   no long-lived AWS keys committed or stored on disk. IAM
+   statements MUST be least-privilege and region-scoped where
+   supported — including build-time generation identities —
+   per P11.
 
 ## Governance
 
@@ -260,4 +306,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.3.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-06-13
+**Version**: 1.4.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-08-15

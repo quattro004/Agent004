@@ -6,7 +6,7 @@
  * rewrites the manifest with the measured `audioDurationMs` values.
  *
  * Requires temporary AWS credentials with `polly:SynthesizeSpeech` (see
- * `docs/audio-plan.md` Phase 3 — IAM Identity Center / `aws sso login`).
+ * `docs/audio-plan.md` Phase 3 — AWS CloudShell session export).
  * The region is intentionally NOT hardcoded: it resolves from the environment
  * or the active profile.
  *

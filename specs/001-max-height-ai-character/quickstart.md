@@ -41,16 +41,33 @@ git clone <repo-url>
 cd Agent004
 pnpm install                     # See note below if Zod peer conflict arises
 
-# Configure AWS credentials — IAM Identity Center (SSO), temporary credentials only.
+# Configure AWS credentials — temporary (ASIA…) credentials only.
 # Do NOT use long-lived IAM user access keys (AKIA…) on disk or in the repo. See constitution P11.
-aws configure sso                # one-time: creates an SSO profile (no secret keys written to disk)
-aws sso login --profile <name>   # per session: fetch temporary (ASIA…) credentials
-export AWS_PROFILE=<name>         # point the SDK/CLI at the SSO profile
+#
+# If your account is NOT part of an AWS Organization, so IAM Identity Center (SSO)
+# is unavailable: SSO only grants AWS-account access from an *organization*
+# instance, and creating an organization would expire the free-tier credits
+# immediately (conflicts with P2). Use the CloudShell export path instead:
+#
+#   1. Sign in to the AWS console as a least-privilege IAM user
+#      (console password only — no access keys).
+#   2. Open AWS CloudShell in the target region.
+#   3. Run: aws configure export-credentials --format env-no-export
+#   4. Copy the three ASIA… values into your local shell as env vars.
+export AWS_ACCESS_KEY_ID=ASIA...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_SESSION_TOKEN=...
+export AWS_REGION=us-west-2
 
 # Bootstrap CDK (first time only)
 cd packages/infra
 npx cdk bootstrap
 ```
+
+> **Note**: These credentials are short-lived and live only in the current
+> shell — they expire with the CloudShell session, and nothing is written to
+> `~/.aws`. Re-export them when they expire. On PowerShell use
+> `$env:AWS_ACCESS_KEY_ID="ASIA..."` instead of `export`.
 
 > **Note**: If a Zod peer dependency conflict occurs between `@strands-agents/sdk` and transitive dependencies still on Zod 3, add an `overrides` block to the root `package.json`: `"overrides": { "zod": "^4.3.6" }`. Zod 4 includes a `zod/v3` compatibility mode for gradual migration. Avoid `--legacy-peer-deps` — it silently masks conflicts. See `research.md §R1` for details.
 
