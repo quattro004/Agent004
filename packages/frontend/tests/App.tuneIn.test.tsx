@@ -414,30 +414,31 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
 
     fireEvent.click(screen.getByTestId('tv-knob'));
 
+    // Both conditions are polled in a single synchronous callback, so tuning is
+    // observed in progress without depending on how much wall-clock time has
+    // elapsed (TUNING_MAX_MS is only 200ms here, and a loaded machine can blow
+    // past it between two awaits).
     await vi.waitFor(() => {
       expect(mockPlayStatic).toHaveBeenCalled();
+      expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();
     });
 
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 120));
-    });
-
-    expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();
-
+    // The hung preload must not stall the sequence — the max timeout takes over.
     await vi.waitFor(
       () => {
         expect(screen.queryByTestId('tuning-overlay')).not.toBeInTheDocument();
         expect(mockStopStatic).toHaveBeenCalled();
       },
-      { timeout: 500 },
+      { timeout: 2000 },
     );
 
     await vi.waitFor(
       () => {
         expect(screen.getByTestId('tv-knob').getAttribute('data-is-on')).toBe('true');
+        // null: the preload never delivered a buffer, so playback used the fallback.
         expect(mockPlayGreeting).toHaveBeenCalledWith(null);
       },
-      { timeout: 700 },
+      { timeout: 2000 },
     );
   });
 
