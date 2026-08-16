@@ -186,6 +186,48 @@ describe('useGreeting', () => {
     expect(mockFetch).toHaveBeenCalledWith('/greetings/manifest.json');
   });
 
+  // The manifest contract defines audioPath as relative to the manifest's own
+  // directory (pattern: ^audio/greeting-\d{3}\.mp3$). Fetching it verbatim
+  // resolves it against the page root instead, which 404s to index.html and
+  // makes decodeAudioData throw "unknown content type".
+  it('should resolve a relative audioPath against the /greetings/ base directory', async () => {
+    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+
+    const greetingEntry = {
+      id: 'greeting-001',
+      archetype: 'TV_PRESENTER_INTRO' as const,
+      text: 'Hello!',
+      audioPath: 'audio/greeting-001.mp3',
+      audioDurationMs: 3000,
+      videoPath: 'video/greeting-001.mp4',
+      weight: 1.0,
+      tags: [],
+    };
+
+    const manifestData = {
+      version: '1.0.0',
+      voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
+      greetings: [greetingEntry],
+    };
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify(manifestData)),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      });
+
+    mockSelectGreeting.mockReturnValue(greetingEntry);
+
+    const greeting = createUseGreeting(mockAudioChain);
+    await greeting.preloadGreeting();
+
+    expect(mockFetch).toHaveBeenCalledWith('/greetings/audio/greeting-001.mp3');
+  });
+
   it('should push selected greeting ID to visitorStore.greetingHistory', async () => {
     const { createUseGreeting } = await import('../../src/hooks/useGreeting');
 

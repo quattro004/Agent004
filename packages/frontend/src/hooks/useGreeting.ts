@@ -16,6 +16,9 @@ import {
 
 const MOUTH_POLL_INTERVAL_MS = 50;
 
+/** Base directory the greeting manifest and its relative `audioPath`s live under. */
+const GREETINGS_BASE_PATH = '/greetings/';
+
 export interface GreetingResult {
   id: string;
   text: string;
@@ -57,18 +60,31 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
 
   async function loadCachedManifest(signal?: AbortSignal): Promise<GreetingManifest | null> {
     if (cachedManifest) return cachedManifest;
-    const response = await fetchResource('/greetings/manifest.json', signal);
+    const response = await fetchResource(`${GREETINGS_BASE_PATH}manifest.json`, signal);
     if (!response.ok) return null;
     const raw = await response.text();
     cachedManifest = loadManifest(raw);
     return cachedManifest;
   }
 
+  /**
+   * The manifest contract declares `audioPath` relative to the manifest's own
+   * directory (e.g. `audio/greeting-001.mp3`), so it must be resolved against
+   * `/greetings/`. Fetching it verbatim would resolve it against the page URL
+   * and 404 to index.html, which then fails `decodeAudioData`.
+   */
+  function resolveAudioUrl(audioPath: string): string {
+    if (/^(?:[a-z]+:)?\/\//i.test(audioPath) || audioPath.startsWith('/')) {
+      return audioPath;
+    }
+    return `${GREETINGS_BASE_PATH}${audioPath}`;
+  }
+
   async function decodeGreetingAudio(
     audioPath: string,
     signal?: AbortSignal,
   ): Promise<AudioBuffer | null> {
-    const audioResponse = await fetchResource(audioPath, signal);
+    const audioResponse = await fetchResource(resolveAudioUrl(audioPath), signal);
     if (!audioResponse.ok) return null;
 
     const arrayBuffer = await audioResponse.arrayBuffer();
