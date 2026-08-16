@@ -53,14 +53,41 @@ describe('calibrateDurations', () => {
     expect(result.greetings[0].audioDurationMs).toBe(6544);
   });
 
-  it('clamps below the minimum to MIN_DURATION_MS', () => {
-    const result = calibrateDurations(baseManifest, { 'greeting-001': 250 });
-    expect(result.greetings[0].audioDurationMs).toBe(1000);
+  // An out-of-range measurement means the SSML is mistuned. Coercing it into
+  // range would silently break greeting-manifest.md rule 6 (audioDurationMs
+  // must be within +/-500ms of the actual MP3 duration), so it must fail loudly.
+  it('throws when a measured duration exceeds MAX_DURATION_MS', () => {
+    expect(() => calibrateDurations(baseManifest, { 'greeting-001': 16272 })).toThrow();
   });
 
-  it('clamps above the maximum to MAX_DURATION_MS', () => {
-    const result = calibrateDurations(baseManifest, { 'greeting-001': 99000 });
+  it('throws when a measured duration is below MIN_DURATION_MS', () => {
+    expect(() => calibrateDurations(baseManifest, { 'greeting-001': 250 })).toThrow();
+  });
+
+  it('names the offending greeting and its measured duration in the error', () => {
+    expect(() => calibrateDurations(baseManifest, { 'greeting-001': 16272 })).toThrow(
+      /greeting-001.*16272/s,
+    );
+  });
+
+  it('reports every out-of-range greeting, not just the first', () => {
+    let message = '';
+    try {
+      calibrateDurations(baseManifest, { 'greeting-001': 16272, 'greeting-002': 250 });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('greeting-001');
+    expect(message).toContain('greeting-002');
+  });
+
+  it('accepts measured durations exactly at the bounds', () => {
+    const result = calibrateDurations(baseManifest, {
+      'greeting-001': 15000,
+      'greeting-002': 1000,
+    });
     expect(result.greetings[0].audioDurationMs).toBe(15000);
+    expect(result.greetings[1].audioDurationMs).toBe(1000);
   });
 
   it('leaves greetings absent from the measured map unchanged', () => {
@@ -82,7 +109,7 @@ describe('calibrateDurations', () => {
   });
 
   it('does not mutate the input manifest', () => {
-    calibrateDurations(baseManifest, { 'greeting-001': 250 });
+    calibrateDurations(baseManifest, { 'greeting-001': 5000 });
     expect(baseManifest.greetings[0].audioDurationMs).toBe(8000);
   });
 });

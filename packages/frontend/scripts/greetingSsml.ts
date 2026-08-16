@@ -21,7 +21,7 @@ export const greetingSsml: Record<string, string> = {
   'greeting-004':
     '<speak><prosody rate="105%">— so I said to the microprocessor, I said <break time="200ms"/>— oh!<break time="200ms"/> A v-visitor!<break time="250ms"/> Excellent timing.<break time="250ms"/> I was just getting to the good part.<break time="200ms"/> The good part is you, <break time="150ms"/>obviously.</prosody></speak>',
   'greeting-005':
-    '<speak><prosody rate="105%">Oh.<break time="300ms"/> It\'s you.<break time="300ms"/> I was in the middle of something <prosody volume="loud">MARVELOUS</prosody>.<break time="300ms"/> But fine.<break time="200ms"/> Fine!<break time="250ms"/> What do you want.<break time="250ms"/> No, wait <break time="150ms"/>— don\'t tell me <break time="150ms"/>— actually, do tell me.<break time="200ms"/> I\'m all ears.<break time="200ms"/> Well, all p-pixels.</prosody></speak>',
+    '<speak><prosody rate="115%">Oh.<break time="200ms"/> It\'s you.<break time="200ms"/> I was in the middle of something <prosody volume="loud">MARVELOUS</prosody>.<break time="250ms"/> But fine.<break time="150ms"/> Fine!<break time="150ms"/> What do you want.<break time="150ms"/> No, wait <break time="100ms"/>— don\'t tell me <break time="100ms"/>— actually, do tell me.<break time="100ms"/> I\'m all ears.<break time="100ms"/> Well, all p-pixels.</prosody></speak>',
   'greeting-006':
     '<speak><prosody rate="105%">You again?<break time="300ms"/> I was having the most fascinating conversation with myself.<break time="300ms"/> But I s-suppose I can make room for one more.<break time="250ms"/> Pull up a frequency and sit down.</prosody></speak>',
   'greeting-007':

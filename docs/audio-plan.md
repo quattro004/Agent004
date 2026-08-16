@@ -17,7 +17,7 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 | Manifest (16 greetings, `audioPath` / `audioDurationMs` / `videoPath`) | ✅ Present                                                            | `public/greetings/manifest.json`                            |
 | Volume knob UI → store → `audioChain.setVolume`                 | ✅ **Already wired**                                                        | `components/VolumeKnob.tsx`, `App.tsx:92,161-164,311`        |
 | Audio-driven greeting timing                                    | ✅ **Already uses `audioDurationMs`**; `GREETING_DISPLAY_MS` is text-only fallback | `App.tsx:143`, `useGreeting.ts:159`                  |
-| **16 greeting MP3 files**                                       | ❌ **Missing**                                                              | `public/greetings/audio/` (does not exist)                  |
+| **16 greeting MP3 files**                                       | ✅ **Generated & committed** (Phase 3 complete)                              | `public/greetings/audio/greeting-001…016.mp3`               |
 | **Generation script**                                           | ✅ **Built** (Phase 2 complete)                                             | `scripts/generate-greetings.ts`, `scripts/greetingGenCore.ts` |
 | `@aws-sdk/client-polly` dependency                              | ✅ Present                                                                  | `packages/frontend/package.json`                            |
 | `tsx` runner                                                    | ✅ In monorepo (agent + frontend)                                           | `packages/agent`, `packages/frontend`                       |
@@ -61,7 +61,7 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 - **Orchestration:** read manifest → for each greeting synth via Polly (`SynthesizeSpeechCommand`, neural / Matthew / mp3 / 24k, `TextType:'ssml'`; client injectable + mocked in tests like `pollyTts.test.ts`) → write `public/greetings/audio/greeting-NNN.mp3` → measure → rewrite manifest durations. Flags: `--dry-run`, `--only <id>`. No new infra, no deployed resources.
   - **Region:** don't hardcode a region in the `PollyClient` — let it resolve from the environment/profile (`AWS_REGION` or the active profile) so the Phase 3 credential setup drives it.
 
-### Phase 3 — Generate & commit assets ⬅️ NEXT
+### Phase 3 — Generate & commit assets ✅ DONE
 
 Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with a session token) carrying `polly:SynthesizeSpeech` — **no long-lived IAM user keys (`AKIA…`) on disk, ever** (constitution P11).
 
@@ -114,6 +114,14 @@ Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with
 - Verify output: 16 files in `public/greetings/audio/`, each small (~<100 KB; no Git LFS), manifest `audioDurationMs` updated. Listen to each for character/quality.
 - **Commit** the 16 generated MP3s in `public/greetings/audio/` together with the updated `public/greetings/manifest.json` (recalibrated `audioDurationMs`) as static assets.
 
+**Outcome (generated 2026-08-16):** all 16 MP3s produced via CloudShell session export as planned — 53–88 KB each, ~1.0 MB total, no Git LFS needed. Measured durations span 8832–14688 ms; every entry is now exactly equal to its measured MP3 duration, satisfying contract rule 6 (±500 ms) and the 1000–15000 ms bounds.
+
+Two corrections surfaced during generation:
+
+- **`calibrateDurations` silently clamped out-of-range measurements.** `greeting-005` measured 16272 ms and was written to the manifest as `15000`. The clamp did not protect the contract — it *manufactured* a 1272 ms violation of rule 6 and hid it, which would also have clipped Max's last words at playback. Fixed via TDD: the function now throws an aggregated, actionable error naming every out-of-range greeting instead of coercing the value. See `docs/tdd-plans/greeting-duration-clamp-TDD-Plan.md`.
+- **`greeting-005` re-tuned rather than raising the ceiling.** Decision: keep the 15 s contract ceiling. 15 of 16 greetings land between 8832 and 12792 ms, so raising the contract 33% for a single 8% outlier would have weakened the guardrail for all future greetings and the re-engagement pool. Instead its SSML was trimmed (rate 105%→115%, `<break>` total 2300→1500 ms, **no wording change**, so the manifest `text` is untouched), bringing it to 14688 ms. Note this leaves only ~312 ms of headroom — re-check if that greeting is ever re-tuned.
+- Post-generation, run Prettier on `manifest.json`: the script writes it via `JSON.stringify(…, 2)`, which expands `tags` arrays and normalizes `1.0`→`1`.
+
 **Pre-flight status (verified):** the generation script, SSML module, `tsx`/`music-metadata`/`@aws-sdk/client-polly` deps and the `generate:greetings` package script are all in place; `--dry-run` resolves all 16 greetings to `audio/greeting-NNN.mp3` (relative paths, correct). Nothing in `.gitignore` excludes the MP3s. **Credentials are the only blocker.**
 
 ### Phase 4 — Playback verification & audio-dependent tuning (TDD where logic exists)
@@ -152,8 +160,8 @@ Generation needs **temporary AWS security credentials** (STS `ASIA…` keys with
 2. ~~**author-ssml** — Phase 1 hand-tuned SSML module + coverage test.~~ ✅ done
 3. ~~**gen-script-pure** — Phase 2 pure units (build SSML, calibrate, measure) via TDD.~~ ✅ done
 4. ~~**gen-script-orchestrate** — Phase 2 Polly synth + manifest rewrite + tooling/deps/tsconfig.~~ ✅ done
-5. **generate-assets** — Phase 3 run script, commit 16 MP3s, QA. ⬅️ **NEXT**
-6. **tune-mouth-threshold** — Phase 4 mouth threshold tuning + test.
+5. ~~**generate-assets** — Phase 3 run script, commit 16 MP3s, QA.~~ ✅ done
+6. **tune-mouth-threshold** — Phase 4 mouth threshold tuning + test. ⬅️ **NEXT**
 7. **audio-driven-timing** — Phase 4 tail-buffer timing refinement + tests.
 8. **verify-volume** — Phase 4 verify volume knob (optional localStorage persistence).
 9. **validate-finalize** — Phase 5 `pnpm run validate` + docs update.

@@ -29,24 +29,46 @@ export function buildGreetingSsml(text: string, customSsml?: string): string {
 
 /**
  * Return a new manifest with each greeting's `audioDurationMs` set to its
- * measured value, rounded and clamped to [MIN_DURATION_MS, MAX_DURATION_MS].
- * Greetings absent from `measuredMsById` are left untouched.
+ * measured value, rounded. Greetings absent from `measuredMsById` are left
+ * untouched.
+ *
+ * Measurements outside [MIN_DURATION_MS, MAX_DURATION_MS] are rejected rather
+ * than clamped: the bounds assert a property of the generated asset, so an
+ * out-of-range value means the greeting's SSML is mistuned. Coercing it into
+ * range would silently violate greeting-manifest.md validation rule 6
+ * (`audioDurationMs` within ±500ms of the actual MP3 duration) and would skew
+ * greeting playback timing.
  */
 export function calibrateDurations(
   manifest: GreetingManifest,
   measuredMsById: Record<string, number>,
 ): GreetingManifest {
-  return {
-    ...manifest,
-    greetings: manifest.greetings.map((greeting) => {
-      const measured = measuredMsById[greeting.id];
-      if (measured === undefined) {
-        return greeting;
-      }
-      const clamped = Math.min(MAX_DURATION_MS, Math.max(MIN_DURATION_MS, Math.round(measured)));
-      return { ...greeting, audioDurationMs: clamped };
-    }),
-  };
+  const outOfRange: string[] = [];
+
+  const greetings = manifest.greetings.map((greeting) => {
+    const measured = measuredMsById[greeting.id];
+    if (measured === undefined) {
+      return greeting;
+    }
+    const rounded = Math.round(measured);
+    if (rounded < MIN_DURATION_MS) {
+      outOfRange.push(`${greeting.id}: ${rounded}ms is below the ${MIN_DURATION_MS}ms minimum`);
+    } else if (rounded > MAX_DURATION_MS) {
+      outOfRange.push(`${greeting.id}: ${rounded}ms exceeds the ${MAX_DURATION_MS}ms maximum`);
+    }
+    return { ...greeting, audioDurationMs: rounded };
+  });
+
+  if (outOfRange.length > 0) {
+    throw new Error(
+      `Measured audio duration out of contract range for ${outOfRange.length} greeting(s):\n` +
+        `${outOfRange.map((entry) => `  - ${entry}`).join('\n')}\n` +
+        'Re-tune the SSML in scripts/greetingSsml.ts (adjust <break> times or prosody rate) ' +
+        'and regenerate the affected greeting(s).',
+    );
+  }
+
+  return { ...manifest, greetings };
 }
 
 // --- Duration measurement ---
