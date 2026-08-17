@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# CDK
+cdk.out/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE (workspace-specific settings already in .vscode/)
+.idea/
+*.swp
+*.tmp
+
+# TDD plans (local working docs)
+docs/tdd-plans/
+
+# Test coverage
+coverage/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Docker
+*.secret.yaml

@@ -1,0 +1,806 @@
+/**
+ * App.css — CRT Console TV visual experience for Max Height.
+ * Inspired by late-70s/80s console televisions: wood grain cabinet,
+ * chrome trim, right-side control panel with speaker grille.
+ * Color palette: cyan (#00ffff), magenta (#ff00ff) on black.
+ */
+
+/* ===== App Layout ===== */
+
+#max-height-app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  height: 100dvh;
+  padding: 0;
+  gap: 0;
+}
+
+/* TV wrapper — contains the oversized TV and clips overflow.
+   Takes all vertical space except the chat-bar. */
+.tv-wrapper {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: default;
+}
+
+/* ===== Chat Bar (input below TV frame) ===== */
+
+.chat-bar {
+  flex-shrink: 0;
+  width: 100%;
+  z-index: 10;
+  padding: 0.25rem 1.5rem 0.4rem;
+  margin-top: -20px;
+  position: relative;
+  background: transparent;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+}
+
+.chat-bar > * {
+  width: 100%;
+}
+
+/* ===== CRT Console TV Cabinet ===== */
+
+.crt-bezel {
+  position: relative;
+  /* Lock to TV-frame.png native aspect ratio (1536×1024).
+     Container always matches image proportions so percentage-based
+     overlays track the image content at any viewport size. */
+  aspect-ratio: 1536 / 1024;
+  /* Fill the viewport edge-to-edge. On widescreen (16:9) the TV
+     extends beyond the viewport vertically; on tall/narrow screens
+     it extends horizontally. The parent overflow:hidden crops the
+     excess, creating an immersive full-screen feel.
+     The 104% factor pushes the TV slightly past viewport edges
+     so no black gaps are visible around the cabinet. */
+  width: max(108vw, calc(108vh * 1536 / 1024));
+  height: auto;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+/* TV frame image — the image IS the cabinet AND the mask.
+   Sits ON TOP of content; transparent screen area lets content show through.
+   Container is aspect-ratio-locked to match, so fill without distortion. */
+.crt-frame-image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+}
+
+/* ===== CRT Screen ===== */
+
+.crt-screen {
+  position: absolute;
+  /* Content area sits BEHIND the TV frame image. The frame's opaque
+     wood/chrome masks any overflow. Coordinates match the transparent
+     glass area of TV-frame.png (1536×1024). */
+  left: 12%;
+  top: 14%;
+  width: 60%;
+  height: 62%;
+  background: #0a0a0a;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* Scanline overlay via repeating gradient */
+.crt-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* CRT glass reflection — convex barrel curvature */
+.crt-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.07) 0%, transparent 55%);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ===== CRT Control Panel (invisible overlay on image controls) ===== */
+
+.crt-panel {
+  position: absolute;
+  /* Position over TV-frame.png control strip.
+     Aligned to the frame's ON/OFF switch, volume knob, and painted CHANNEL knob.
+     Right panel opaque area: 71.8%–93.0%, center ~82.4%.
+     Panel spans 18%–64% of bezel height (height = 46% of bezel). */
+  right: 13.3%;
+  top: 18%;
+  bottom: 36%;
+  width: 11%;
+  pointer-events: auto;
+  z-index: 6;
+}
+
+/* Both control wrappers are absolutely positioned within .crt-panel so they
+   anchor to the bezel image (which has fixed aspect ratio) rather than to the
+   viewport. This eliminates vertical drift on window resize.
+
+   Painted positions (bezel coords): ON/OFF switch cy ≈ 0.28, brass knob cy ≈ 0.41,
+   CHANNEL knob cy ≈ 0.58.
+   Panel spans 0.18–0.64 → switch at ~21.8% of panel, knob at ~50%, channel at ~77%. */
+
+.tv-knob-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 21.8%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The volume button sits at the top of this wrapper with the LED bar below.
+   The taller panel shifts the hit-area upward so the button center lands
+   around 50% of the bezel height. */
+.volume-knob-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40.1%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.channel-knob-wrapper {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 77.1%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ===== TV Power Knob (overlay on image's toggle switch) ===== */
+
+.tv-knob {
+  /* Size to cover just the physical switch toggle in the frame */
+  width: 40%;
+  aspect-ratio: 3 / 4;
+  border-radius: 6px;
+  background: transparent;
+  border: 2px solid rgba(0, 255, 255, 0.3);
+  box-shadow: 0 0 8px rgba(0, 255, 255, 0.35);
+  cursor: pointer;
+  transition:
+    box-shadow 0.3s ease,
+    background 0.3s ease,
+    border-color 0.3s ease;
+  appearance: none;
+  padding: 0;
+  position: relative;
+  flex-shrink: 0;
+  animation: knob-pulse 2s ease-in-out infinite;
+}
+
+.tv-knob::after {
+  content: none;
+}
+
+/* TV is on — steady subtle glow (no pulse animation) */
+.tv-knob.on {
+  box-shadow:
+    0 0 10px rgba(0, 255, 255, 0.45),
+    0 0 20px rgba(0, 255, 255, 0.2);
+  animation: none;
+  border-color: rgba(0, 255, 255, 0.5);
+}
+
+/* Desktop hover: highlight + pointer cursor */
+@media (hover: hover) {
+  .tv-knob:hover:not(.on) {
+    background: rgba(0, 255, 255, 0.15);
+    border-color: rgba(0, 255, 255, 0.6);
+    box-shadow:
+      0 0 16px rgba(0, 255, 255, 0.5),
+      0 0 32px rgba(0, 255, 255, 0.2);
+    animation: none;
+  }
+}
+
+/* Mobile touch feedback */
+.tv-knob:active:not(.on) {
+  background: rgba(0, 255, 255, 0.2);
+  border-color: rgba(0, 255, 255, 0.7);
+  box-shadow:
+    0 0 16px rgba(0, 255, 255, 0.5),
+    0 0 32px rgba(0, 255, 255, 0.2);
+  animation: none;
+}
+
+.tv-knob:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ===== Volume Knob (invisible hit area over image's volume knob) ===== */
+
+.volume-knob {
+  /* Size relative to panel width for proportional scaling */
+  width: 55%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  appearance: none;
+  padding: 0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.volume-knob:hover:not(:disabled) {
+  box-shadow:
+    0 0 16px rgba(0, 255, 255, 0.5),
+    0 0 32px rgba(0, 255, 255, 0.2);
+}
+
+.volume-knob:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.channel-knob {
+  width: 55%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  appearance: none;
+  padding: 0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.channel-knob:hover:not(:disabled) {
+  box-shadow:
+    0 0 16px rgba(0, 255, 255, 0.5),
+    0 0 32px rgba(0, 255, 255, 0.2);
+}
+
+.channel-knob:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* SVG indicator that overlays the painted brass knob */
+/* ===== Volume LED segment bar (under the painted brass knob) ===== */
+
+.volume-led-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4%;
+  width: 70%;
+  margin-top: 6%;
+  pointer-events: none;
+}
+
+.volume-led {
+  flex: 1 1 0;
+  height: 0.6vh;
+  min-height: 4px;
+  max-height: 8px;
+  border-radius: 1px;
+  background: rgba(40, 50, 55, 0.85);
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.6);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.volume-led--dim {
+  /* explicit dim state — same as base; kept as a hook for future styling */
+  background: rgba(40, 50, 55, 0.85);
+}
+
+.volume-led--lit {
+  background: #00ffff;
+  box-shadow:
+    0 0 4px rgba(0, 255, 255, 0.9),
+    0 0 8px rgba(0, 255, 255, 0.5);
+}
+
+/* The eleventh LED — "one louder". Warm hot accent when lit. */
+.volume-led--max.volume-led--lit {
+  background: #ff5530;
+  box-shadow:
+    0 0 6px rgba(255, 85, 48, 1),
+    0 0 12px rgba(255, 85, 48, 0.6);
+}
+
+/* ===== Footer Overlay (input bar on TV cabinet base) ===== */
+
+.crt-footer-overlay {
+  position: absolute;
+  /* Positioned over the wooden base of the TV cabinet (y≈91-97%).
+     Spans below the screen, stopping before the panel area. */
+  left: 5%;
+  right: 22%;
+  bottom: 2%;
+  top: 91%;
+  display: flex;
+  align-items: center;
+  z-index: 4;
+  pointer-events: auto;
+}
+
+/* ===== Controls Area (inside footer overlay) ===== */
+
+.controls-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 4px;
+}
+
+/* ===== Text Input ===== */
+
+.text-input {
+  flex: 1;
+  height: 40px;
+  min-height: 36px;
+  padding: 0 12px;
+  background: rgba(0, 255, 255, 0.06);
+  border: 2px solid rgba(0, 255, 255, 0.5);
+  border-radius: 4px;
+  color: #00ffff;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(13px, 1.6vw, 16px);
+  caret-color: #00ffff;
+  box-shadow:
+    0 0 10px rgba(0, 255, 255, 0.45),
+    0 0 24px rgba(0, 255, 255, 0.2),
+    inset 0 0 8px rgba(0, 255, 255, 0.06);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+  animation: input-glow 2s ease-in-out infinite;
+}
+
+@keyframes input-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 10px rgba(0, 255, 255, 0.45),
+      0 0 24px rgba(0, 255, 255, 0.2),
+      inset 0 0 8px rgba(0, 255, 255, 0.06);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(0, 255, 255, 0.6),
+      0 0 36px rgba(0, 255, 255, 0.3),
+      inset 0 0 10px rgba(0, 255, 255, 0.1);
+  }
+}
+
+.text-input::placeholder {
+  color: rgba(0, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.text-input:focus {
+  background: rgba(0, 255, 255, 0.1);
+  border-color: #00ffff;
+  box-shadow:
+    0 0 16px rgba(0, 255, 255, 0.7),
+    0 0 40px rgba(0, 255, 255, 0.35),
+    inset 0 0 10px rgba(0, 255, 255, 0.12);
+  outline: none;
+  animation: none;
+}
+
+.text-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(10, 10, 10, 0.9);
+  border-color: rgba(0, 255, 255, 0.15);
+  box-shadow: 0 0 4px rgba(0, 255, 255, 0.1);
+  animation: none;
+}
+
+/* ===== Mic Button ===== */
+
+.mic-button {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  border: 2px solid #444;
+  color: #ccc;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.mic-button:hover:not(:disabled) {
+  border-color: #ff00ff;
+  box-shadow: 0 0 10px rgba(255, 0, 255, 0.25);
+}
+
+.mic-button.active {
+  border-color: #ff0000;
+  background: #2a0a0a;
+  box-shadow: 0 0 16px rgba(255, 0, 0, 0.4);
+  animation: mic-pulse 1s infinite;
+}
+
+.mic-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.mic-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.on-air-indicator {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: bold;
+  color: #ff0000;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: on-air-blink 0.8s steps(1) infinite;
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 16px rgba(255, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(255, 0, 0, 0.6);
+  }
+}
+
+@keyframes on-air-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes knob-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(0, 255, 255, 0.55);
+  }
+}
+
+/* ===== Avatar ===== */
+
+.avatar-frame-cycler {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center 166%;
+  z-index: 2;
+  filter: drop-shadow(0 0 8px rgba(0, 255, 255, 0.3));
+}
+
+/* ===== Background Cycler ===== */
+
+.crt-background-cycler {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ===== Broadcast Text ===== */
+
+.broadcast-text {
+  position: absolute;
+  bottom: 6%;
+  left: 8%;
+  right: 8%;
+  color: #00ffff;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(12px, 2.5vw, 16px);
+  line-height: 1.4;
+  text-shadow: 0 0 6px rgba(0, 255, 255, 0.4);
+  z-index: 3;
+  max-height: 30%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.broadcast-text::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===== Session State Overlay (non-SIGNAL_LOST) ===== */
+
+.session-state-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 6;
+}
+
+.overlay-message {
+  color: #00ffff;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(14px, 3vw, 18px);
+  text-align: center;
+  padding: 0 20px;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+  max-width: 80%;
+  line-height: 1.5;
+}
+
+/* ===== SIGNAL_LOST — Retro TV Off-Air ===== */
+
+.session-state-overlay.signal-lost {
+  background: #000;
+  flex-direction: column;
+}
+
+/* SMPTE color bars */
+.signal-lost .color-bars {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    #bfbfbf 0% 14.28%,
+    #bfbf00 14.28% 28.57%,
+    #00bfbf 28.57% 42.85%,
+    #00bf00 42.85% 57.14%,
+    #bf00bf 57.14% 71.42%,
+    #bf0000 71.42% 85.71%,
+    #0000bf 85.71% 100%
+  );
+  opacity: 0.7;
+}
+
+/* Animated static snow */
+.signal-lost .static-noise {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  mix-blend-mode: overlay;
+}
+
+/* PLEASE STAND BY banner */
+.signal-lost .standby-banner {
+  position: relative;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 12px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.signal-lost .standby-text {
+  color: #e0e0e0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(18px, 5vw, 32px);
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.signal-lost .standby-subtext {
+  color: #c0c0c0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(12px, 3vw, 20px);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+/* ===== Tuning Overlay (TV power-on static) ===== */
+
+.tuning-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  background: #000;
+  overflow: hidden;
+}
+
+.tuning-overlay .static-noise {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
+/* ===== Tune-In Glitch Flash (post-static, settling phase) ===== */
+
+.tune-in-glitch-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: rgba(0, 255, 255, 0.08);
+  mix-blend-mode: screen;
+  animation: tune-in-glitch 600ms steps(6) 1;
+}
+
+@keyframes tune-in-glitch {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  20% {
+    opacity: 0.9;
+    transform: translateX(-2%);
+  }
+  30%,
+  40% {
+    opacity: 0;
+  }
+  50%,
+  60% {
+    opacity: 0.7;
+    transform: translateX(1.5%);
+  }
+  70%,
+  80% {
+    opacity: 0;
+  }
+  85%,
+  95% {
+    opacity: 0.5;
+    transform: translateX(-1%);
+  }
+}
+
+/* ===== Reduced Motion ===== */
+
+@media (prefers-reduced-motion: reduce) {
+  .mic-button.active {
+    animation: none;
+  }
+
+  .on-air-indicator {
+    animation: none;
+    opacity: 1;
+  }
+
+  .signal-lost .static-noise {
+    display: none;
+  }
+
+  .text-input {
+    animation: none;
+  }
+
+  .crt-background-cycler {
+    /* Component handles reduced motion internally (no cycling) */
+  }
+}
+
+/* ===== Mobile / Small Screens ===== */
+
+@media (max-width: 600px) {
+  .crt-bezel {
+    /* On narrow viewports, width becomes the constraint.
+       Height auto-derived from aspect-ratio. No overflow needed. */
+    width: 100vw;
+    height: auto;
+  }
+
+  .tv-wrapper {
+    /* TV fits inside wrapper on portrait — don't grow beyond content */
+    flex: 0 0 auto;
+  }
+
+  #max-height-app {
+    justify-content: center;
+  }
+
+  .chat-bar {
+    margin-top: 0;
+  }
+}
+
+/* Mobile landscape — short viewport, TV oversized */
+@media (max-height: 500px) {
+  .tv-wrapper {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chat-bar {
+    margin-top: -10px;
+    padding: 0.2rem 1rem 0.3rem;
+  }
+}
+
+/* Mobile landscape with narrow height (phones in landscape orientation) —
+   height is the constraint, so fit the TV vertically instead of overflowing */
+@media (orientation: landscape) and (max-height: 500px) {
+  .crt-bezel {
+    width: auto;
+    height: 115%;
+  }
+
+  .chat-bar {
+    margin-top: -8px;
+    padding: 0.15rem 0.75rem 0.2rem;
+  }
+}
+
+/* Ensure cursor is visible on hover-capable devices (tablets with trackpads, Chromebooks) */
+@media (hover: hover) {
+  .tv-wrapper,
+  .crt-bezel,
+  .crt-screen {
+    cursor: default;
+  }
+}

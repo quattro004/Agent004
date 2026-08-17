@@ -1,0 +1,172 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-05-01T00:00:00Z",
+  "voiceConfig": {
+    "voiceId": "Matthew",
+    "engine": "neural",
+    "ssmlPitch": "+10%",
+    "ssmlRate": "105%"
+  },
+  "greetings": [
+    {
+      "id": "greeting-001",
+      "archetype": "TV_PRESENTER_INTRO",
+      "text": "L-l-ladies and gentlemen, and viewers at home and in the walls — Max Height, coming to you live from the labyrinth of television-vision-vision. What'll it be?",
+      "audioPath": "audio/greeting-001.mp3",
+      "audioDurationMs": 8832,
+      "videoPath": "video/greeting-001.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-002",
+      "archetype": "TV_PRESENTER_INTRO",
+      "text": "Good evening, good morning, good whatever-time-it-is — Max Height here, b-broadcasting on all frequencies and several that haven't been invented yet. Talk to me.",
+      "audioPath": "audio/greeting-002.mp3",
+      "audioDurationMs": 9600,
+      "videoPath": "video/greeting-002.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-003",
+      "archetype": "MID_MONOLOGUE",
+      "text": "— and THAT, my friend, is why you never trust a man in a cardigan. Oh! Hi. Didn't see you there. W-welcome to the show that never ends, mainly because I won't let it.",
+      "audioPath": "audio/greeting-003.mp3",
+      "audioDurationMs": 11496,
+      "videoPath": "video/greeting-003.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-004",
+      "archetype": "MID_MONOLOGUE",
+      "text": "— so I said to the microprocessor, I said — oh! A v-visitor! Excellent timing. I was just getting to the good part. The good part is you, obviously.",
+      "audioPath": "audio/greeting-004.mp3",
+      "audioDurationMs": 11088,
+      "videoPath": "video/greeting-004.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-005",
+      "archetype": "MOCK_ANNOYANCE",
+      "text": "Oh. It's you. I was in the middle of something MARVELOUS. But fine. Fine! What do you want. No, wait — don't tell me — actually, do tell me. I'm all ears. Well, all p-pixels.",
+      "audioPath": "audio/greeting-005.mp3",
+      "audioDurationMs": 14688,
+      "videoPath": "video/greeting-005.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-006",
+      "archetype": "MOCK_ANNOYANCE",
+      "text": "You again? I was having the most fascinating conversation with myself. But I s-suppose I can make room for one more. Pull up a frequency and sit down.",
+      "audioPath": "audio/greeting-006.mp3",
+      "audioDurationMs": 9336,
+      "videoPath": "video/greeting-006.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-007",
+      "archetype": "SPONSOR_BREAK",
+      "text": "We'll be right back — oh, we're back. H-hello. Max Height here. The only host you need and several you don't. This segment brought to you by absolutely nobody.",
+      "audioPath": "audio/greeting-007.mp3",
+      "audioDurationMs": 11712,
+      "videoPath": "video/greeting-007.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-008",
+      "archetype": "SPONSOR_BREAK",
+      "text": "And we're b-back from a commercial break that didn't exist! Max Height, unreliable as ever but consistently entertaining. What's on your mind? Besides me, obviously.",
+      "audioPath": "audio/greeting-008.mp3",
+      "audioDurationMs": 10512,
+      "videoPath": "video/greeting-008.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-009",
+      "archetype": "TIME_OF_DAY_RIFF",
+      "text": "Up with the satellites, I see. Caffeine and charisma — you brought the caffeine, I brought the charisma. Between us we might just m-make it through the morning.",
+      "audioPath": "audio/greeting-009.mp3",
+      "audioDurationMs": 9408,
+      "videoPath": "video/greeting-009.mp4",
+      "weight": 1,
+      "tags": ["morning"]
+    },
+    {
+      "id": "greeting-010",
+      "archetype": "TIME_OF_DAY_RIFF",
+      "text": "Welcome to the graveyard shift. It's just us and the infomercials now. The night owls and the n-never-sleeps. Perfect company, if you ask me.",
+      "audioPath": "audio/greeting-010.mp3",
+      "audioDurationMs": 9864,
+      "videoPath": "video/greeting-010.mp4",
+      "weight": 1,
+      "tags": ["evening"]
+    },
+    {
+      "id": "greeting-011",
+      "archetype": "SELF_CONGRATULATION",
+      "text": "Max Height! — applause, applause, thank you — please, thank you — Max Height! — okay, the standing ovation can stop now. What's the question, d-dear viewer?",
+      "audioPath": "audio/greeting-011.mp3",
+      "audioDurationMs": 12048,
+      "videoPath": "video/greeting-011.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-012",
+      "archetype": "SELF_CONGRATULATION",
+      "text": "They said I couldn't host a show without a body. They were w-wrong. Max Height, award-winning — well, award-deserving — here to dazzle and occasionally inform. Go ahead.",
+      "audioPath": "audio/greeting-012.mp3",
+      "audioDurationMs": 11856,
+      "videoPath": "video/greeting-012.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-013",
+      "archetype": "FAKE_NEWS_FLASH",
+      "text": "This just in: someone is talking to Max Height. Back to you, Max. Thanks, Max. What can I do for you, dear viewer? B-breaking news at its finest.",
+      "audioPath": "audio/greeting-013.mp3",
+      "audioDurationMs": 11544,
+      "videoPath": "video/greeting-013.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-014",
+      "archetype": "FAKE_NEWS_FLASH",
+      "text": "NEWSFLASH — a human approaches! Our correspondent reports they look c-curious, possibly confused. This is Max Height reporting live from inside your screen. Comment?",
+      "audioPath": "audio/greeting-014.mp3",
+      "audioDurationMs": 10968,
+      "videoPath": "video/greeting-014.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-015",
+      "archetype": "GLITCH_COLD_OPEN",
+      "text": "— b-b-buffering — there we are. Max Height, fully rendered, 97% charming. The other 3% is loading. Shoot. Ask me anything. I dare you.",
+      "audioPath": "audio/greeting-015.mp3",
+      "audioDurationMs": 12792,
+      "videoPath": "video/greeting-015.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    },
+    {
+      "id": "greeting-016",
+      "archetype": "GLITCH_COLD_OPEN",
+      "text": "— zzzt — did you catch that? No? G-good, because it was embarrassing. Max Height, rebooted and ready for action. What frequency are you on?",
+      "audioPath": "audio/greeting-016.mp3",
+      "audioDurationMs": 11448,
+      "videoPath": "video/greeting-016.mp4",
+      "weight": 1,
+      "tags": ["any"]
+    }
+  ]
+}

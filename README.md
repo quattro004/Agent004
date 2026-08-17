@@ -1,6 +1,6 @@
 # Max Height
 
-*Inspired by Max Headroom — the iconic 1980s "computer-generated" TV presenter*
+_Inspired by Max Headroom — the iconic 1980s "computer-generated" TV presenter_
 
 ## About
 
@@ -20,18 +20,18 @@ This is a **non-commercial fan project** for a friends-and-family audience. It i
 
 ## Architecture
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React + Vite SPA, React Three Fiber, Zustand, Web Audio API |
-| Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime |
-| LLM | Amazon Bedrock — Claude 3.5 Haiku |
-| TTS | Amazon Polly Neural (direct SDK, streaming) |
-| STT | Web Speech API (browser built-in) |
-| Auth | Amazon Cognito Identity Pool (guest/unauthenticated) |
-| Memory | AgentCore Memory (30-day rolling window) |
-| Observability | AgentCore Observability (traces, metrics, logs) |
-| Hosting | S3 + CloudFront |
-| IaC | AWS CDK (all infrastructure, including AgentCore resources) |
+| Layer         | Technology                                                  |
+| ------------- | ----------------------------------------------------------- |
+| Frontend      | React + Vite SPA, React Three Fiber, Zustand, Web Audio API |
+| Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime      |
+| LLM           | Amazon Bedrock — Claude 3.5 Haiku                           |
+| TTS           | Amazon Polly Neural (direct SDK, streaming)                 |
+| STT           | Web Speech API (browser built-in)                           |
+| Auth          | Amazon Cognito Identity Pool (guest/unauthenticated)        |
+| Memory        | AgentCore Memory (30-day rolling window)                    |
+| Observability | AgentCore Observability (traces, metrics, logs)             |
+| Hosting       | S3 + CloudFront                                             |
+| IaC           | AWS CDK (all infrastructure, including AgentCore resources) |
 
 ## Repo Layout
 

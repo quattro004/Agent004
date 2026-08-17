@@ -1,30 +1,46 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.0.0 → 1.1.0
-  Bump rationale : MINOR — new principle added (P10. Unit Tests
-                   Where Possible).
+  Version change : 1.3.0 → 1.4.0
+  Bump rationale : MINOR — P11 materially expanded: the
+                   mandated *mechanism* for local temporary
+                   credentials (IAM Identity Center / SSO) is
+                   relaxed to a preference-ordered list. The
+                   underlying requirement — temporary,
+                   least-privilege credentials with no
+                   long-lived AKIA keys on disk — is unchanged
+                   and now applies explicitly to build-time
+                   generation identities.
 
-  Modified principles : None.
+  Modified principles : P11 Credential & Secret Hygiene.
 
-  Added principles:
-    P10. Unit Tests Where Possible
+  Added : None.
 
-  Added sections:
-    - Quality gate #6 (Test coverage gate) under Quality Gates.
+  Modified sections:
+    - Core Principles (P11 expanded).
+    - Quality Gates (gate #7 wording aligned with P11).
 
-  Removed sections : None.
+  Rationale for the P11 change:
+    IAM Identity Center can only issue AWS-account access
+    (permission sets) from an *organization* instance; an
+    account instance supports neither permission sets nor
+    account assignment. Creating an AWS Organization on the
+    free plan expires all remaining free-tier credits
+    immediately and forfeits eligibility for future credits.
+    Mandating SSO therefore carried a real, immediate cost in
+    direct conflict with P2 (Budget Ceiling), so the mechanism
+    is now chosen per-account rather than fixed.
 
   Templates requiring updates:
-    ✅ plan-template.md — Constitution Check section is generic;
-       compatible. Test tasks already present in template.
-    ✅ spec-template.md — Requirements format is generic;
-       compatible.
-    ✅ tasks-template.md — Phase structure already includes test
-       tasks; compatible.
-    ✅ No command templates found in .specify/templates/commands/.
+    ✅ quickstart.md — local credential guidance updated to
+       the org-free CloudShell path.
+    ✅ docs/audio-plan.md — Phase 3 credential setup rewritten.
+    ✅ contracts/polly-tts.md — runtime IAM scoped by
+       aws:RequestedRegion (unchanged, still compliant).
 
-  Follow-up TODOs : None.
+  Follow-up TODOs : Review remaining IAM statements (Cognito
+    guest role in cognito-stack.ts) for region scoping.
+    Revisit SSO if this account ever joins an organization.
 -->
 
 # Max Height Constitution
@@ -94,8 +110,8 @@ the judge influences what it judges.
 
 - Pin exact SDK versions; no `^` / `~` on pre-1.0
   dependencies.
-- `package-lock.json` MUST be committed, never deleted.
-- `npm audit` MUST be clean before merging dependency changes.
+- `pnpm-lock.yaml` MUST be committed, never deleted.
+- `pnpm audit` MUST be clean before merging dependency changes.
 - New dependencies MUST be reviewed (maintainer, publish date,
   downloads) before adding.
 
@@ -158,23 +174,70 @@ eyes. Automated tests are the substitute for code review
 confidence. They also protect against personality and behavior
 regressions that traces alone cannot catch.
 
+### P11. Credential & Secret Hygiene
+
+- Local/developer AWS access MUST use **temporary** (`ASIA…`)
+  credentials. Long-lived IAM user access keys (`AKIA…`) MUST
+  NOT be written to disk or committed.
+- The *mechanism* for obtaining those temporary credentials is
+  NOT mandated. IAM Identity Center (SSO) can only grant AWS
+  account access from an **organization** instance, and
+  creating an AWS Organization on the free plan expires all
+  remaining free-tier credits immediately — a direct conflict
+  with P2. Acceptable mechanisms, in order of preference:
+  1. **AWS CloudShell session export** — sign in to the console
+     as a least-privilege IAM user (console password only, no
+     access keys) and export that session's temporary
+     credentials into the local shell. No long-lived key is
+     ever created.
+  2. **`sts:AssumeRole`** into a task-scoped role, where the
+     bootstrap access key lives in environment variables only
+     (never `aws configure`, never on disk) and is deleted
+     immediately after use.
+  3. **IAM Identity Center (SSO)** — preferred on any account
+     that already belongs to an AWS Organization.
+- Temporary credentials MUST be supplied to tooling as
+  environment variables only. They MUST NOT be written to
+  `~/.aws`, committed, or pasted into chat, issue, or PR
+  transcripts.
+- Runtime access MUST use scoped temporary credentials
+  (Cognito guest), consistent with P7.
+- IAM permissions MUST follow least privilege — scoped by
+  action and, where supported, by `aws:RequestedRegion` and
+  service conditions (e.g., `polly:Engine`, `polly:VoiceId`).
+  This applies to build-time and one-shot asset-generation
+  identities as much as to runtime roles.
+- Application secrets (API keys) MUST live in SSM
+  SecureString or environment variables, never in source.
+
+**Rationale**: A solo project has no security team. Temporary,
+least-privilege, region-scoped credentials limit the blast
+radius if a laptop, token, or repository is compromised. The
+guarantee that matters is *short-lived and narrowly scoped* —
+which mechanism delivers it is an account-level detail, and
+pinning it to one product would have cost real money here.
+
 ## Technology Stack
 
 | Layer | Technology |
 |-------|------------|
 | Frontend | React + Vite SPA, React Three Fiber, Zustand, Web Audio API |
 | Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime |
-| LLM | Amazon Bedrock — Claude 3.5 Haiku |
+| LLM | Amazon Bedrock — Anthropic Haiku-class (specific model version in plan) |
 | TTS | Amazon Polly Neural (direct SDK, streaming) |
 | STT | Web Speech API (browser built-in) |
 | Auth | Amazon Cognito Identity Pool (guest/unauthenticated) |
 | Memory | AgentCore Memory (30-day rolling window) |
 | Observability | AgentCore Observability (traces, metrics, logs) |
 | Hosting | S3 + CloudFront |
-| IaC | AWS CDK (all infrastructure, including AgentCore resources) |
+| IaC | AWS CDK (infrastructure) + AgentCore CLI (agent deployment) |
 
 Technology choices are load-bearing — changes to this table
 require a constitution amendment (MINOR version bump minimum).
+The LLM row pins the model tier (e.g., Haiku-class), not the
+specific version. The exact model ID is specified in the feature
+plan's Technical Context section. This allows model version
+upgrades within the same tier without a constitution amendment.
 
 ## Quality Gates
 
@@ -202,6 +265,13 @@ The following gates MUST pass before work proceeds past them:
    logic MUST include unit tests covering the changed behavior,
    per P10. Exemptions for trivial glue code MUST be justified
    in the PR description.
+
+7. **Credential gate**: Local AWS access uses temporary
+   (`ASIA…`) credentials supplied via environment variables;
+   no long-lived AWS keys committed or stored on disk. IAM
+   statements MUST be least-privilege and region-scoped where
+   supported — including build-time generation identities —
+   per P11.
 
 ## Governance
 
@@ -236,4 +306,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-04-19
+**Version**: 1.4.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-08-15
