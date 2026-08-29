@@ -36,11 +36,58 @@ This is a **non-commercial fan project** for a friends-and-family audience. It i
 ## Repo Layout
 
 ```
-apps/web/               # React + Vite SPA
-packages/agent/         # Strands agent backend + Dockerfile
-infrastructure/cdk/     # All AWS resources via CDK
-docs/                   # Specs, personality bible, plans
+packages/
+  frontend/           # React + Vite SPA
+  agent/              # Strands agent for AgentCore Runtime
+  infra/              # All AWS resources via CDK
+specs/                # Feature specifications (source of truth)
+docs/                 # Design documents, personality bible
 ```
+
+## Getting Started
+
+Requires **Node.js 24** (see `.nvmrc`) and **pnpm 11.0.8**:
+
+```bash
+npm install -g pnpm@11.0.8
+git clone <repo-url>
+cd Agent004
+pnpm install
+```
+
+Then run the quality gate to confirm your environment is healthy:
+
+```bash
+pnpm run validate    # lint → format:check → typecheck → build → test
+```
+
+| Command              | Purpose                       |
+| -------------------- | ----------------------------- |
+| `pnpm run validate`  | Full gate — run before any PR |
+| `pnpm run lint`      | ESLint                        |
+| `pnpm run format`    | Auto-fix formatting           |
+| `pnpm run typecheck` | TypeScript project build      |
+| `pnpm run test`      | All workspace tests           |
+
+Per-package development:
+
+```bash
+cd packages/frontend && pnpm run dev     # Vite dev server
+cd packages/agent    && pnpm run dev     # Agent watch mode
+cd packages/infra    && npx cdk synth    # Synthesize CDK stacks
+```
+
+Deploying to AWS additionally requires the AWS CLI, CDK CLI, Docker, and
+credentials. See
+[`specs/001-max-height-ai-character/quickstart.md`](specs/001-max-height-ai-character/quickstart.md)
+for the full setup, including the credentials policy (temporary `ASIA…`
+credentials only).
+
+## Contributing
+
+- Read `.specify/memory/constitution.md` and the relevant folder under `specs/` before writing code — they are the source of truth.
+- This project uses **TDD**: write a failing test first, then the implementation.
+- `pnpm run validate` must pass before opening a PR.
 
 ## Legal
 

@@ -1,0 +1,16 @@
+# Normalize all text files to LF in the repository and in the working tree.
+# Prettier's `endOfLine` default is "lf", so without this a Windows clone
+# (git core.autocrlf=true) checks out CRLF and `pnpm run format:check` fails
+# on every tracked text file while Linux CI passes.
+* text=auto eol=lf
+
+# Shell scripts must keep LF or they break when executed.
+*.sh text eol=lf
+
+# Windows-only scripts are more predictable with CRLF.
+*.ps1 text eol=crlf
+
+# Binary assets: never touch line endings or attempt text diffs.
+*.png binary
+*.ico binary
+*.mp3 binary
