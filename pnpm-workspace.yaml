@@ -1,5 +1,17 @@
 packages:
   - 'packages/*'
 allowBuilds:
+  # Optional native file watcher pulled in by jest-haste-map (jest 30.5+).
+  # Tests always run single-shot, never in watch mode, so jest falls back
+  # cleanly and we avoid a node-gyp compile. Denied explicitly so installs
+  # don't fail with ERR_PNPM_IGNORED_BUILDS.
+  '@parcel/watcher': false
   esbuild: true
   unrs-resolver: true
+# pnpm reads overrides only from this file. A top-level `overrides` key in
+# package.json is npm-only, and pnpm 11 also ignores `pnpm.overrides` there.
+# Forces a single Zod 4 version across the graph per research.md §R1. The floor
+# tracks the `zod` version declared by packages/agent so the override can never
+# resolve below the package's own declared dependency.
+overrides:
+  zod: ^4.5.2

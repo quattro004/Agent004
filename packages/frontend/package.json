@@ -9,31 +9,33 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "typecheck": "tsc -b --noEmit",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json",
     "generate:greetings": "tsx scripts/generate-greetings.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-cognito-identity": "^3.1110.0",
-    "@aws-sdk/client-polly": "^3.1110.0",
+    "@aws-sdk/client-cognito-identity": "^3.1121.0",
+    "@aws-sdk/client-polly": "^3.1121.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
-    "@testing-library/jest-dom": "^6.10.0",
-    "@testing-library/react": "^16.3.2",
-    "@types/node": "25.9.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
-    "jsdom": "^29.1.1",
-    "music-metadata": "^11.14.0",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "jsdom": "^30.0.1",
+    "music-metadata": "^11.15.0",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vite": "^8.2.1",
-    "vitest": "^4.1.10"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   }
 }

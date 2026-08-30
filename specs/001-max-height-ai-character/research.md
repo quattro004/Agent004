@@ -2,7 +2,7 @@
 
 **Feature**: 001-max-height-ai-character
 **Date**: 2026-04-20
-**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-06-07 with dependency upgrade to latest stable (TS 6.0.3, React 19.2.7, CDK 2.258.0, Strands SDK 1.4.0, Vitest 4.1.8 security fix). Previously updated 2026-04-22 with Node.js 24 LTS upgrade (Node 20 EOL April 30, 2026), TypeScript pinned to 5.8.x for MVP stability, Vite patch bump. Previously updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, version refresh, and spec clarification session 2.
+**Status**: Complete — all NEEDS CLARIFICATION items resolved. Updated 2026-08-30 with a dependency refresh to latest stable and the deliberate deferral of three majors (TypeScript 7, pnpm 12, Node 26) — see `R15`. Previously updated 2026-06-07 with dependency upgrade to latest stable (TS 6.0.3, React 19.2.7, CDK 2.258.0, Strands SDK 1.4.0, Vitest 4.1.8 security fix). Previously updated 2026-04-22 with Node.js 24 LTS upgrade (Node 20 EOL April 30, 2026), TypeScript pinned to 5.8.x for MVP stability, Vite patch bump. Previously updated 2026-04-20 with Claude Haiku 4.5 migration, AgentCore CLI adoption, version refresh, and spec clarification session 2.
 
 ---
 
@@ -82,7 +82,7 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 - TypeScript chosen over Python because the developer is a TypeScript developer — unified language stack with the React frontend eliminates context-switching and enables shared types across the monorepo.
 - Hooks are **observational, not interceptive** — you can observe `afterModelCallEvent` and request retry (`event.retry = true`), but cannot modify response content mid-stream. Stutter injection must be post-processing on the complete response text, not mid-stream interception.
 - AgentCore CLI provides project scaffolding, local dev with hot reload, and direct deployment to AgentCore Runtime.
-- ⚠️ **Zod 4 peer dependency conflict** may still apply — `@strands-agents/sdk` and its transitive dependencies may require different Zod major versions (some packages still on Zod 3 vs Zod 4). pnpm strict peer dependency resolution can surface install errors early. **Preferred resolution**: use root `package.json` `overrides` to force a single Zod 4 version (e.g., `"overrides": { "zod": "^4.3.6" }`). Zod 4 ships a `zod/v3` compatibility mode (`z.setCompatMode(true)`) for gradual migration of Zod 3 consumers. Avoid bypassing peer checks in production workflows. Latest stable Zod version: **4.3.6** (April 2026).
+- ⚠️ **Zod 4 peer dependency conflict** may still apply — `@strands-agents/sdk` and its transitive dependencies may require different Zod major versions (some packages still on Zod 3 vs Zod 4). pnpm strict peer dependency resolution can surface install errors early. **Preferred resolution**: force a single Zod 4 version via an `overrides` block in **`pnpm-workspace.yaml`** (an `overrides:` mapping containing `zod: ^4.4.3`). Note that pnpm reads overrides *only* from `pnpm-workspace.yaml`: a top-level `overrides` key in `package.json` is npm-only, and pnpm 11 also ignores `pnpm.overrides` in `package.json` — either is silently a no-op. Keep the override floor at or above the `zod` version declared by `packages/agent` so it can never resolve below that package's own dependency. Zod 4 ships a `zod/v3` compatibility mode (`z.setCompatMode(true)`) for gradual migration of Zod 3 consumers. Avoid bypassing peer checks in production workflows. Latest stable Zod version at time of research: **4.3.6** (April 2026); the workspace currently resolves **4.4.3**.
 
 **SDK status (April 2026)**:
 - Python: v1.36.0, production since July 2025, millions of downloads
@@ -428,3 +428,58 @@ Additional phrases may be added based on personality bible catchphrases during i
 - Keep text-only at $8: Simpler, but violates the spirit of P8 since voice can still be provided at zero cost.
 - Pre-generate a limited set of budget-mode audio: Doesn't cover dynamic LLM responses.
 - Third-party free TTS (e.g., Coqui): Adds dependency, quality uncertain, may not be truly free long-term.
+
+---
+
+## R15. Dependency Refresh and Deferred Majors (2026-08-30)
+
+**Decision**: Refresh all dependencies to latest stable *within their current
+major*. Defer three available majors — TypeScript 7, pnpm 12, and Node.js 26 —
+and align `@types/node` to the Node 24 LTS line.
+
+**Adopted**:
+
+| Package | From | To |
+|---------|------|-----|
+| pnpm | 11.0.8 | 11.24.0 |
+| `@strands-agents/sdk` | 1.4.0 | 1.15.0 |
+| `zod` | 4.4.3 | 4.5.2 |
+| `aws-cdk-lib` | 2.265.0 | 2.267.0 |
+| `@aws-cdk/aws-bedrock-agentcore-alpha` | 2.258.0-alpha.0 | 2.267.0-alpha.0 |
+| `aws-cdk` | 2.1136.0 | 2.1139.0 |
+| all `@aws-sdk/*` | 3.1110.0 | 3.1121.0 |
+| `@testing-library/jest-dom` | 6.10.0 | 7.0.1 |
+| `jsdom` | 29.1.1 | 30.0.1 |
+| `@types/node` | 25.9.x | 24.13.3 |
+| `vite` / `vitest` / `eslint` / `jest` / others | — | latest in-major |
+
+**Deferred majors and rationale**:
+
+- **TypeScript 7.0.2 — blocked.** TS 7 is the Go-native port (`tsgo`). It ships
+  *without the public compiler API*, which `typescript-eslint` requires; the API
+  is not planned until 7.1. Adopting it would break `pnpm run lint`. TS 6.0.3 is
+  already the newest 6.x release. Revisit when 7.1 ships and `typescript-eslint`
+  declares support.
+- **pnpm 12.1.0 — deferred.** Released 2026-08-26 as a Rust rewrite. The npm
+  `latest` tag still points at the 11.x line; v12 is opt-in via the `next-12`
+  tag. Not appropriate for a project whose onboarding path must be dependable.
+  11.24.0 is the newest stable 11.x.
+- **Node.js 26 — deferred.** Node 24 is Active LTS as of August 2026; Node 26 is
+  Current and does not enter LTS until October 2026. `.nvmrc` stays at 24.
+
+**`@types/node` alignment**: the repo was on the 25.x line while running Node 24
+LTS, so it typed against APIs absent from the runtime. Moved to 24.13.3 so types
+track the runtime major.
+
+**Supply-chain note**: pnpm 11.24 enforces a `minimumReleaseAge` policy on the
+lockfile, which directly implements constitution P6 (review publish date before
+adding a dependency). It rejected `zod@4.5.4` and `4.5.3` as published only hours
+earlier; `4.5.2` is the newest release that clears the policy. Because the check
+verifies the lockfile *before* resolving, a lockfile produced by an older pnpm
+may need to be restored from the last committed state and re-resolved under
+11.24 rather than patched in place.
+
+**Alternatives considered**:
+- Adopt TS 7 for the ~10x faster type check: rejected — breaks lint until 7.1.
+- Adopt pnpm 12 now: rejected — not on the `latest` tag; contradicts the goal of
+  a dependable fresh-clone setup.
