@@ -9,18 +9,20 @@
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.1110.0",
-    "@strands-agents/sdk": "1.4.0",
-    "zod": "^4.4.3"
+    "@aws-sdk/client-bedrock-runtime": "^3.1121.0",
+    "@strands-agents/sdk": "1.15.0",
+    "zod": "^4.5.2"
   },
   "devDependencies": {
-    "@types/node": "25.9.2",
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^4.1.11",
     "aws-sdk-client-mock": "^4.1.0",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

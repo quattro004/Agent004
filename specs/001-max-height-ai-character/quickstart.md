@@ -10,11 +10,22 @@
 | Tool | Version | Install |
 |------|---------|---------|
 | Node.js | 24 LTS | [nodejs.org](https://nodejs.org/) |
-| pnpm | 11+ | `npm install -g pnpm@11.0.8` |
+| pnpm | 11.24.0 | `corepack enable` (uses the pinned `packageManager` version) |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.258+ | `npm install -g aws-cdk` |
 | AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |
 | Docker | 24+ | [docker.com](https://www.docker.com/) |
+
+Only Node.js and pnpm are needed to install, build, and test the repo. The AWS
+CLI, CDK CLI, AgentCore CLI, and Docker are required only for deploying.
+
+`corepack enable` is preferred over `npm install -g pnpm@11.24.0` because the
+version then comes from the `packageManager` field in the root `package.json`,
+so it stays correct as that pin changes.
+
+> **Note**: `.npmrc` sets `engine-strict=true`. On Node older than 24,
+> `pnpm install` **fails outright** rather than warning. Check with `node -v`
+> first; `.nvmrc` pins the major version for `nvm`/`fnm` users.
 
 AWS account with Bedrock model access enabled for `anthropic.claude-haiku-4-5-20251001-v1:0` in your target region.
 
@@ -39,7 +50,10 @@ docs/                # Design documents, personality bible
 # Clone and install
 git clone <repo-url>
 cd Agent004
-pnpm install                     # See note below if Zod peer conflict arises
+pnpm install
+
+# Confirm the toolchain is healthy before going further
+pnpm run validate                # lint → format:check → typecheck → build → test
 
 # Configure AWS credentials — temporary (ASIA…) credentials only.
 # Do NOT use long-lived IAM user access keys (AKIA…) on disk or in the repo. See constitution P11.
@@ -69,7 +83,14 @@ npx cdk bootstrap
 > `~/.aws`. Re-export them when they expire. On PowerShell use
 > `$env:AWS_ACCESS_KEY_ID="ASIA..."` instead of `export`.
 
-> **Note**: If a Zod peer dependency conflict occurs between `@strands-agents/sdk` and transitive dependencies still on Zod 3, add an `overrides` block to the root `package.json`: `"overrides": { "zod": "^4.3.6" }`. Zod 4 includes a `zod/v3` compatibility mode for gradual migration. Avoid `--legacy-peer-deps` — it silently masks conflicts. See `research.md §R1` for details.
+> **Note**: A single Zod 4 version is already forced across the workspace via the
+> `overrides` block in `pnpm-workspace.yaml`, so the peer conflict described in
+> `research.md §R1` should not occur. If you need to adjust it, edit it **there** —
+> pnpm reads overrides only from `pnpm-workspace.yaml`. A top-level `overrides`
+> key in `package.json` is npm-only, and pnpm 11 also ignores `pnpm.overrides`
+> in `package.json`; either one is silently a no-op. Zod 4 includes a `zod/v3`
+> compatibility mode for gradual migration. Avoid `--legacy-peer-deps` — it
+> silently masks conflicts.
 
 ### SSM SecureString secrets (required before `cdk deploy`)
 
@@ -160,6 +181,9 @@ npx cdk deploy         # Deploy all stacks
 ## Running Tests
 
 ```bash
+# Everything the CI gate runs, in order
+pnpm run validate
+
 # All tests
 pnpm test
 
@@ -168,8 +192,21 @@ cd packages/frontend && pnpm test    # Vitest + RTL
 cd packages/agent && pnpm test       # Vitest
 cd packages/infra && pnpm test       # Jest + CDK assertions
 
-# E2E (requires deployed stack)
-cd packages/frontend && pnpm run test:e2e   # Playwright
+# Coverage (v8 provider for Vitest packages, --coverage for Jest)
+pnpm run test:coverage
+```
+
+Coverage reports are written to `coverage/` in each package (text summary plus
+HTML and lcov). `coverage/` is git-ignored. Baseline at the 2026-08-30 refresh:
+agent ~93% statements, frontend ~79%, infra 100%.
+
+E2E requires a deployed stack **and** the Playwright browser binaries, which are
+not installed by `pnpm install`:
+
+```bash
+cd packages/frontend
+npx playwright install              # One time — downloads browser binaries
+pnpm run test:e2e                   # Playwright
 ```
 
 ---
@@ -223,10 +260,17 @@ Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/
 
 | Command | Description |
 |---------|-------------|
+| `pnpm run validate` | Full gate — lint, format:check, typecheck, build, test |
 | `pnpm run lint` | ESLint across all packages |
+| `pnpm run format` | Auto-fix formatting |
+| `pnpm run format:check` | Verify formatting without writing |
 | `pnpm run typecheck` | TypeScript compilation check |
 | `pnpm run build` | Build all packages |
-| `pnpm run test:coverage` | Tests with coverage report |
+| `pnpm run test:coverage` | Tests with coverage report (v8 for Vitest, `--coverage` for Jest) |
+| `pnpm audit --audit-level=moderate` | Dependency audit — **also run by CI** |
+
+`pnpm run validate` does **not** include the audit. CI runs both, so run the
+audit as well before opening a PR or CI can fail on a locally-green branch.
 
 ---
 
@@ -234,10 +278,16 @@ Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/
 
 | Problem | Solution |
 |---------|----------|
-| `zod` peer dependency error | Add `"overrides": { "zod": "^4.3.6" }` to root `package.json`, then `pnpm install`. |
+| VS Code: "Vitest not found in `agent`/`frontend` folder" | Expected on a fresh clone — the Vitest extension scans for `vitest.config.ts` before dependencies exist. Run `pnpm install`, then reload the window. **Do not** run the suggested `pnpm add -D vitest`; vitest is already a declared devDependency and re-adding it only churns `pnpm-lock.yaml`. |
+| Prettier reformats hundreds of untouched files | Your clone predates `.gitattributes` (added in `060f925`), so the working tree still has CRLF endings while Prettier expects LF. Adding `.gitattributes` does not rewrite an existing working tree. Fix with `git add --renormalize .`, or simply re-clone. Verify with `git ls-files --eol` — only `*.ps1` files should show `w/crlf`. |
+| `pnpm install` fails on an engine check | `.npmrc` sets `engine-strict=true` and the repo requires Node >= 24. Check `node -v` and upgrade. |
+| `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` | pnpm 11.24+ rejects lockfile entries published too recently (this enforces constitution P6). Pick a slightly older release of the offending package. Because the check runs *before* resolution, a lockfile written by an older pnpm can't be patched in place — restore it with `git checkout -- pnpm-lock.yaml` and re-run `pnpm install` so resolution happens under the policy. |
+| `ERR_PNPM_IGNORED_BUILDS` | A dependency wants to run a build script. Decide explicitly by adding it to `allowBuilds` in `pnpm-workspace.yaml` as `true` (allow) or `false` (deny). |
+| `zod` peer dependency error | The workspace already forces a single Zod 4 version via `overrides` in **`pnpm-workspace.yaml`**. Adjust it there — pnpm ignores `overrides` and `pnpm.overrides` in `package.json`. |
 | CDK bootstrap error | Ensure CDK CLI ≥ 2.258.0 and correct AWS region |
 | Polly "not authorized" | Check Cognito guest role has `polly:SynthesizeSpeech` |
 | WebSocket connection fails | Verify presigned URL generation, check Cognito identity pool |
 | Agent cold start > 5s | Check container image size (target < 200MB) |
 | Audio doesn't play on iOS | Ensure TV-on gesture unlocks AudioContext before playback |
+| Playwright E2E fails with missing browsers | Run `npx playwright install` in `packages/frontend` |
 | Tool API returns errors | Check `NEWS_API_KEY` / `WEATHER_API_KEY` env vars are set in agent container. See research.md §R7 for provider details |

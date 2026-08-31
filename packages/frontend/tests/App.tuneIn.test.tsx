@@ -91,7 +91,11 @@ vi.mock('../src/hooks/useIsMobile', () => ({
 vi.mock('../src/config/constants', () => ({
   GREETING_DISPLAY_MS: 200,
   TUNING_MIN_MS: 60,
-  TUNING_MAX_MS: 200,
+  // Kept well clear of the observation windows below. At 200ms the gap between
+  // "min interval elapsed" and "max timeout fires" was ~110ms, so a loaded
+  // machine could blow past the max between two awaits and unmount the tuning
+  // overlay while a test was still asserting on it.
+  TUNING_MAX_MS: 800,
   SETTLING_DURATION_MS: 300,
   TUNE_IN_GLITCH_PATTERN: [
     { frame: 'glitch', durationMs: 30 },
@@ -346,8 +350,10 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
       expect(mockPlayStatic).toHaveBeenCalled();
     });
 
+    // Comfortably past TUNING_MIN_MS (60ms) and far short of TUNING_MAX_MS
+    // (800ms), so the only thing that can end tuning here is preload resolving.
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 90));
+      await new Promise((resolve) => setTimeout(resolve, 150));
     });
 
     expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();
@@ -416,8 +422,7 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
 
     // Both conditions are polled in a single synchronous callback, so tuning is
     // observed in progress without depending on how much wall-clock time has
-    // elapsed (TUNING_MAX_MS is only 200ms here, and a loaded machine can blow
-    // past it between two awaits).
+    // elapsed between two awaits.
     await vi.waitFor(() => {
       expect(mockPlayStatic).toHaveBeenCalled();
       expect(screen.getByTestId('tuning-overlay')).toBeInTheDocument();

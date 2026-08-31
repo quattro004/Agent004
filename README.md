@@ -46,10 +46,12 @@ docs/                 # Design documents, personality bible
 
 ## Getting Started
 
-Requires **Node.js 24** (see `.nvmrc`) and **pnpm 11.0.8**:
+Requires **Node.js 24 LTS** (see `.nvmrc`) and **pnpm 11.24.0**. `.npmrc` sets
+`engine-strict=true`, so an older Node makes `pnpm install` fail outright rather
+than warn:
 
 ```bash
-npm install -g pnpm@11.0.8
+corepack enable          # Installs the pnpm version pinned in package.json
 git clone <repo-url>
 cd Agent004
 pnpm install
@@ -61,13 +63,22 @@ Then run the quality gate to confirm your environment is healthy:
 pnpm run validate    # lint → format:check → typecheck → build → test
 ```
 
-| Command              | Purpose                       |
-| -------------------- | ----------------------------- |
-| `pnpm run validate`  | Full gate — run before any PR |
-| `pnpm run lint`      | ESLint                        |
-| `pnpm run format`    | Auto-fix formatting           |
-| `pnpm run typecheck` | TypeScript project build      |
-| `pnpm run test`      | All workspace tests           |
+| Command                             | Purpose                             |
+| ----------------------------------- | ----------------------------------- |
+| `pnpm run validate`                 | Full gate — run before any PR       |
+| `pnpm audit --audit-level=moderate` | Dependency audit — CI runs this too |
+| `pnpm run lint`                     | ESLint                              |
+| `pnpm run format`                   | Auto-fix formatting                 |
+| `pnpm run typecheck`                | TypeScript project build            |
+| `pnpm run test`                     | All workspace tests                 |
+| `pnpm run test:coverage`            | All workspace tests + coverage      |
+
+`validate` does not include the audit, but CI runs both — run the audit too, or a
+locally-green branch can still fail CI.
+
+If your editor's Vitest extension reports "Vitest not found" right after cloning,
+that is expected before `pnpm install`; install, then reload the window. Don't run
+the `pnpm add -D vitest` it suggests — vitest is already a declared dependency.
 
 Per-package development:
 
