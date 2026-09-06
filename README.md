@@ -46,16 +46,48 @@ docs/                 # Design documents, personality bible
 
 ## Getting Started
 
-Requires **Node.js 24 LTS** (see `.nvmrc`) and **pnpm 11.24.0**. `.npmrc` sets
-`engine-strict=true`, so an older Node makes `pnpm install` fail outright rather
-than warn:
+Requires **Node.js 24** and **pnpm 11** to bootstrap. After that the repo pins its
+own toolchain: pnpm installs the exact pnpm and Node versions this project is
+built and tested against, so nobody has to match them by hand.
 
 ```bash
-corepack enable          # Installs the pnpm version pinned in package.json
-git clone <repo-url>
+git clone https://github.com/quattro004/Agent004.git
 cd Agent004
-pnpm install
+
+node -v                  # must be 24.x — `nvm use` / `fnm use` reads .nvmrc
+npm install -g pnpm@11   # only if you don't already have pnpm
+
+pnpm install             # self-switches pnpm, then downloads the pinned Node
 ```
+
+Two pins are in play, both resolved by `pnpm install`:
+
+| Tool | Declared in                    | How it's applied                                                  |
+| ---- | ------------------------------ | ----------------------------------------------------------------- |
+| pnpm | `packageManager` (exact)       | pnpm re-executes as that version — `pnpm -v` prints `11.24.0`     |
+| Node | `devEngines.runtime` (`^24.x`) | pnpm downloads it and runs every script on it, pinned by checksum |
+
+So `node -v` may print `24.14.0` while `pnpm exec node -v` prints `24.20.0` —
+that is working as intended. Scripts, builds, and tests all use the pinned Node,
+which is what CI runs too.
+
+Notes:
+
+- **No Corepack required.** Node removed Corepack from its distribution in Node
+  25+, and pnpm 11 has a built-in equivalent: the
+  [`pmOnFail`](https://pnpm.io/settings/cli#pmonfail) setting (default
+  `download`) makes pnpm fetch and run the version declared in `packageManager`.
+  `corepack enable` still works on Node 24 but is redundant here.
+- `.npmrc` sets `engine-strict=true`, so an older Node makes `pnpm install` fail
+  outright rather than warn — hence the `node -v` check before installing.
+- `.nvmrc` still pins the major for `nvm`/`fnm` and for CI's `actions/setup-node`.
+  A test guards it against drifting from `devEngines.runtime`.
+- On Windows, pnpm recommends installing via npm — Microsoft Defender sometimes
+  blocks the standalone installer. On macOS/Linux you can instead use
+  `curl -fsSL https://get.pnpm.io/install.sh | sh -`.
+- If you manage toolchains with asdf, mise, or Volta, set `pmOnFail: ignore` and
+  `runtimeOnFail: ignore` in `pnpm-workspace.yaml` locally so pnpm defers to your
+  version manager.
 
 Then run the quality gate to confirm your environment is healthy:
 

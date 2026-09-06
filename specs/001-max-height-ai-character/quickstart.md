@@ -9,8 +9,8 @@
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Node.js | 24 LTS | [nodejs.org](https://nodejs.org/) |
-| pnpm | 11.24.0 | `corepack enable` (uses the pinned `packageManager` version) |
+| Node.js | 24 (repo pins the exact patch) | [nodejs.org](https://nodejs.org/) |
+| pnpm | 11 (repo pins 11.24.0) | `npm install -g pnpm@11` |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.258+ | `npm install -g aws-cdk` |
 | AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |
@@ -19,9 +19,24 @@
 Only Node.js and pnpm are needed to install, build, and test the repo. The AWS
 CLI, CDK CLI, AgentCore CLI, and Docker are required only for deploying.
 
-`corepack enable` is preferred over `npm install -g pnpm@11.24.0` because the
-version then comes from the `packageManager` field in the root `package.json`,
-so it stays correct as that pin changes.
+Corepack is **not** required. Node removed Corepack from its distribution in Node
+25+, and pnpm 11 replaces it natively: the [`pmOnFail`](https://pnpm.io/settings/cli#pmonfail)
+setting (default `download`) makes pnpm fetch and run the exact version declared
+in the root `package.json` `packageManager` field. Install any pnpm 11 globally
+and it self-switches to the pin inside this repo — confirm with `pnpm -v`, which
+reports `11.24.0`. `corepack enable` still works on Node 24 but adds nothing.
+
+The Node.js runtime is pinned the same way, via
+[`devEngines.runtime`](https://pnpm.io/package_json#devenginesruntime) in the root
+`package.json`. `pnpm install` resolves the `^24.x` range, records the exact
+version and checksum in `pnpm-lock.yaml`, downloads it if missing, and runs every
+script on it. Your system Node only has to be new enough to satisfy
+`engines.node` for the install itself — `pnpm exec node -v` reports the pinned
+version, which may be a later patch than `node -v`.
+
+If you manage toolchains with asdf, mise, or Volta, set `pmOnFail: ignore` and
+`runtimeOnFail: ignore` in `pnpm-workspace.yaml` locally so pnpm defers to your
+version manager.
 
 > **Note**: `.npmrc` sets `engine-strict=true`. On Node older than 24,
 > `pnpm install` **fails outright** rather than warning. Check with `node -v`
