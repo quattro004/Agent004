@@ -1,0 +1,51 @@
+# Dependabot keeps two things current that nothing else in this repository can:
+# the commit SHAs that ci.yml pins its actions to, and the dependency graph
+# behind pnpm-lock.yaml. `pnpm audit` reports vulnerabilities but never proposes
+# a fix; a pinned SHA resolves forever, including past the action's own security
+# releases.
+#
+# Cooldown interacts with pnpm and is set explicitly for that reason. pnpm 11
+# enables minimumReleaseAge by default at one day, refusing to resolve anything
+# published more recently. Dependabot already waits three days before proposing a
+# version update, which clears that floor -- declaring it here means a future
+# change to Dependabot's default cannot silently drop us underneath it.
+#
+# Security updates are deliberately exempt from cooldown, so an advisory fix
+# published today can still trip pnpm's gate and fail `pnpm install
+# --frozen-lockfile`. That trade-off is the one we want: learning about the
+# advisory immediately beats a green check.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      # GitHub Actions supports default-days only; the semver-bump variants are
+      # not available for this ecosystem.
+      default-days: 3
+    groups:
+      # One PR for all six pins rather than one per action.
+      actions:
+        patterns:
+          - '*'
+
+  # pnpm is served by the `npm` ecosystem -- there is no `pnpm` value, and a
+  # config naming one would be ignored. Dependabot reads pnpm-workspace.yaml from
+  # the root, so workspace packages do not need their own entries.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      # Majors are left ungrouped so each one gets its own PR to review against
+      # its changelog. Minors and patches arrive together.
+      dependencies:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
