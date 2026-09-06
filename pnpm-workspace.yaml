@@ -15,3 +15,12 @@ allowBuilds:
 # resolve below the package's own declared dependency.
 overrides:
   zod: ^4.5.2
+  # Transitive-only, both reached via @strands-agents/sdk. Neither is a direct
+  # dependency, so the advisories can only be cleared by an override until the
+  # SDK bumps its own graph.
+  # GHSA-f65p-4m7j-42xc, GHSA-fph4-wmhf-6fwf, GHSA-jqff-g426-hqxp (high):
+  # host confusion and SSRF via percent-decoding. Patched in 3.1.6.
+  fast-uri: ^3.1.6
+  # GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g (moderate): array-limit bypass and
+  # DoS via attacker-controlled isBuffer. Patched in 6.16.0.
+  qs: ^6.16.0
