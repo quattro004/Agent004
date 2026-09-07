@@ -6,7 +6,14 @@ allowBuilds:
   # cleanly and we avoid a node-gyp compile. Denied explicitly so installs
   # don't fail with ERR_PNPM_IGNORED_BUILDS.
   '@parcel/watcher': false
+  better-sqlite3: false
   esbuild: true
+  node-llama-cpp: false
+  tree-sitter-go: false
+  tree-sitter-javascript: false
+  tree-sitter-python: false
+  tree-sitter-rust: false
+  tree-sitter-typescript: false
   unrs-resolver: true
 # pnpm reads overrides only from this file. A top-level `overrides` key in
 # package.json is npm-only, and pnpm 11 also ignores `pnpm.overrides` there.
