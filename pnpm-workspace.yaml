@@ -18,16 +18,27 @@ allowBuilds:
 # pnpm reads overrides only from this file. A top-level `overrides` key in
 # package.json is npm-only, and pnpm 11 also ignores `pnpm.overrides` there.
 # Forces a single Zod 4 version across the graph per research.md §R1. The floor
-# tracks the `zod` version declared by packages/agent so the override can never
-# resolve below the package's own declared dependency.
+# must stay at or above the `zod` version declared by packages/agent so the
+# override can never resolve below the package's own declared dependency.
 overrides:
-  zod: ^4.5.2
-  # Transitive-only, both reached via @strands-agents/sdk. Neither is a direct
-  # dependency, so the advisories can only be cleared by an override until the
-  # SDK bumps its own graph.
+  zod: ^4.6.1
+  # fast-uri, qs and hono are transitive-only, all reached via
+  # @strands-agents/sdk. None is a direct dependency, so their advisories can
+  # only be cleared by an override until the SDK bumps its own graph.
   # GHSA-f65p-4m7j-42xc, GHSA-fph4-wmhf-6fwf, GHSA-jqff-g426-hqxp (high):
   # host confusion and SSRF via percent-decoding. Patched in 3.1.6.
   fast-uri: ^3.1.6
   # GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g (moderate): array-limit bypass and
   # DoS via attacker-controlled isBuffer. Patched in 6.16.0.
   qs: ^6.16.0
+  # GHSA-gqvv-2mrq-wpjv, GHSA-g6gw-c38x-mqfc, GHSA-crvj-82cr-hjcx (moderate):
+  # toSSG() path traversal, parseBody() memory exhaustion via unbounded
+  # dot-notation nesting, and query parsing past the URL fragment. Patched in
+  # 4.13.5; reached via @modelcontextprotocol/sdk and @hono/node-server.
+  hono: ^4.13.8
+  # Transitive dev-only, reached via packages/infra > jest >
+  # babel-plugin-istanbul > @istanbuljs/load-nyc-config. Only the 3.x line is in
+  # the graph, so a bare override cannot strand a 4.x consumer.
+  # GHSA-2883-xcg3-v3hh (high): maxTotalMergeKeys does not limit CPU use for
+  # empty merge sources. Patched in 3.15.2.
+  js-yaml: ^3.15.2
