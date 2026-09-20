@@ -51,6 +51,38 @@ version manager.
 
 AWS account with Bedrock model access enabled for `anthropic.claude-haiku-4-5-20251001-v1:0` in your target region.
 
+### MCP servers (optional — AI coding assistants only)
+
+`.mcp.json` configures Model Context Protocol servers for AI coding assistants.
+It is **not** needed to build, test, or deploy, and every entry is a plain HTTP
+endpoint — there is nothing to install, no `uvx`/`uv`, and no long-lived
+credentials on disk (constitution P11).
+
+| Server | Purpose |
+|--------|---------|
+| `context7` | Up-to-date library and framework documentation |
+| `aws-knowledge-mcp-server` | AWS docs, API references, What's New, Well-Architected guidance |
+| `aws-mcp` | AWS API access + docs + best-practice Agent SOPs |
+
+`aws-mcp` authenticates with **OAuth 2.1 through AWS Sign-in**, which
+OAuth-capable clients (GitHub Copilot, Claude Code, Cursor, Kiro, Gemini CLI)
+support directly — no `mcp-proxy-for-aws` needed. On first tool use it opens a
+browser for consent; tokens are short-lived (1 h access, ≤12 h refresh) and grant
+nothing beyond the IAM permissions you already have.
+
+It needs `signin:AuthorizeOAuth2Access` and `signin:CreateOAuth2Token`, available
+as the managed policy `AWSMCPSignInOAuthAccessPolicy`:
+
+```bash
+aws iam attach-user-policy \
+  --user-name <your-user> \
+  --policy-arn arn:aws:iam::aws:policy/AWSMCPSignInOAuthAccessPolicy
+```
+
+If your client does not auto-start the OAuth flow, append `?oauth=initialize` to
+the URL. Note that OAuth does not support multi-profile cross-account switching —
+that still requires the SigV4 proxy.
+
 ---
 
 ## Repository Structure

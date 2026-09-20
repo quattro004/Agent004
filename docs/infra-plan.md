@@ -70,7 +70,8 @@ Two things drive this plan:
   documented install command was broken).
 - `tasks.md`: T023 split into **T023a** (done) / **T023b** / **T023c**; V2 work
   added as **T148–T153**; deviations **C4** and **C5** recorded.
-- `.mcp.json`: added the AWS IaC MCP server for CDK guidance and cdk-nag checks.
+- `.mcp.json`: added the AWS MCP Server over plain HTTP (OAuth), giving AWS API
+  access and docs with no local proxy, no `uvx`, and no credentials on disk.
 
 ### Phase 1 — Make the agent snapshot-safe (TDD) — _blocks any V2 deploy_
 

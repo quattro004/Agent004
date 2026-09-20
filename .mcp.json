@@ -8,13 +8,9 @@
       "type": "http",
       "url": "https://knowledge-mcp.global.api.aws"
     },
-    "aws-iac": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["awslabs.aws-iac-mcp-server@latest"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      }
+    "aws-mcp": {
+      "type": "http",
+      "url": "https://aws-mcp.us-east-1.api.aws/mcp"
     }
   }
 }
