@@ -83,6 +83,13 @@ If your client does not auto-start the OAuth flow, append `?oauth=initialize` to
 the URL. Note that OAuth does not support multi-profile cross-account switching —
 that still requires the SigV4 proxy.
 
+> **Why `us-east-1` when we deploy to `us-west-2`?** The endpoint Region is where
+> the MCP *server* is hosted, not the Region it operates on. AWS MCP Server is
+> only offered in `us-east-1` and `eu-central-1`; there is no `us-west-2`
+> endpoint. It can still read and act on our `us-west-2` resources — state the
+> target Region explicitly when it matters. Do not confuse this with the
+> AgentCore V2 Region list in research.md §R2c, which *is* binding on us.
+
 ---
 
 ## Repository Structure
