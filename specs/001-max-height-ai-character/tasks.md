@@ -33,6 +33,8 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 | B1 | FR-018 export misleading in MVP | T066 clarifies MVP export is localStorage-only |
 | B2 | R3F claimed V1-only but used in MVP | T063/T065 clarify R3F is an MVP dependency for CRT effects |
 | I3 | displayAlias collection V1-only | Added T068 note: MVP stores alias in localStorage via session_start payload |
+| C4 | T023 was marked complete but only half-implemented (audit 2026-09-20) | `agent-stack.ts` contained only the WebSocket API + Lambda + SSM; the AgentCore Memory construct was never written and `@aws-cdk/aws-bedrock-agentcore-alpha` is imported nowhere. Split into T023a (done), T023b (Memory construct), T023c (agent-side client stub). See `docs/infra-plan.md`. |
+| C5 | AgentCore Runtime never provisioned; platform version undecided (2026-09-20) | Added T148–T153: target platform version **V2** per research.md R2c. CDK/CFN cannot set `platformVersion`, so the runtime deploys via the AgentCore CLI. Agent must be made snapshot-safe first. |
 
 ---
 
@@ -88,7 +90,9 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 
 - [x] T021 Implement CDK CognitoStack in packages/infra/lib/cognito-stack.ts (CfnIdentityPool with unauthenticated access, IAM role with bedrock-agentcore:InvokeAgentRuntime + polly:SynthesizeSpeech scoped to neural engine + Matthew voice via conditions, stack outputs for IdentityPoolId)
 - [x] T022 [P] Implement CDK BudgetStack in packages/infra/lib/budget-stack.ts (CfnBudget $10/month with SNS topic alerts at $5 and $8 thresholds, EventBridge rule + Lambda function for $10 hard-stop that detaches IAM policy from Cognito guest role)
-- [x] T023 [P] Implement CDK AgentStack in packages/infra/lib/agent-stack.ts (AgentCore Memory construct with semantic + summary + userPreferences strategies per research.md R2, WebSocket API Gateway with $connect/$disconnect/$default routes pointing to Lambda handler from T020, stage deployment, stack outputs for WebSocket endpoint URL)
+- [x] T023a [P] Implement WebSocket half of CDK AgentStack in packages/infra/lib/agent-stack.ts (WebSocket API Gateway with $connect/$disconnect/$default routes pointing to Lambda handler from T020, IAM authorizer on $connect, prod stage with throttling, Lambda live alias for blue/green rollback, SSM SecureString params for tool API keys, stack outputs for WebSocket endpoint URL)
+- [ ] T023b [P] Implement AgentCore Memory construct in packages/infra/lib/agent-stack.ts (semantic + summary + userPreferences strategies per research.md R2, namespace `/max-height/{actorId}/`, 30-day retention; import `@aws-cdk/aws-bedrock-agentcore-alpha` — the dependency is declared in packages/infra/package.json but currently imported nowhere in the repo; export memoryId as a stack output for the agent to consume) — **see C4**
+- [ ] T023c [P] Replace the AgentCore Memory client stub in packages/agent/src/memory/agentCoreMemoryClient.ts (currently throws "AgentCore Memory client not configured"; wire the real SDK client against the memoryId output from T023b, keeping the injectable-client seam that memoryAdapter.test.ts mocks) — **see C4**
 - [x] T024 [P] Implement CDK FrontendStack in packages/infra/lib/frontend-stack.ts (S3 bucket with OAI, CloudFront distribution with default root index.html, error page routing for SPA, stack outputs for distribution URL and bucket name)
 
 ### Phase 2 Tests (P10 Compliance)
@@ -337,6 +341,17 @@ This regeneration addresses the following coverage gaps from cross-artifact anal
 - [ ] T100 [P] Write Playwright E2E test for mobile/voice path (US2) in packages/frontend/tests/e2e/mobile.spec.ts (mobile viewport emulation, tap TV knob, Web Speech API mock for voice input, verify ON AIR indicator, verify reduced CRT effects)
 - [ ] T101 [P] Write Playwright E2E test for text-only path (US3) in packages/frontend/tests/e2e/text-only.spec.ts (deny mic permissions, verify no mic-related UI, type message, verify full voice+text response)
 
+### AgentCore Runtime V2 (research.md §R2c)
+
+> Platform version **V2** is the target. CloudFormation and the CDK cannot set `platformVersion`, so the runtime is created by the AgentCore CLI while CDK provisions everything around it (per R2b/R2c). The agent must be snapshot-safe **before** the first V2 deploy — a snapshot taken from a half-initialized or entropy-frozen process is not a deploy-time failure, it is a silent correctness bug across every restored instance.
+
+- [ ] T148 [P] Write Vitest tests for V2 startup/health gating in packages/agent/tests/startup.test.ts (RED: assert `/ping` does NOT report healthy before the init routine resolves, and DOES report healthy after; assert the HTTP listener is not accepting connections until init completes; assert init rejects rather than retrying past the 120 s deadline — no silent fallback)
+- [ ] T149 [US1] Gate agent startup for V2 snapshotting in packages/agent/src/index.ts (today `server.listen(PORT)` runs unconditionally at module scope and `/ping` answers immediately, so AgentCore would snapshot a half-initialized agent; introduce an explicit async init that constructs AND exercises the Bedrock/Strands client so connection-pool + endpoint + credential resolution setup is captured in the snapshot, then `listen()`; keep the existing `isTestEnvironment` guard so parallel Vitest files do not race for port 8080)
+- [ ] T150 [P] Audit and fix snapshot-unsafe patterns across packages/agent/src (move any module-scope random values, UUIDs, tokens, `Date.now()`/monotonic reference points into the `/invocations` handler — values computed before the snapshot are identical on every restored instance; ensure no session id, lock owner, log stream, or metric dimension derives from hostname or PID, since every restored instance reports `localhost` and PID 1; refresh credentials in-handler, never read once at startup; correct the stale "lifetime of the Lambda execution environment" comment on the `sessions` Map — the agent is not Lambda-hosted)
+- [ ] T151 [P] Select a snapsafe base image for packages/agent/Dockerfile (a container agent bringing its own cryptographic libraries must use a snapshot-safe build that reseeds after restore — `openssl-snapsafe-libs` on Amazon Linux 2023; verify Node's crypto links against it; fold the result into T106's Dockerfile validation and keep LINUX_ARM64 + non-root + <200MB)
+- [ ] T152 [US1] Deploy the runtime on V2 and verify (deploy via `agentcore deploy`, or `aws bedrock-agentcore-control create-agent-runtime --platform-version V2` if the CLI does not expose the flag; confirm with `get-agent-runtime --query platformVersion`; poll `get_agent_runtime` until `READY` or `*FAILED` — create/update returns while still `CREATING` and takes minutes on V2, and calling update/delete before a terminal state returns `ConflictException`; keep total agent env vars under the V2 cap of 2.5 KB for container agents, down from 4 KB on V1; deploy in `us-west-2`, one of the five V2-supported Regions)
+- [ ] T153 [US1] Open the AgentCore session on TV power-on rather than first message (per research.md §R2c: AWS guidance is to warm the session as soon as the user engages; greeting MP3s run 8832–14688 ms per docs/audio-plan.md, which fully hides a ~2 s V2 cold start; wire `session_start` to the power-on transition in App.tsx alongside `playGreeting`, not to the first `user_message`; add a test asserting the session opens before the greeting finishes)
+
 ### Security + Infrastructure
 
 - [ ] T102 [P] Implement Content Security Policy headers in packages/infra/lib/frontend-stack.ts (CloudFront response headers policy: script-src self, connect-src for WebSocket endpoint + Polly + Cognito, img-src self + data:, style-src self unsafe-inline for CRT effects, media-src self for greeting audio)
@@ -444,7 +459,7 @@ Phase 8 (Polish + E2E Tests)
 ### Parallel Opportunities
 
 **Phase 1**: T003–T009 (7 tasks) can all run in parallel after T001+T002
-**Phase 2**: T010–T016 (types + stores, 7 tasks) can run in parallel; T021–T024 (CDK stacks, 4 tasks) can run in parallel; T018+T019 (connection services) can run in parallel; T025–T027 (tests) can run in parallel
+**Phase 2**: T010–T016 (types + stores, 7 tasks) can run in parallel; T021, T022, T023a, T023b, T024 (CDK stacks, 5 tasks) can run in parallel — T023c is agent-side and depends on T023b's `memoryId` output; T018+T019 (connection services) can run in parallel; T025–T027 (tests) can run in parallel
 **Phase 3**: AudioWorklet processors T051–T054 (4 tasks) can run in parallel; UI components T043–T049 (7 tasks) can run in parallel; agent personality T037+T038 can run in parallel; agent tools T114+T115 can run in parallel; tests T028–T032 + T118 can run in parallel
 **Phase 4+5**: US2 and US3 can run in parallel (different concerns)
 **Phase 6**: Memory adapter T086 and extractor T087 can run in parallel

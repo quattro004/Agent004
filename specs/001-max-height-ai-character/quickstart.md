@@ -13,11 +13,18 @@
 | pnpm | 11 (repo pins 11.24.0) | `npm install -g pnpm@11` |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.258+ | `npm install -g aws-cdk` |
-| AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |
+| AgentCore CLI | 0.30+ | `npm install -g @aws/agentcore` |
 | Docker | 24+ | [docker.com](https://www.docker.com/) |
 
 Only Node.js and pnpm are needed to install, build, and test the repo. The AWS
 CLI, CDK CLI, AgentCore CLI, and Docker are required only for deploying.
+
+> **Package rename.** The AgentCore CLI used to ship as `@aws/agentcore-cli`.
+> That name is unpublished and now 404s on npm — the package is `@aws/agentcore`.
+> If `agentcore --version` errors instead of printing a version, an older Python
+> `agentcore` from the `bedrock-agentcore-starter-toolkit` pip package is
+> shadowing it on `PATH` (common on Windows): `pip uninstall bedrock-agentcore-starter-toolkit`,
+> then open a new terminal.
 
 Corepack is **not** required. Node removed Corepack from its distribution in Node
 25+, and pnpm 11 replaces it natively: the [`pmOnFail`](https://pnpm.io/settings/cli#pmonfail)
@@ -43,6 +50,45 @@ version manager.
 > first; `.nvmrc` pins the major version for `nvm`/`fnm` users.
 
 AWS account with Bedrock model access enabled for `anthropic.claude-haiku-4-5-20251001-v1:0` in your target region.
+
+### MCP servers (optional — AI coding assistants only)
+
+`.mcp.json` configures Model Context Protocol servers for AI coding assistants.
+It is **not** needed to build, test, or deploy, and every entry is a plain HTTP
+endpoint — there is nothing to install, no `uvx`/`uv`, and no long-lived
+credentials on disk (constitution P11).
+
+| Server | Purpose |
+|--------|---------|
+| `context7` | Up-to-date library and framework documentation |
+| `aws-knowledge-mcp-server` | AWS docs, API references, What's New, Well-Architected guidance |
+| `aws-mcp` | AWS API access + docs + best-practice Agent SOPs |
+
+`aws-mcp` authenticates with **OAuth 2.1 through AWS Sign-in**, which
+OAuth-capable clients (GitHub Copilot, Claude Code, Cursor, Kiro, Gemini CLI)
+support directly — no `mcp-proxy-for-aws` needed. On first tool use it opens a
+browser for consent; tokens are short-lived (1 h access, ≤12 h refresh) and grant
+nothing beyond the IAM permissions you already have.
+
+It needs `signin:AuthorizeOAuth2Access` and `signin:CreateOAuth2Token`, available
+as the managed policy `AWSMCPSignInOAuthAccessPolicy`:
+
+```bash
+aws iam attach-user-policy \
+  --user-name <your-user> \
+  --policy-arn arn:aws:iam::aws:policy/AWSMCPSignInOAuthAccessPolicy
+```
+
+If your client does not auto-start the OAuth flow, append `?oauth=initialize` to
+the URL. Note that OAuth does not support multi-profile cross-account switching —
+that still requires the SigV4 proxy.
+
+> **Why `us-east-1` when we deploy to `us-west-2`?** The endpoint Region is where
+> the MCP *server* is hosted, not the Region it operates on. AWS MCP Server is
+> only offered in `us-east-1` and `eu-central-1`; there is no `us-west-2`
+> endpoint. It can still read and act on our `us-west-2` resources — state the
+> target Region explicitly when it matters. Do not confuse this with the
+> AgentCore V2 Region list in research.md §R2c, which *is* binding on us.
 
 ---
 
@@ -251,6 +297,26 @@ cd packages/agent
 agentcore deploy
 # Deploys to AgentCore Runtime
 ```
+
+The runtime targets **platform version V2** (research.md §R2c). Neither
+CloudFormation nor the CDK can set `platformVersion`, so the runtime is created
+by the CLI — or, if the installed CLI does not expose the flag, directly:
+
+```bash
+aws bedrock-agentcore-control create-agent-runtime \
+  --agent-runtime-name max-height \
+  --platform-version V2 \
+  ...
+
+# Confirm, then poll until terminal — V2 create/update takes minutes and
+# returns while the runtime is still CREATING.
+aws bedrock-agentcore-control get-agent-runtime \
+  --agent-runtime-id <id> --query platformVersion
+```
+
+Calling update or delete before the runtime reaches `READY` or a `*FAILED`
+state returns `ConflictException`. V2 also caps total environment variables at
+2.5 KB for container agents (4 KB on V1).
 
 ### Infrastructure (via CDK)
 
