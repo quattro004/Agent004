@@ -58,6 +58,10 @@ It is **not** needed to build, test, or deploy, and every entry is a plain HTTP
 endpoint — there is nothing to install, no `uvx`/`uv`, and no long-lived
 credentials on disk (constitution P11).
 
+VS Code reads a second file, `.vscode/mcp.json`, which lists the same servers
+under a `servers` key instead of `mcpServers`. **Edit both files together** —
+`packages/infra/test/mcp-config.test.ts` fails the build if they drift.
+
 | Server | Purpose |
 |--------|---------|
 | `context7` | Up-to-date library and framework documentation |
