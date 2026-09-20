@@ -13,11 +13,18 @@
 | pnpm | 11 (repo pins 11.24.0) | `npm install -g pnpm@11` |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.258+ | `npm install -g aws-cdk` |
-| AgentCore CLI | 0.9+ | `npm install -g @aws/agentcore-cli` |
+| AgentCore CLI | 0.30+ | `npm install -g @aws/agentcore` |
 | Docker | 24+ | [docker.com](https://www.docker.com/) |
 
 Only Node.js and pnpm are needed to install, build, and test the repo. The AWS
 CLI, CDK CLI, AgentCore CLI, and Docker are required only for deploying.
+
+> **Package rename.** The AgentCore CLI used to ship as `@aws/agentcore-cli`.
+> That name is unpublished and now 404s on npm — the package is `@aws/agentcore`.
+> If `agentcore --version` errors instead of printing a version, an older Python
+> `agentcore` from the `bedrock-agentcore-starter-toolkit` pip package is
+> shadowing it on `PATH` (common on Windows): `pip uninstall bedrock-agentcore-starter-toolkit`,
+> then open a new terminal.
 
 Corepack is **not** required. Node removed Corepack from its distribution in Node
 25+, and pnpm 11 replaces it natively: the [`pmOnFail`](https://pnpm.io/settings/cli#pmonfail)
@@ -251,6 +258,26 @@ cd packages/agent
 agentcore deploy
 # Deploys to AgentCore Runtime
 ```
+
+The runtime targets **platform version V2** (research.md §R2c). Neither
+CloudFormation nor the CDK can set `platformVersion`, so the runtime is created
+by the CLI — or, if the installed CLI does not expose the flag, directly:
+
+```bash
+aws bedrock-agentcore-control create-agent-runtime \
+  --agent-runtime-name max-height \
+  --platform-version V2 \
+  ...
+
+# Confirm, then poll until terminal — V2 create/update takes minutes and
+# returns while the runtime is still CREATING.
+aws bedrock-agentcore-control get-agent-runtime \
+  --agent-runtime-id <id> --query platformVersion
+```
+
+Calling update or delete before the runtime reaches `READY` or a `*FAILED`
+state returns `ConflictException`. V2 also caps total environment variables at
+2.5 KB for container agents (4 KB on V1).
 
 ### Infrastructure (via CDK)
 

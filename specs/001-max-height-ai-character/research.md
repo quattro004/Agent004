@@ -87,7 +87,7 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 **SDK status (April 2026)**:
 - Python: v1.36.0, production since July 2025, millions of downloads
 - TypeScript: `@strands-agents/sdk`, production-ready for core features, TypeScript announced December 2025
-- AgentCore CLI: `@aws/agentcore-cli` v0.9.1, GA, supports Strands TS natively
+- AgentCore CLI: `@aws/agentcore` v0.30.0, GA, supports Strands TS natively (renamed from `@aws/agentcore-cli` — see R2c)
 
 **Alternatives considered**:
 - LangChain.js: Heavier, less type-safe, leaky abstractions. Consider only if Strands hits a critical bug.
@@ -115,7 +115,7 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 
 ### R2b. AgentCore CLI
 
-**Decision**: Use `@aws/agentcore-cli` (v0.9.1) as the primary agent development and deployment tool.
+**Decision**: Use `@aws/agentcore` (v0.30.x) as the primary agent development and deployment tool.
 
 **Rationale**: The AgentCore CLI is GA (platform GA since October 2025) and the officially recommended tool for new AgentCore projects. It provides project scaffolding with Strands framework support, local dev server with hot reload, built-in evaluation tools, direct deploy to AgentCore Runtime, and gateway management.
 
@@ -127,6 +127,63 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 - Python Starter Toolkit: deprecated in favor of the CLI.
 - CDK-only deployment: more complex; CLI handles agent-specific concerns natively.
 - Manual deployment: no scaffolding, no hot reload, no built-in evals.
+
+---
+
+## R2c. AgentCore Runtime Platform Version V2 (2026-09-20)
+
+**Decision**: Target **platform version V2** for the Max Height agent runtime.
+Deploy the runtime through the AgentCore CLI (not CDK), and structure the agent
+process so the snapshot captures a fully initialized agent.
+
+**Rationale**: V2 restores each instance from a prepared snapshot instead of
+booting and initializing the container on every cold start. AWS-measured P75
+cold start is ~2 s and flat from a 200 MB to a 2 GB image, versus ~5.4 s rising
+to ~30 s on V1. V2 also bills reclaimed memory rather than the session peak.
+For a scale-to-zero, friends-and-family-traffic project, essentially every visit
+is a cold start, so this is the difference between Max answering promptly and
+Max stalling — and it lowers the bill against the P2 ceiling.
+
+### Constraints that bind our implementation
+
+| Constraint | Source | Consequence for this repo |
+|---|---|---|
+| **CloudFormation and the AWS CDK cannot set `platformVersion`** | AgentCore devguide, *Platform versions → Infrastructure as code* | The runtime cannot be created by `@aws-cdk/aws-bedrock-agentcore-alpha`. V2 must come from `agentcore deploy`, the AWS CLI (`--platform-version V2`), or the SDK. This **confirms** the R2b split: CLI owns the runtime, CDK owns everything else. Revisit if the alpha construct adds the property. |
+| **V2 Regions**: `us-east-1`, `us-east-2`, `us-west-2`, `eu-west-1`, `ap-northeast-1` | Same | We deploy in `us-west-2` — supported. Region choice is now load-bearing; do not move without rechecking. |
+| **`/ping` must report healthy only after initialization completes** | *Optimize your agent for V2* | `packages/agent/src/index.ts` runs its own `node:http` server, not the AgentCore SDK, and calls `server.listen(PORT)` unconditionally. As written, V2 would snapshot a half-initialized agent. The listener must be gated behind an init routine, or `/ping` must return non-healthy until init resolves. |
+| **Container must be healthy within 120 s of start** | Same | Startup work is bounded. Fail fast and loudly rather than retrying past the deadline (P-guard: no silent fallbacks). |
+| **Snapshot-shared state** | Same | No random values, UUIDs, tokens, timestamps, or monotonic reference points may be computed at module scope — every restored instance would inherit identical values. They belong in the `/invocations` handler. |
+| **Instance identity collapses** | Same | Every restored instance reports hostname `localhost` and PID `1`. Never derive a session, lock, log-stream, or metric id from either. Generate per request. |
+| **Cryptographic libraries must be snapsafe** | Same | A container agent bringing its own crypto must use a snapshot-safe build that reseeds after restore (`openssl-snapsafe-libs` on Amazon Linux 2023). This is a **base-image decision** for `packages/agent/Dockerfile` and must be settled before T106. |
+| **Environment variables capped at 2.5 KB** (container agents) vs 4 KB on V1 | Devguide note | Config budget; exceeding it fails with `ValidationException`. AWS states the limit will rise to match V1. |
+| **Create/update runs for minutes and returns while still `CREATING`** | Devguide, *What to expect* | Deploy tooling must poll `get_agent_runtime` until `READY` or `*FAILED`. Calling update/delete before a terminal state returns `ConflictException`. Affects the deploy runbook and any CI deploy step. |
+
+### Reusable clients are still a startup win
+
+The socket opened at startup does not survive a restore, but the expensive setup
+a client caches around it — service-model parsing, endpoint and credential
+resolution, connection pool — does. Construct **and exercise** the Bedrock client
+at startup so that work lands in the snapshot; expect the first post-restore call
+to reconnect transparently. Credentials themselves must be refreshed in the
+handler, never read once at startup.
+
+Do **not** snapshot anything that changes without a redeploy. A tool catalog
+fetched at startup looks like an ideal candidate but would freeze Max's tool
+inventory at snapshot time.
+
+### Cold start is fully hidden by the greeting
+
+AWS's own guidance for interactive agents is to start the session when the user
+engages rather than when they submit. Max Height gets this for free: the session
+should open on **TV power-on**, while the greeting MP3 plays. Measured greeting
+durations are 8832–14688 ms (see `docs/audio-plan.md` Phase 3), which comfortably
+covers a ~2 s V2 start. By the time a visitor finishes hearing Max and types,
+the microVM is warm. This makes session-open-on-power-on a **design requirement**,
+not an optimization.
+
+**Alternatives considered**:
+- **Stay on V1.** Default, and the only option expressible in CDK today. Rejected: cold starts scale with image size exactly where our traffic pattern is all-cold-start, and it forgoes the memory-reclaim billing benefit.
+- **Wait for CDK support for `platformVersion`.** Rejected: unbounded wait, and R2b already routes runtime deployment through the CLI, so CDK support buys us little.
 
 ---
 
