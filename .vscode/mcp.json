@@ -7,6 +7,10 @@
     "aws-knowledge-mcp-server": {
       "type": "http",
       "url": "https://knowledge-mcp.global.api.aws"
+    },
+    "aws-mcp": {
+      "type": "http",
+      "url": "https://aws-mcp.us-east-1.api.aws/mcp"
     }
   }
 }

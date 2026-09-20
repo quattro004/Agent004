@@ -69,6 +69,12 @@ call), check the current reality first and update the spec in the same change.
 
 `.mcp.json` is for AI coding assistants only; it is not part of the build.
 
+**There are two MCP config files and they must be edited together.** `.mcp.json`
+keys servers under `mcpServers`; `.vscode/mcp.json` uses VS Code's `servers`
+key. Adding a server to one and not the other silently leaves that client
+short — which is exactly what happened when `aws-mcp` landed. Parity is now
+enforced by `packages/infra/test/mcp-config.test.ts`.
+
 **Every entry must be a plain HTTP endpoint.** Do not add `stdio` servers that
 shell out to `uvx`, `npx`, or similar — that makes a package manager a new
 onboarding prerequisite for every contributor. Prefer AWS-hosted servers with
