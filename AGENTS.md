@@ -30,6 +30,20 @@ The wiki is the project's compounding knowledge base. It is a **separate git
 repo** cloned to a gitignored `./wiki` directory. Its default branch is
 `master`, not `main`.
 
+The pattern comes from Karpathy's ["LLM wiki" idea file](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f):
+three layers (immutable raw sources, an LLM-owned wiki, a schema the human and
+LLM co-evolve), three operations (ingest, query, lint), and an `Index` plus a
+`Log` to navigate them. Our adaptations are deliberate — see
+`Source-LLM-Wiki-Pattern` on the wiki for what we kept, changed and dropped.
+
+**External sources arrive as research, not as a reading list.** The original
+pattern assumes you drop articles into a folder. Here, outside knowledge shows
+up because someone building on the project went and found it — AWS or SDK
+documentation, an upstream changelog, a GitHub issue that explains a behavior.
+Treat that the same as any other ingest: cite it, give it a `Source-*` page if
+it will be consulted again, and update whatever pages it affects. Research that
+only ever reaches a pull request description has evaporated.
+
 **Session start ritual:** `pnpm run wiki:pull`, then read the wiki's `Index`
 page. Check `Gotchas` before rediscovering a known trap.
 
