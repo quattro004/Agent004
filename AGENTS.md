@@ -30,6 +30,20 @@ The wiki is the project's compounding knowledge base. It is a **separate git
 repo** cloned to a gitignored `./wiki` directory. Its default branch is
 `master`, not `main`.
 
+The pattern comes from Karpathy's ["LLM wiki" idea file](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f):
+three layers (immutable raw sources, an LLM-owned wiki, a schema the human and
+LLM co-evolve), three operations (ingest, query, lint), and an `Index` plus a
+`Log` to navigate them. Our adaptations are deliberate — see
+`Source-LLM-Wiki-Pattern` on the wiki for what we kept, changed and dropped.
+
+**External sources arrive as research, not as a reading list.** The original
+pattern assumes you drop articles into a folder. Here, outside knowledge shows
+up because someone building on the project went and found it — AWS or SDK
+documentation, an upstream changelog, a GitHub issue that explains a behavior.
+Treat that the same as any other ingest: cite it, give it a `Source-*` page if
+it will be consulted again, and update whatever pages it affects. Research that
+only ever reaches a pull request description has evaporated.
+
 **Session start ritual:** `pnpm run wiki:pull`, then read the wiki's `Index`
 page. Check `Gotchas` before rediscovering a known trap.
 
@@ -185,6 +199,21 @@ operational conventions belong here.
 Knowledge that is about the _project_ rather than about _working in this repo_
 belongs on the wiki instead — and traps belong on the wiki's `Gotchas` page, so
 they reach humans as well as agents.
+
+**Storing an agent memory is a trigger to check the wiki.** A memory is private
+to one agent and one user; it reaches no contributor and no human reader. So
+whenever something is durable enough to remember, ask in the same change whether
+it is also durable enough to publish:
+
+| If the fact is…                                 | It goes…                                              |
+| ----------------------------------------------- | ----------------------------------------------------- |
+| A personal working preference                   | Memory only — not the wiki                            |
+| A repo convention, constraint or corrected fact | Memory **and** the owning wiki page                   |
+| A non-obvious trap                              | Memory, the owning page, **and** the wiki's `Gotchas` |
+
+If it reaches the wiki, follow the ingest workflow — update `Index`, append to
+`Log`, run `pnpm run wiki:lint` — and get approval before `wiki:push`, because
+wiki pushes are live and public.
 
 ## Root scripts are invisible to the toolchain
 
