@@ -85,6 +85,23 @@ Refactoring means that we review the code for clarity, maintainability, and desi
 
 Every TDD cycle should be grounded in clear requirements. Context can come from multiple sources — use whatever the user provides.
 
+### Step 0: Check whether this needs a spec first
+
+Before gathering context, classify the request. If it is a **new user-facing
+capability**, introduces a **new AWS resource or cost-model change**, requires a
+**constitution check**, or needs **research before the work is understood**, then
+our hybrid rule says it wants Spec Kit — not just tests.
+
+Say so before writing the first test:
+
+> This looks like a new capability, so it wants a spec before code. I'd suggest
+> `/speckit.specify` first. Want me to start there, or go straight to the TDD
+> cycle?
+
+Push back once, naming the trigger. The user may decline — but record the reason
+and carry on with TDD. Bug fixes, refactors, tooling and behavior changes to
+existing features do **not** need a spec; go straight to Step 1.
+
 ### Step 1: Determine the context source
 
 The user may provide one or more of:

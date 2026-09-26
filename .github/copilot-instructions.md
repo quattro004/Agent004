@@ -5,6 +5,23 @@
 
 ---
 
+## 0. Stop — before you write any code
+
+Two methodology questions must be answered **out loud, in your first response**,
+before implementation starts. Never skip them because the user didn't mention
+them.
+
+1. **Does this need a spec?** If the request trips any Spec Kit trigger (§3),
+   say so and recommend `/speckit.specify` before writing code.
+2. **What is the failing test?** TDD is mandatory for all production code (§3).
+
+The user may decline either one — but only **explicitly, with a reason**, and you
+must record that reason in the PR or issue. Silence is not a decision. If the
+user says "just build it," push back once, state the specific risk, and ask them
+to confirm. Then proceed as instructed and note the exception.
+
+---
+
 ## 1. Knowing what is true
 
 This project keeps **current-state truth in the GitHub wiki**
@@ -28,13 +45,44 @@ the wiki's `Gotchas` page before rediscovering a known trap.
 
 - **Read before writing.** Before generating or modifying code, read the constitution, the wiki `Index`, and the relevant feature or spec page. If a user request references a number, behavior, or component you can't find, **ask** rather than invent.
 - **Don't duplicate.** Point to the wiki page or spec section — don't restate it in code comments, commit messages, or other docs.
-- **Wiki or Spec Kit?** Use Spec Kit for a new user-facing capability, a new AWS resource or cost-model change, work that needs a constitution check, or work that needs research first. Use the wiki (a `Feature-*` page plus GitHub issues, no branch) for changes to existing behavior, bug fixes, refactors, tooling, dependency and CI work, and knowledge capture.
+- **Wiki or Spec Kit?** See §3a. Recommend a spec when a trigger fires — don't wait to be asked.
 - **Propose, don't assume.** If every source is silent on something material, propose a wiki page or a spec clarification rather than making the call inline.
 - **Record traps.** When you hit a non-obvious trap, write it on the wiki page that owns it and link it from `Gotchas`, in the same change.
 
 ---
 
-## 3. Test-Driven Development is mandatory
+## 3. Methodology is mandatory — SDD for scope, TDD for code
+
+### 3a. Spec-Driven Development — recommend it, don't wait to be asked
+
+**Use Spec Kit** (`specs/NNN-*`, feature branch, full pipeline) when _any_ of
+these triggers fire:
+
+- a new user-facing capability,
+- a new AWS resource or a change to the cost model,
+- a constitution check is required,
+- research or clarification is needed before the work is understood.
+
+**Use the wiki** (a `Feature-*` page plus GitHub issues, no branch) for changes
+to existing behavior, bug fixes, refactors, tooling, dependency and CI work, and
+knowledge capture.
+
+When a trigger fires and the user has not mentioned a spec, **say so before
+writing code**:
+
+> This looks like a new user-facing capability, so our hybrid rule says it wants
+> a spec. I'd suggest `/speckit.specify` first — it'll force the clarify and
+> constitution-check steps we'd otherwise skip. Want me to start there, or would
+> you rather go straight to code?
+
+Push back **once**, concretely — name which trigger fired and what the skip
+costs (usually: a hard number invented instead of decided, or a constitution
+check never run). If the user declines, record the reason and continue. Do not
+nag twice, and do not silently comply the first time.
+
+Large or ambiguous changes get both: a spec for the _what_, TDD for the _how_.
+
+### 3b. Test-Driven Development is not optional
 
 This project uses **extreme programming (XP)** practices. Specs drive what we build; tests prove the code behaves as specified. **TDD is not optional — it is the development methodology.**
 

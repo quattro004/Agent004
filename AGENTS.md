@@ -78,6 +78,19 @@ Package-level commands:
 
 ## Required engineering workflow
 
+**Open every piece of work by naming the methodology.** Before writing code,
+state (a) whether this needs a spec and (b) what the failing test is. Both
+questions get answered in your first response, even when the user didn't raise
+them.
+
+- If a Spec Kit trigger fires — new user-facing capability, new AWS resource or
+  cost-model change, a required constitution check, or research needed first —
+  **recommend `/speckit.specify` before coding.** Name the trigger and the
+  concrete cost of skipping it (typically an invented hard number, or a
+  constitution check never run).
+- The user can decline either methodology, but only **explicitly and with a
+  reason**, recorded in the PR or issue. Silence is not consent. Push back once,
+  then respect the decision and note the exception.
 - Use TDD for production code: **RED → GREEN → REFACTOR**.
 - Add or update tests for any non-trivial behavior change.
 - Reuse existing patterns/helpers before introducing new abstractions.
@@ -104,6 +117,40 @@ Package names, versions, and service limits in `specs/` were true when written.
 `@aws/agentcore-cli` was renamed and unpublished, leaving a documented install
 command that 404s. When a spec drives an external action (install, deploy, API
 call), check the current reality first and update the spec in the same change.
+
+## Maintaining the Spec Kit toolchain
+
+Upgrade with the **manifest-aware** path, not `specify init --here --force`
+(upstream calls that an escape hatch — it skips per-file integrity checks):
+
+```sh
+uv tool install specify-cli --force --from git+https://github.com/github/spec-kit.git@<tag>
+specify integration status                  # review before changing anything
+specify integration upgrade copilot --force
+specify extension update
+```
+
+`integration status` is trustworthy only because
+`.specify/scripts/powershell/*.ps1` are pinned to **LF** in `.gitattributes`.
+Spec Kit records a SHA-256 per managed file and writes those scripts with LF, so
+the repo-wide `*.ps1 text eol=crlf` rule made all of them report as modified on
+every Windows checkout. Never "fix" that by relaxing the LF rule — the advertised
+remedy for the warning is `--force`, which overwrites real customizations.
+
+Two tiers of protection, and only one is safe:
+
+- **Integration-managed** files (`.github/prompts/`, `.github/agents/`,
+  `.specify/scripts/`, `.specify/templates/`, `.vscode/settings.json`) carry
+  per-file hashes. Local edits are detected and preserved; upgrade refuses until
+  you resolve them.
+- **Extension-provided** files carry only a whole-manifest hash. `extension
+update` has no `--force` and no per-file comparison — it removes and reinstalls,
+  so any local patch is lost silently. Do not patch extensions in place; prefer
+  an extension that needs no patching.
+
+Untracked files are never deleted by any Spec Kit command — removal iterates
+manifest keys only, so hand-authored files such as `.github/prompts/tdd.prompt.md`
+are safe. `.specify/feature.json` is machine-local and gitignored.
 
 ## MCP configuration
 
