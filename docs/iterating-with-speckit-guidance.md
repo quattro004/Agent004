@@ -68,27 +68,29 @@ Best for targeted changes — version bumps, wording fixes, correcting stale dat
 **Pros**: Full control, no regeneration risk, sidesteps LLM training-cutoff issues.
 **Cons**: Requires understanding of which artifacts reference the data being changed.
 
-### 2. The `spec-kit-iterate` Extension (Recommended for Non-Trivial Changes)
+### 2. `speckit.converge` (Recommended for Non-Trivial Changes)
 
-The [spec-kit-iterate](https://github.com/imviancagrace/spec-kit-iterate) community extension was created specifically for this gap. It provides a controlled way to evolve existing specs without destructive regeneration.
+`/speckit.converge` assesses the codebase against `spec.md`, `plan.md` and
+`tasks.md`, then appends the remaining work to `tasks.md` rather than
+regenerating anything. It is the built-in answer to "the artifacts and the code
+have drifted apart" — the same gap that previously required a third-party
+extension.
 
-#### Commands
+- **Non-destructive**: appends remaining work; does not regenerate artifacts
+- **Drift-aware**: compares declared state against what the code actually does
+- **Safe to run anytime**: assessment first, changes are additive
 
-| Command | Purpose |
-|---------|---------|
-| `/speckit.iterate.define <change description>` | Analyzes the change against current spec state, classifies scope, writes a reviewable `pending-iteration.md` |
-| `/speckit.iterate.apply` | Updates artifacts in dependency order (`spec.md → data-model.md → plan.md → tasks.md → quickstart.md → research.md`), runs consistency validation, then hands off to `speckit.implement` |
+> **Previously**: this section recommended the
+> [spec-kit-iterate](https://github.com/imviancagrace/spec-kit-iterate)
+> community extension. It was removed from this project on 2026-09-26 — the
+> upstream repository has two commits, was last pushed 2026-03-17, and our
+> request for PowerShell support
+> ([issue #1](https://github.com/imviancagrace/spec-kit-iterate/issues/1)) has
+> gone unanswered since 2026-04-22. It also sat in the one part of Spec Kit with
+> no per-file integrity tracking, so our local PowerShell patch could have been
+> overwritten silently by any future version bump. For multi-artifact changes,
+> use `speckit.converge` or manual edits plus `speckit.analyze`.
 
-#### Why Use It
-
-- **Non-destructive**: Updates artifacts surgically rather than regenerating them
-- **Dependency-aware**: Propagates changes in the correct order across artifacts
-- **Reviewable**: The `pending-iteration.md` step lets you inspect proposed changes before they're applied
-- **Validates consistency**: Runs cross-artifact checks as part of the apply step
-
-#### Installation
-
-See the [spec-kit-iterate README](https://github.com/imviancagrace/spec-kit-iterate) for setup instructions.
 
 ### 3. Regeneration on a Throwaway Branch (For Major Pivots)
 
@@ -111,7 +113,7 @@ When changes are so large that manual editing is impractical (e.g., a full archi
 |-------------|---------------------|------|
 | Version bumps, wording fixes | Manual edits + `speckit.analyze` | Low |
 | New clarifications to requirements | `speckit.clarify` | Low |
-| Multi-artifact changes (new component, revised data model) | `spec-kit-iterate` extension | Low–Medium |
+| Multi-artifact changes (new component, revised data model) | `speckit.converge`, or manual edits + `speckit.analyze` | Low–Medium |
 | Architectural pivot, major restructure | Regenerate on throwaway branch + cherry-pick | Medium |
 | Re-running `speckit.plan` on existing feature | **Avoid** — destructive regeneration | **High** |
 
@@ -122,5 +124,9 @@ When changes are so large that manual editing is impractical (e.g., a full archi
 - **Always commit (or back up) before** running any regenerative command.
 - **Use `speckit.analyze` after every batch of edits** to catch cross-artifact inconsistencies early.
 - **Be aware of LLM training cutoffs**: Any AI-driven regeneration may introduce stale versions or deprecated APIs. Providing explicit version data in prompts or spec context mitigates this.
-- **Upgrading Spec Kit itself is safe**: Running `specify init --here --force` updates CLI, templates, and scripts but **never touches `specs/`**.
+- **Upgrading Spec Kit itself is safe**, but use the manifest-aware path:
+  `specify integration upgrade copilot` (add `--force` only after reviewing what
+  it reports as modified), then `specify extension update`. `specify init --here
+  --force` is an escape hatch, not the upgrade path — it skips the per-file
+  integrity checks. Neither command ever touches `specs/`.
 - **Treat `spec.md` as the "what" and plan artifacts as the "how"**: Choose your update tool based on which layer you're changing.
