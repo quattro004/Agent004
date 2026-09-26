@@ -13,6 +13,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --build",
+    "wiki:pull": "git -C wiki pull --ff-only origin master || git clone https://github.com/quattro004/Agent004.wiki.git wiki",
+    "wiki:push": "git -C wiki add -A && git -C wiki commit -m \"Update wiki\" && git -C wiki push origin master",
+    "wiki:lint": "pnpm --filter @max-height/repo-tools run wiki:lint",
     "validate": "eslint . && prettier --check . && tsc --build && pnpm -r --if-present build && pnpm -r --if-present test"
   },
   "devDependencies": {

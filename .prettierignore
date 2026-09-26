@@ -16,3 +16,6 @@ pnpm-lock.yaml
 # Specs and docs (prose — formatting is author-controlled)
 specs/
 docs/
+
+# Local wiki clone (separate git repo, gitignored)
+wiki/

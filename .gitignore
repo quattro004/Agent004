@@ -39,3 +39,6 @@ playwright-report/
 
 # Docker
 *.secret.yaml
+
+# Local clone of the GitHub wiki (separate git repo — see docs/llm-wiki-plan.md D5)
+/wiki/
