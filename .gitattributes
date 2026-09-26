@@ -10,6 +10,13 @@
 # Windows-only scripts are more predictable with CRLF.
 *.ps1 text eol=crlf
 
+# Exception: Spec Kit records a SHA-256 of every file it manages and writes its
+# PowerShell scripts with LF. Checking them out as CRLF changes the bytes, so
+# `specify integration status` reports them as modified when they are untouched
+# — and the documented remedy for that warning is `--force`, which overwrites
+# real customizations elsewhere. Keep these LF so the integrity check stays true.
+.specify/scripts/powershell/*.ps1 text eol=lf
+
 # Binary assets: never touch line endings or attempt text diffs.
 *.png binary
 *.ico binary
