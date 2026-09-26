@@ -1,1 +1,1 @@
-export default ['packages/frontend', 'packages/agent'];
+export default ['packages/frontend', 'packages/agent', 'packages/repo-tools'];

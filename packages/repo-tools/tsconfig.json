@@ -11,13 +11,13 @@
     "isolatedModules": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "composite": true,
+    "lib": ["ES2024"],
+    "types": ["node"]
   },
-  "references": [
-    { "path": "packages/frontend" },
-    { "path": "packages/agent" },
-    { "path": "packages/infra" },
-    { "path": "packages/repo-tools" }
-  ],
-  "files": []
+  "include": ["src", "bin"],
+  "exclude": ["node_modules", "dist", "test"]
 }
