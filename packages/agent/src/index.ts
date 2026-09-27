@@ -17,9 +17,20 @@ import {
 
 const PORT = 8080;
 
-// In-memory session store. Lives for the lifetime of the Lambda execution
-// environment (i.e., across warm invocations). Cold starts wipe it, which
-// is acceptable — sessions are short-lived (≤30 min per FR-010).
+/**
+ * AgentCore Runtime V2 snapshots the process on the first healthy `/ping` and
+ * inherits that snapshot on every later instance. `/ping` must therefore stay
+ * unhealthy until `initialize()` has constructed and exercised the Bedrock
+ * client, so endpoint and credential resolution land inside the snapshot.
+ */
+let isReady = false;
+
+/** Initialization must fail loudly rather than retry past this deadline. */
+const INIT_DEADLINE_MS = 120_000;
+
+// In-memory session store. Lives for the lifetime of this container instance.
+// Sessions are short-lived (≤30 min per FR-010), so losing them on restart is
+// acceptable.
 const sessions = new Map<string, Session>();
 
 /** Rough char→token estimate when the SDK does not report usage directly. */
@@ -97,6 +108,11 @@ export function createMaxHeightAgent(options?: { displayAlias?: string }) {
 // --- HTTP Server ---
 
 function handlePing(_req: IncomingMessage, res: ServerResponse): void {
+  if (!isReady) {
+    res.writeHead(503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'initializing' }));
+    return;
+  }
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ status: 'healthy' }));
 }
@@ -236,6 +252,47 @@ export const __test = {
 
 const server = createServer(requestHandler);
 
+/**
+ * Warm the Bedrock/Strands client so endpoint resolution and the connection
+ * pool are captured by the V2 snapshot instead of being paid for on every
+ * restored instance.
+ *
+ * NOTE: this currently *constructs* the client only. The infra plan also calls
+ * for exercising it with a real round-trip, which costs tokens on every
+ * container start and so is a budget decision (P2) rather than a code detail.
+ * Tracked as the next cycle in infra-plan Phase 1.
+ */
+async function warmBedrockClient(): Promise<void> {
+  createMaxHeightAgent();
+}
+
+/**
+ * Explicit async initialization. Until this resolves, `/ping` reports
+ * unhealthy and the listener is not accepting connections, so AgentCore
+ * cannot snapshot a half-built process.
+ *
+ * Failure is surfaced, never retried silently — a snapshot taken from a
+ * degraded process would be inherited by every later instance.
+ */
+export async function initialize(): Promise<void> {
+  if (isReady) return;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Agent initialization exceeded ${INIT_DEADLINE_MS}ms deadline`)),
+      INIT_DEADLINE_MS,
+    );
+  });
+
+  try {
+    await Promise.race([warmBedrockClient(), deadline]);
+    isReady = true;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Only start the HTTP listener when not running under a test runner. Test
 // files import this module to access createMaxHeightAgent and the __test
 // helpers; if we listened unconditionally, parallel test files would race
@@ -243,7 +300,14 @@ const server = createServer(requestHandler);
 const isTestEnvironment = process.env.VITEST !== undefined || process.env.NODE_ENV === 'test';
 
 if (!isTestEnvironment) {
-  server.listen(PORT, () => {
-    console.log(`Max Height agent listening on port ${PORT}`);
-  });
+  initialize()
+    .then(() => {
+      server.listen(PORT, () => {
+        console.log(`Max Height agent listening on port ${PORT}`);
+      });
+    })
+    .catch((err: unknown) => {
+      console.error('Agent initialization failed; refusing to serve traffic:', err);
+      process.exit(1);
+    });
 }
