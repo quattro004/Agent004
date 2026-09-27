@@ -37,7 +37,8 @@ Source-of-truth order (highest authority first):
 4. `docs/` — supporting design documents. Useful background only.
 
 Session start ritual: `pnpm run wiki:pull`, then read the wiki's `Index`. Check
-the wiki's `Gotchas` page before rediscovering a known trap.
+the wiki's `Gotchas` page before rediscovering a known trap. The `wiki` skill
+carries this ritual and the ingest, query and record-a-trap workflows.
 
 ---
 

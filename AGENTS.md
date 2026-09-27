@@ -47,7 +47,9 @@ only ever reaches a pull request description has evaporated.
 **Session start ritual:** `pnpm run wiki:pull`, then read the wiki's `Index`
 page. Check `Gotchas` before rediscovering a known trap.
 
-The three workflows, documented in full on the wiki's `Wiki-Conventions` page:
+The three workflows, documented in full on the wiki's `Wiki-Conventions` page
+and available as the **`wiki` skill** (`.github/skills/wiki/`, or the `/wiki`
+prompt):
 
 - **Ingest** — read the new source → write or refresh its `Source-*` page → update every affected `Concept-`, `Component-`, `Contract-`, `Decision-` and `Feature-` page → update `Index` → append to `Log` → `pnpm run wiki:lint` → `pnpm run wiki:push`.
 - **Query** — read `Index` first, drill in, answer **with citations**. If the answer is durable, file it back as a new page.
@@ -134,6 +136,12 @@ call), check the current reality first and update the spec in the same change.
 
 ## Maintaining the Spec Kit toolchain
 
+To change a feature's artifacts _after_ the `specify → clarify → plan → tasks`
+pipeline has run, read the wiki's `Guide-Spec-Kit-Iteration` first. The short
+version: `speckit.plan` and `speckit.tasks` **regenerate destructively**,
+`speckit.analyze` is read-only, and `speckit.converge` is append-only and is the
+right default for closing code-versus-artifact drift.
+
 Upgrade with the **manifest-aware** path, not `specify init --here --force`
 (upstream calls that an escape hatch — it skips per-file integrity checks):
 
@@ -163,8 +171,12 @@ update` has no `--force` and no per-file comparison — it removes and reinstall
   an extension that needs no patching.
 
 Untracked files are never deleted by any Spec Kit command — removal iterates
-manifest keys only, so hand-authored files such as `.github/prompts/tdd.prompt.md`
-are safe. `.specify/feature.json` is machine-local and gitignored.
+manifest keys only, so hand-authored files such as `.github/prompts/tdd.prompt.md`,
+`.github/prompts/wiki.prompt.md` and everything under `.github/skills/` are safe.
+Put our own skills and prompts there, never in `.specify/extensions/` — that is
+the tier with no per-file hashing, where `extension update` deletes and
+reinstalls without a diff. `.specify/feature.json` is machine-local and
+gitignored.
 
 ## MCP configuration
 
@@ -222,6 +234,16 @@ wiki pushes are live and public.
 root-level script is therefore neither linted nor tested. Put real logic in a
 workspace package — `packages/repo-tools` exists for exactly this — and keep
 root `package.json` scripts to inline, logic-free commands.
+
+`wiki:push` is the cautionary example. As a root one-liner,
+`git add -A && git commit -m "..." && git push`, its `&&` chain encoded a
+decision — push _only if_ the commit succeeded — so a clone whose work was
+already committed hit "nothing to commit", exited non-zero, and never pushed.
+Nothing caught it, because nothing checks root scripts. It now lives in
+`packages/repo-tools` under types, lint and tests.
+
+The rule that follows: a root script may **chain** commands, but the moment it
+encodes a **decision**, it belongs in a package.
 
 ## Product and legal guardrails
 
