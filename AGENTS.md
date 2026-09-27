@@ -235,6 +235,16 @@ root-level script is therefore neither linted nor tested. Put real logic in a
 workspace package — `packages/repo-tools` exists for exactly this — and keep
 root `package.json` scripts to inline, logic-free commands.
 
+`wiki:push` is the cautionary example. As a root one-liner,
+`git add -A && git commit -m "..." && git push`, its `&&` chain encoded a
+decision — push _only if_ the commit succeeded — so a clone whose work was
+already committed hit "nothing to commit", exited non-zero, and never pushed.
+Nothing caught it, because nothing checks root scripts. It now lives in
+`packages/repo-tools` under types, lint and tests.
+
+The rule that follows: a root script may **chain** commands, but the moment it
+encodes a **decision**, it belongs in a package.
+
 ## Product and legal guardrails
 
 - User-facing/project-facing name is **Max Height**.

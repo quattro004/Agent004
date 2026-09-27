@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -b --noEmit",
-    "wiki:lint": "tsx bin/wiki-lint.ts"
+    "wiki:lint": "tsx bin/wiki-lint.ts",
+    "wiki:push": "tsx bin/wiki-push.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.1",

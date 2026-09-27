@@ -94,8 +94,14 @@ Browser edits on github.com bypass the linter entirely.
 ## Pushing — live, public, and gated on approval
 
 ```sh
-pnpm run wiki:push
+pnpm run wiki:push                          # uses the default "Update wiki" message
+pnpm run wiki:push "Record the CRLF trap"   # or supply your own
 ```
+
+It stages and commits **only when the working tree is dirty**, then pushes
+whether or not this run committed anything — so committing by hand first with a
+real message works, and is usually better. A clean, up-to-date clone reports
+"nothing to push" and exits 0.
 
 **Always ask the user before pushing.** A GitHub wiki has no branches, no pull
 requests, no review and no CI: the push *is* the publication, to everyone,
