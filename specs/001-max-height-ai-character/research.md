@@ -35,8 +35,8 @@
 | Zustand | 5.x (5.0.14) | Latest stable |
 | React Three Fiber | 9.x | R3F v9 = React 19 compatible; used in MVP for CRT shader + wireframe backdrop |
 | `@strands-agents/sdk` | 1.4.0 | Latest stable (upgraded from 1.0.0-rc.5) |
-| `@aws/agentcore-cli` | 0.9.1 | GA, recommended for new projects |
-| AWS CDK | 2.x (2.258.0) | Latest stable (upgraded from 2.250.0) |
+| `@aws/agentcore` | 0.30.0 | GA. **Renamed** from `@aws/agentcore-cli`, which is unpublished and 404s — see R2b |
+| AWS CDK | 2.x (2.270.0) | Latest stable. AgentCore constructs are now in **stable** `aws-cdk-lib/aws-bedrockagentcore` — see R2d |
 | Node.js | 24 LTS (24.15.0) | Active LTS through April 2028 — Node 20 EOL April 30, 2026. Strands TS SDK requires Node 20+; 22 confirmed, 24 expected compatible. |
 
 ### Cost Model (Claude Haiku 4.5 + Polly Neural)
@@ -74,7 +74,7 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 
 ## R1. Strands Agents TypeScript SDK
 
-**Decision**: Use `@strands-agents/sdk` (TypeScript, production-ready) with AgentCore CLI (`@aws/agentcore-cli` v0.9.1) for development and deployment. The Python SDK is at v1.36.0 (production since v1.0 in July 2025); the TypeScript SDK reached production-ready status for core features in early 2026.
+**Decision**: Use `@strands-agents/sdk` (TypeScript, production-ready) with the AgentCore CLI (`@aws/agentcore` v0.30.x) for local development. Deployment moved to CDK — see R2d. The Python SDK is at v1.36.0 (production since v1.0 in July 2025); the TypeScript SDK reached production-ready status for core features in early 2026.
 
 **Rationale**:
 - Full ESM, Node 20+, TypeScript-first. Streaming via `agent.stream()` async generator delivering token-by-token events.
@@ -98,7 +98,7 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 
 ## R2. AgentCore Runtime CDK Deployment
 
-**Decision**: Use AgentCore CLI (`@aws/agentcore-cli` v0.9.1) for agent development and deployment. Use `@aws-cdk/aws-bedrock-agentcore-alpha` L2 constructs (CDK v2.250.0+) for infrastructure provisioning (Memory, Observability). WebSocket connections via API Gateway WebSocket API + Lambda integration with SigV4-signed presigned URLs.
+**Decision**: Use the AgentCore CLI (`@aws/agentcore` v0.30.x) for agent development. Use the **stable** `aws-cdk-lib/aws-bedrockagentcore` L2 constructs for infrastructure provisioning (Runtime, Memory, Observability) — superseding `@aws-cdk/aws-bedrock-agentcore-alpha`, see R2d. WebSocket connections via API Gateway WebSocket API + Lambda integration with SigV4-signed presigned URLs.
 
 **Rationale**:
 - L2 constructs (`Runtime`, `AgentRuntimeArtifact`) from RFC #785 simplify deployment. `AgentRuntimeArtifact.fromAsset()` handles Docker image building and ECR push.
@@ -119,9 +119,12 @@ Budget is feasible for friends-and-family traffic. The $8 soft-degrade (voice of
 
 **Rationale**: The AgentCore CLI is GA (platform GA since October 2025) and the officially recommended tool for new AgentCore projects. It provides project scaffolding with Strands framework support, local dev server with hot reload, built-in evaluation tools, direct deploy to AgentCore Runtime, and gateway management.
 
-**Architecture split**:
-- AgentCore CLI: agent project scaffolding, local development, agent deployment to Runtime
-- AWS CDK: everything else (S3, CloudFront, Cognito, Budgets, Lambda, Observability dashboards)
+**Architecture split** (superseded by R2d, 2026-09-27):
+- AgentCore CLI: agent project scaffolding and local development
+- AWS CDK: everything else, **including the Runtime** (S3, CloudFront, Cognito, Budgets, Lambda, Observability dashboards)
+
+> **Correction (2026-09-27).** This section originally routed *deployment* through
+> the CLI. That was forced by a CDK limitation that no longer exists. See **R2d**.
 
 **Alternatives considered**:
 - Python Starter Toolkit: deprecated in favor of the CLI.
@@ -148,7 +151,7 @@ Max stalling — and it lowers the bill against the P2 ceiling.
 
 | Constraint | Source | Consequence for this repo |
 |---|---|---|
-| **CloudFormation and the AWS CDK cannot set `platformVersion`** | AgentCore devguide, *Platform versions → Infrastructure as code* | The runtime cannot be created by `@aws-cdk/aws-bedrock-agentcore-alpha`. V2 must come from `agentcore deploy`, the AWS CLI (`--platform-version V2`), or the SDK. This **confirms** the R2b split: CLI owns the runtime, CDK owns everything else. Revisit if the alpha construct adds the property. |
+| ~~**CloudFormation and the AWS CDK cannot set `platformVersion`**~~ **NO LONGER TRUE — see R2d** | AgentCore devguide, *Platform versions → Infrastructure as code* | **Superseded 2026-09-27.** `AWS::BedrockAgentCore::Runtime` now exposes a `PlatformVersion` property, so CloudFormation *can* set it. The CDK's generated L1 has not caught up (verified absent in `aws-cdk-lib` 2.270.0 **and** 2.271.0), but an L1 `addPropertyOverride('PlatformVersion', 'V2')` emits raw CloudFormation and works today. The CLI/CDK split is now a **choice**, not a constraint. |
 | **V2 Regions**: `us-east-1`, `us-east-2`, `us-west-2`, `eu-west-1`, `ap-northeast-1` | Same | We deploy in `us-west-2` — supported. Region choice is now load-bearing; do not move without rechecking. |
 | **`/ping` must report healthy only after initialization completes** | *Optimize your agent for V2* | `packages/agent/src/index.ts` runs its own `node:http` server, not the AgentCore SDK, and calls `server.listen(PORT)` unconditionally. As written, V2 would snapshot a half-initialized agent. The listener must be gated behind an init routine, or `/ping` must return non-healthy until init resolves. |
 | **Container must be healthy within 120 s of start** | Same | Startup work is bounded. Fail fast and loudly rather than retrying past the deadline (P-guard: no silent fallbacks). |
@@ -182,8 +185,70 @@ the microVM is warm. This makes session-open-on-power-on a **design requirement*
 not an optimization.
 
 **Alternatives considered**:
-- **Stay on V1.** Default, and the only option expressible in CDK today. Rejected: cold starts scale with image size exactly where our traffic pattern is all-cold-start, and it forgoes the memory-reclaim billing benefit.
-- **Wait for CDK support for `platformVersion`.** Rejected: unbounded wait, and R2b already routes runtime deployment through the CLI, so CDK support buys us little.
+- **Stay on V1.** Rejected: cold starts scale with image size exactly where our traffic pattern is all-cold-start, and it forgoes the memory-reclaim billing benefit.
+- ~~**Wait for CDK support for `platformVersion`.**~~ **Overtaken by events (2026-09-27)** — CloudFormation added the property and the constructs graduated to stable. See R2d.
+
+---
+
+## R2d. AgentCore constructs graduated to stable; CDK reclaims the Runtime (2026-09-27)
+
+**Decision**: Provision the AgentCore Runtime **in CDK**, using the stable
+`aws-cdk-lib/aws-bedrockagentcore` module. Drop
+`@aws-cdk/aws-bedrock-agentcore-alpha`. The AgentCore CLI keeps local
+development and loses deployment.
+
+**What changed.** Three independently verified facts, all dated 2026-09-27:
+
+| Fact | How it was verified |
+|---|---|
+| `AWS::BedrockAgentCore::Runtime` now has a `PlatformVersion` property, plus `LifecycleConfiguration`, `CapacityProviderConfiguration`, `FilesystemConfigurations` and `RequestHeaderConfiguration` | CloudFormation Template Reference for the resource |
+| Every AgentCore construct **except `Policy`** moved from the alpha package into stable `aws-cdk-lib/aws-bedrockagentcore` — including `Runtime`, `Memory` and `MemoryStrategy` | The alpha package's own README, *Migration to Stable* |
+| The stable module is **already installed** in this repo (we pin `aws-cdk-lib ^2.270.0`); the alpha package is declared but imported nowhere | `node_modules` inspection |
+
+**Rationale**:
+- The CLI/CDK split existed *only* because CDK could not express `platformVersion`. That premise is gone, so the split is no longer justified by anything.
+- One deploy path removes the drift surface that produced **C4** and **C6**. A runtime that exists only as a CLI invocation is a runtime nothing tests.
+- `platformVersion: V2` becomes a **CDK assertion in CI** rather than a manual post-deploy `get-agent-runtime --query platformVersion` check — this is the P10 argument, and it is the strongest one.
+- The L2 `Runtime` natively exposes `lifecycleConfiguration.idleRuntimeSessionTimeout`, which is what settles the FR-010 question below declaratively.
+- Deleting the alpha dependency retires the "alpha construct churn" risk outright (P6 supply-chain discipline).
+
+**Known sharp edge.** The CDK codegen lags the CloudFormation spec: `platformVersion`
+is absent from the L1 `CfnRuntime` in both 2.270.0 and 2.271.0 (the latest).
+Setting it therefore requires an **escape hatch**:
+
+```ts
+const cfnRuntime = runtime.node.defaultChild as CfnRuntime;
+cfnRuntime.addPropertyOverride('PlatformVersion', 'V2');
+```
+
+This is untyped, so it **must** be covered by a CDK assertion test, and re-checked
+on every `aws-cdk-lib` bump — if the typed property lands, migrate to it and
+delete the override.
+
+**Not yet verified — do not let this drive a deploy unchecked.** The CFN property
+description reads "Property description not available", indicating freshly
+generated service-model plumbing. That V2 provisions *correctly* through
+CloudFormation is untested by us. Per `AGENTS.md`, confirm at Phase 4 with
+`get-agent-runtime --query platformVersion` before treating it as settled; if it
+fails, fall back to the CLI path, which still works.
+
+### FR-010 session idle timeout — now decided
+
+`idleRuntimeSessionTimeout` defaults to **900 s (15 min)** and accepts **60–28800 s**
+for microVM runtimes (60–1209600 s for capacity-provider Instances). `spec.md`
+FR-010 allows a 30-minute session and T153 opens the session at TV power-on, so
+the default would drop a quiet visitor mid-experience at 16 minutes.
+
+**Set `idleRuntimeSessionTimeout` to 1800 s (30 min)** so the platform timer
+matches the session cap the spec already defines, leaving `sessionManager`'s cap
+as the single authority on session length. 1800 s is comfortably inside the
+microVM range. `maxLifetime` stays at its 8-hour default; it bounds the
+*instance*, not the session, and never binds before our 30-minute cap.
+
+**Alternatives considered**:
+- **Keep deployment in the CLI.** Rejected: nothing now forces it, and it keeps the runtime outside the tested, reviewable artifact.
+- **Wait for typed `platformVersion` in CDK.** Rejected for the same reason it was rejected in R2c — unbounded wait — but now with a working escape hatch available.
+- **Lower FR-010 to 15 minutes to match the default.** Rejected: that is inheriting a number rather than deciding one, and it silently contradicts a published functional requirement.
 
 ---
 
@@ -502,7 +567,7 @@ and align `@types/node` to the Node 24 LTS line.
 | `@strands-agents/sdk` | 1.4.0 | 1.15.0 |
 | `zod` | 4.4.3 | 4.5.2 |
 | `aws-cdk-lib` | 2.265.0 | 2.267.0 |
-| `@aws-cdk/aws-bedrock-agentcore-alpha` | 2.258.0-alpha.0 | 2.267.0-alpha.0 |
+| `@aws-cdk/aws-bedrock-agentcore-alpha` | 2.258.0-alpha.0 | 2.267.0-alpha.0 — **to be removed**, see R2d (constructs graduated to stable `aws-cdk-lib/aws-bedrockagentcore`) |
 | `aws-cdk` | 2.1136.0 | 2.1139.0 |
 | all `@aws-sdk/*` | 3.1110.0 | 3.1121.0 |
 | `@testing-library/jest-dom` | 6.10.0 | 7.0.1 |

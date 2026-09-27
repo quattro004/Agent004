@@ -45,10 +45,15 @@ Two things drive this plan:
   start — V2 is the difference between Max answering promptly and Max stalling.
   It also bills reclaimed memory instead of the session peak, which helps against
   the P2 ceiling.
-- **The CLI owns the runtime; CDK owns everything else.** CloudFormation and the
-  CDK cannot set `platformVersion` (stated outright in the AgentCore devguide), so
-  V2 is only reachable via `agentcore deploy`, the AWS CLI, or the SDK. This
-  *confirms* the split already chosen in research.md §R2b rather than changing it.
+- **CDK owns the runtime too (revised 2026-09-27).** This plan originally said the
+  CLI must own the runtime because "CloudFormation and the CDK cannot set
+  `platformVersion`". **That is no longer true**: `AWS::BedrockAgentCore::Runtime`
+  now has a `PlatformVersion` property, and every AgentCore construct except
+  `Policy` has graduated into stable `aws-cdk-lib/aws-bedrockagentcore`. The
+  runtime moves into CDK; the CLI keeps local development. See research.md **§R2d**.
+  Caveat: CDK codegen lags the CFN spec, so `PlatformVersion` needs an L1
+  `addPropertyOverride` escape hatch plus an assertion test until the typed
+  property lands.
 - **Region stays `us-west-2`.** It is one of only five V2 Regions
   (`us-east-1`, `us-east-2`, `us-west-2`, `eu-west-1`, `ap-northeast-1`) and already
   carries the Polly neural Matthew dependency. Region choice is now load-bearing.
@@ -58,7 +63,8 @@ Two things drive this plan:
 - **Toolchain refresh.** The AgentCore CLI was renamed `@aws/agentcore-cli` →
   `@aws/agentcore` (old name 404s on npm; now v0.30.0, specs said 0.9.1). The CLI
   internally uses `@aws/agentcore-cdk`, which is a *different* package from the
-  `@aws-cdk/aws-bedrock-agentcore-alpha` we pin.
+  `@aws-cdk/aws-bedrock-agentcore-alpha` we pin — and that alpha pin is now
+  **removable** in favour of the stable module already present in `aws-cdk-lib`.
 
 ## Phases & Tasks
 
@@ -73,7 +79,20 @@ Two things drive this plan:
 - `.mcp.json`: added the AWS MCP Server over plain HTTP (OAuth), giving AWS API
   access and docs with no local proxy, no `uvx`, and no credentials on disk.
 
-### Phase 1 — Make the agent snapshot-safe (TDD) — _blocks any V2 deploy_
+### Phase 1 — Make the agent snapshot-safe (TDD) — _blocks any V2 deploy_ 🟡 PARTLY DONE
+
+**Status (2026-09-27).** PR #30 landed T148 and T149: `initialize()` gates the
+listener, `/ping` returns 503 until init resolves, and init fails loudly at the
+120 s deadline. T150's audit is satisfied — no module-scope randomness, UUIDs,
+timestamps or PID/hostname-derived ids remain in `packages/agent/src`, and the
+stale "lifetime of the Lambda execution environment" comment is corrected.
+
+**One gap remains.** `warmBedrockClient()` currently only *constructs* the
+client. The whole point of the warm-up is to capture endpoint resolution,
+service-model parsing and the connection pool **in the snapshot**, which requires
+*exercising* it. As written, Phase 1's stated benefit is not actually realized.
+The code comments this honestly and defers it as a P2 budget question, since a
+real round-trip costs tokens on every container start. Tracked as **T154**.
 
 **T148 → T149 → T150.** Do this before provisioning anything, because a snapshot
 is taken on the first healthy `/ping` and then inherited by every instance.
@@ -106,28 +125,45 @@ strategies, namespace `/max-height/{actorId}/`, 30-day retention — and export
 `memoryId`. Then replace the throwing client stub, keeping the injectable-client
 seam `memoryAdapter.test.ts` already mocks. CDK assertions first, per P10.
 
+Import `Memory` and `MemoryStrategy` from **stable `aws-cdk-lib/aws-bedrockagentcore`**,
+not from `@aws-cdk/aws-bedrock-agentcore-alpha` — the constructs graduated
+(research.md §R2d) and the stable module ships in the `aws-cdk-lib` we already
+pin. Remove the alpha dependency from `packages/infra/package.json` in the same
+change; it is imported nowhere, so nothing breaks.
+
 ### Phase 4 — Deploy (T152, T153)
 
-Deploy the runtime on V2 and confirm with
-`get-agent-runtime --query platformVersion`. Poll until `READY` or `*FAILED`:
-create/update returns while still `CREATING`, takes minutes on V2, and calling
-update/delete early returns `ConflictException`. Keep agent env vars under the
-2.5 KB V2 container cap. Then move `session_start` to the power-on transition
-(T153) so the greeting covers the start.
+Deploy the runtime **via CDK** using the stable `Runtime` construct, setting
+`platformVersion` through an L1 `addPropertyOverride('PlatformVersion', 'V2')`
+escape hatch (the typed property is absent from `aws-cdk-lib` 2.270.0 and
+2.271.0) and `lifecycleConfiguration.idleRuntimeSessionTimeout` to 1800 s. Cover
+both with CDK assertions — the escape hatch is untyped, so the test is the only
+thing standing between us and a silent V1 deploy.
 
-**Open question — session idle timeout versus FR-010.** AgentCore's
-`IdleRuntimeSessionTimeout` is documented as configurable and **defaulting to 15
-minutes**, while T153 opens the session at TV power-on rather than at first
-message and `spec.md` FR-010 allows a session to run to **30 minutes**. A visitor
-who powers on and then reads quietly for sixteen minutes would lose the session
-mid-experience. Because the timeout is configurable, this is a number someone has
-to **decide** rather than inherit — which makes it a spec clarification, the same
-shape as the cold-start threshold in Phase 5, not a deploy-step edit. Settle it
-before T153 lands.
+Then confirm against the deployed resource with
+`get-agent-runtime --query platformVersion`. **This verification is not optional**:
+provisioning V2 through CloudFormation is newly exposed and untested by us. If it
+does not come back `V2`, fall back to `agentcore deploy` / the AWS CLI, which
+still work, and record the failure in the deviations table.
 
-Verify the default first: it was read on the AgentCore WebSocket get-started
-page, which points at the separate lifecycle-settings page. Per `AGENTS.md`,
-external facts in this plan get re-checked before they drive an action.
+Poll until `READY` or `*FAILED`: create/update returns while still `CREATING`,
+takes minutes on V2, and calling update/delete early returns `ConflictException`.
+Keep agent env vars under the 2.5 KB V2 container cap. Then move `session_start`
+to the power-on transition (T153) so the greeting covers the start.
+
+**Resolved — session idle timeout versus FR-010 (verified 2026-09-27).** The
+default was confirmed against the AgentCore lifecycle-settings reference:
+`idleRuntimeSessionTimeout` defaults to **900 s (15 min)** and accepts
+**60–28800 s** on microVM runtimes. Since T153 opens the session at TV power-on
+and `spec.md` FR-010 allows 30 minutes, the default would drop a quiet visitor at
+16 minutes.
+
+**Decision: set it to 1800 s (30 min)**, matching the cap `sessionManager`
+already enforces, so the platform timer never pre-empts the spec. This is set
+declaratively via the stable L2 `Runtime`'s `lifecycleConfiguration` — no
+deploy-step edit needed. `maxLifetime` stays at its 8-hour default: it bounds the
+instance, not the session, and cannot bind before our 30-minute cap. Recorded as
+research.md **§R2d**.
 
 ### Phase 5 — Operational readiness (T111, T113)
 
@@ -168,21 +204,30 @@ the C4 audit exists precisely because that drifted last time.
   long-lived `AKIA` keys on disk (P11). CDK bootstrap and deploy need broader
   permissions than Polly did, so the least-privilege policy for `max-height-gen`
   will need revisiting as its own decision.
-- **Deps:** no new runtime dependencies. `@aws-cdk/aws-bedrock-agentcore-alpha`
-  moves from declared-but-unused to actually imported; consider bumping
-  `2.267.0-alpha.0` → `2.270.0-alpha.0` at the same time.
+- **Deps:** no new runtime dependencies — and one **removal**.
+  `@aws-cdk/aws-bedrock-agentcore-alpha@2.267.0-alpha.0` is declared in
+  `packages/infra/package.json` and imported nowhere; its constructs have
+  graduated into the stable `aws-cdk-lib` we already pin, so it should be deleted
+  rather than bumped. That is a net reduction in supply-chain surface (P6).
 
 ## Risks / Considerations
 
-- **Alpha construct churn.** `@aws-cdk/aws-bedrock-agentcore-alpha` is alpha; its
-  API can break between versions. Pin exactly and re-read the API on every bump.
+- **Untyped escape hatch for `platformVersion`.** `addPropertyOverride` is not
+  type-checked, so a typo silently deploys V1 — the exact failure V2 was chosen to
+  avoid, and it looks like success. A CDK assertion asserting `PlatformVersion:
+  'V2'` in the synthesized template is mandatory, not optional.
+- **V2-through-CloudFormation is unproven by us.** The CFN property is newly
+  exposed and its description is still blank upstream. Verify with
+  `get-agent-runtime` at Phase 4 before trusting it; the CLI path remains a
+  working fallback.
 - **Snapshot bugs are silent.** Nothing fails loudly when entropy or a timestamp is
   frozen into a snapshot — it just produces identical values everywhere. Phase 1's
   audit is the only defence, so treat it as correctness work, not cleanup.
 - **Do not snapshot anything that changes without a redeploy.** A tool catalog
   fetched at startup looks ideal but would freeze Max's tool inventory.
-- **`platformVersion` in CDK may land later.** If the alpha construct adds it,
-  revisit the CLI/CDK split — but do not wait for it.
+- **`platformVersion` typed support may land later.** When `aws-cdk-lib` adds the
+  typed property, migrate off the escape hatch and delete the override. Re-check
+  on every `aws-cdk-lib` bump.
 - TDD is mandatory for code (constitution). Docs, spec edits, and asset generation
   are exempt; Phases 1, 3, and 5 are not.
 
@@ -196,12 +241,15 @@ the C4 audit exists precisely because that drifted last time.
 ## Next Steps (todo list)
 
 1. ~~**spec-alignment** — Phase 0 research/tasks/quickstart corrections.~~ ✅ done
-2. **agent-snapshot-safe** — Phase 1 T148–T150, TDD. ⬅️ **NEXT**
-3. **snapsafe-base-image** — Phase 2 T151.
-4. **agentcore-memory** — Phase 3 T023b + T023c.
-5. **deploy-v2** — Phase 4 T152 + T153.
-6. **ops-alarms** — Phase 5 T111 + T113.
-7. **validate-finalize** — Phase 6 `pnpm run validate` + doc reconciliation.
+2. ~~**agent-snapshot-safe** — Phase 1 T148–T150, TDD.~~ ✅ done in #30
+3. **warm-client-exercise** — Phase 1 remainder, T154, TDD. ⬅️ **NEXT**
+4. **agentcore-cdk-migration** — drop the alpha dep, move to stable
+   `aws-cdk-lib/aws-bedrockagentcore` (research.md §R2d).
+5. **snapsafe-base-image** — Phase 2 T151.
+6. **agentcore-memory** — Phase 3 T023b + T023c.
+7. **deploy-v2** — Phase 4 T152 + T153 (now a CDK deploy).
+8. **ops-alarms** — Phase 5 T111 + T113.
+9. **validate-finalize** — Phase 6 `pnpm run validate` + doc reconciliation.
 
 ## Possible spec session — native AgentCore WebSocket (after Phase 4)
 
@@ -224,7 +272,7 @@ cold-start and cost numbers exist. Impact on this plan if it were adopted:
 | 1 — snapshot safety | No. Same container and `/ping` trigger; `/ws` widens the readiness gate rather than replacing it. |
 | 2 — base image | No. Protocol-agnostic. |
 | 3 — AgentCore Memory | No. Orthogonal to transport. |
-| 4 — deploy | Only via the idle-timeout question above. |
+| 4 — deploy | Resolved — the idle-timeout question is now decided (1800 s, research.md §R2d), so this phase is no longer coupled to the WebSocket question. |
 | 5 — alarms | **Yes.** A WebSocket trace covers the whole connection rather than each message, and "WebSocket 5xx" is an API Gateway metric that would no longer exist. |
 
 Three parts of the current contract conflict with the platform — subprotocol,
