@@ -115,6 +115,20 @@ update/delete early returns `ConflictException`. Keep agent env vars under the
 2.5 KB V2 container cap. Then move `session_start` to the power-on transition
 (T153) so the greeting covers the start.
 
+**Open question — session idle timeout versus FR-010.** AgentCore's
+`IdleRuntimeSessionTimeout` is documented as configurable and **defaulting to 15
+minutes**, while T153 opens the session at TV power-on rather than at first
+message and `spec.md` FR-010 allows a session to run to **30 minutes**. A visitor
+who powers on and then reads quietly for sixteen minutes would lose the session
+mid-experience. Because the timeout is configurable, this is a number someone has
+to **decide** rather than inherit — which makes it a spec clarification, the same
+shape as the cold-start threshold in Phase 5, not a deploy-step edit. Settle it
+before T153 lands.
+
+Verify the default first: it was read on the AgentCore WebSocket get-started
+page, which points at the separate lifecycle-settings page. Per `AGENTS.md`,
+external facts in this plan get re-checked before they drive an action.
+
 ### Phase 5 — Operational readiness (T111, T113)
 
 CloudWatch alarms for error rate, cold-start P95, and WebSocket 5xx, feeding the
@@ -188,3 +202,32 @@ the C4 audit exists precisely because that drifted last time.
 5. **deploy-v2** — Phase 4 T152 + T153.
 6. **ops-alarms** — Phase 5 T111 + T113.
 7. **validate-finalize** — Phase 6 `pnpm run validate` + doc reconciliation.
+
+## Possible spec session — native AgentCore WebSocket (after Phase 4)
+
+AgentCore Runtime now speaks WebSocket natively (`/ws` on port 8080), which could
+remove the API Gateway + Lambda hop from `Contract-WebSocket-API` entirely.
+Researched and recorded on the wiki as `Source-AgentCore-Bidirectional-Streaming`;
+**nothing is adopted.**
+
+This trips the hybrid rule — it changes the cost model, adds or removes AWS
+resources, and needs a constitution check (P2 budget, P8 graceful degradation,
+P11 credentials, since the browser OAuth path carries a token in
+`Sec-WebSocket-Protocol`). So it wants **`/speckit.specify`, not a pull request.**
+
+**Do not spec it yet.** Nothing is deployed, so the trade-off would be argued
+against assumptions rather than measurements. Revisit after Phase 4, when real
+cold-start and cost numbers exist. Impact on this plan if it were adopted:
+
+| Phase | Affected |
+| --- | --- |
+| 1 — snapshot safety | No. Same container and `/ping` trigger; `/ws` widens the readiness gate rather than replacing it. |
+| 2 — base image | No. Protocol-agnostic. |
+| 3 — AgentCore Memory | No. Orthogonal to transport. |
+| 4 — deploy | Only via the idle-timeout question above. |
+| 5 — alarms | **Yes.** A WebSocket trace covers the whole connection rather than each message, and "WebSocket 5xx" is an API Gateway metric that would no longer exist. |
+
+Three parts of the current contract conflict with the platform — subprotocol,
+close codes, and heartbeat versus the idle timer. They are tabled on the wiki's
+`Contract-WebSocket-API` page and should be treated as blocking questions for any
+such spec.
