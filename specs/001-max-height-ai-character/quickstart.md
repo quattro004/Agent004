@@ -294,33 +294,50 @@ CDK deploy outputs the WebSocket endpoint and Cognito pool ID. Copy these to `.e
 
 ## Deployment
 
-### Agent (via AgentCore CLI)
+### Agent runtime (via CDK — revised 2026-09-27)
 
-```bash
-cd packages/agent
-agentcore deploy
-# Deploys to AgentCore Runtime
+The runtime targets **platform version V2** and is provisioned **by CDK**, not
+the CLI. This changed: the original instruction routed deployment through
+`agentcore deploy` because "neither CloudFormation nor the CDK can set
+`platformVersion`". `AWS::BedrockAgentCore::Runtime` now exposes a
+`PlatformVersion` property, and the AgentCore constructs have graduated into
+stable `aws-cdk-lib/aws-bedrockagentcore`. See research.md **§R2d**.
+
+Because CDK codegen still lags the CloudFormation spec (`platformVersion` is
+absent from `aws-cdk-lib` 2.270.0 and 2.271.0), it is set with an L1 escape
+hatch and pinned by a CDK assertion:
+
+```ts
+const cfnRuntime = runtime.node.defaultChild as CfnRuntime;
+cfnRuntime.addPropertyOverride('PlatformVersion', 'V2');
 ```
 
-The runtime targets **platform version V2** (research.md §R2c). Neither
-CloudFormation nor the CDK can set `platformVersion`, so the runtime is created
-by the CLI — or, if the installed CLI does not expose the flag, directly:
+Always confirm on the deployed resource — an untyped override that silently
+fails looks exactly like success:
 
 ```bash
-aws bedrock-agentcore-control create-agent-runtime \
-  --agent-runtime-name max-height \
-  --platform-version V2 \
-  ...
-
-# Confirm, then poll until terminal — V2 create/update takes minutes and
-# returns while the runtime is still CREATING.
+# Poll until terminal — V2 create/update takes minutes and returns
+# while the runtime is still CREATING.
 aws bedrock-agentcore-control get-agent-runtime \
   --agent-runtime-id <id> --query platformVersion
+```
+
+If that does not return `V2`, fall back to the CLI path, which still works:
+
+```bash
+cd packages/agent && agentcore deploy
+# or: aws bedrock-agentcore-control create-agent-runtime \
+#       --agent-runtime-name max-height --platform-version V2 ...
 ```
 
 Calling update or delete before the runtime reaches `READY` or a `*FAILED`
 state returns `ConflictException`. V2 also caps total environment variables at
 2.5 KB for container agents (4 KB on V1).
+
+Session lifetime is set declaratively via the L2 `Runtime`'s
+`lifecycleConfiguration.idleRuntimeSessionTimeout` — **1800 s**, matching
+FR-010's 30-minute cap. The service default is 900 s, which would cut a quiet
+visitor off at 16 minutes.
 
 ### Infrastructure (via CDK)
 
@@ -331,11 +348,12 @@ npx cdk deploy --all
 
 This deploys:
 1. **CognitoStack** — Guest identity pool + IAM roles.
-2. **AgentStack** — AgentCore Memory, WebSocket API + Lambda integration.
+2. **AgentStack** — AgentCore Runtime + Memory, WebSocket API + Lambda integration.
 3. **FrontendStack** — S3 bucket + CloudFront distribution.
 4. **BudgetStack** — Cost alerts ($5/$8 SNS) + hard-stop ($10 Lambda).
 
-The agent itself is deployed separately via `agentcore deploy` (see above).
+Deploy **BudgetStack first**, before the runtime, so the cost guardrail predates
+the thing it guards.
 
 Post-deploy: update frontend `.env.local` with stack outputs, then `cd packages/frontend && pnpm run build && aws s3 sync dist/ s3://<bucket>`.
 
