@@ -2,6 +2,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createGitRunner, pushWiki } from '../src/wiki/push.js';
+import { parsePushArgs } from '../src/wiki/push-args.js';
 
 /**
  * Pushes the local wiki clone.
@@ -19,10 +20,15 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  const message = process.argv[2];
+  const args = parsePushArgs(process.argv.slice(2));
+  if (args.kind === 'usage-error') {
+    console.error(`wiki:push — ${args.reason}`);
+    return 1;
+  }
+
   const outcome = await pushWiki({
     git: createGitRunner(wikiDir),
-    ...(message ? { message } : {}),
+    ...(args.message ? { message: args.message } : {}),
   });
 
   switch (outcome.kind) {

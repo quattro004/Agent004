@@ -97,9 +97,18 @@ Browser edits on github.com bypass the linter entirely.
 ## Pushing — live, public, and gated on approval
 
 ```sh
-pnpm run wiki:push                          # uses the default "Update wiki" message
-pnpm run wiki:push "Record the CRLF trap"   # or supply your own
+pnpm run wiki:push                             # uses the default "Update wiki" message
+pnpm run wiki:push -- "Record the CRLF trap"   # or supply your own
+pnpm run wiki:push -- -m "Record the CRLF trap"
 ```
+
+**Quote the whole message.** Anything the argument parser cannot explain — an
+unknown flag, a message split across several unquoted words, an empty one — is
+rejected with a usage error and a non-zero exit *before* git runs. A wiki push
+is live, public and un-reviewed, so a misunderstood argument has to fail loudly
+rather than be guessed at: `--message "text"` once committed the literal string
+`--message` as the wiki commit message, because the bin read `argv[2]`
+positionally.
 
 It stages and commits **only when the working tree is dirty**, then pushes
 whether or not this run committed anything — so committing by hand first with a

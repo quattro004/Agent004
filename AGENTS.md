@@ -69,18 +69,18 @@ wiki separately via its own git history.
 
 ## Setup and core commands
 
-| Task                     | Command                 |
-| ------------------------ | ----------------------- |
-| Install dependencies     | `pnpm install`          |
-| Run full validation gate | `pnpm run validate`     |
-| Lint                     | `pnpm run lint`         |
-| Format check             | `pnpm run format:check` |
-| Type-check               | `pnpm run typecheck`    |
-| Build all workspaces     | `pnpm run build`        |
-| Test all workspaces      | `pnpm run test`         |
-| Pull the wiki clone      | `pnpm run wiki:pull`    |
-| Lint the wiki            | `pnpm run wiki:lint`    |
-| Push the wiki (live)     | `pnpm run wiki:push`    |
+| Task                     | Command                           |
+| ------------------------ | --------------------------------- |
+| Install dependencies     | `pnpm install`                    |
+| Run full validation gate | `pnpm run validate`               |
+| Lint                     | `pnpm run lint`                   |
+| Format check             | `pnpm run format:check`           |
+| Type-check               | `pnpm run typecheck`              |
+| Build all workspaces     | `pnpm run build`                  |
+| Test all workspaces      | `pnpm run test`                   |
+| Pull the wiki clone      | `pnpm run wiki:pull`              |
+| Lint the wiki            | `pnpm run wiki:lint`              |
+| Push the wiki (live)     | `pnpm run wiki:push -- "Message"` |
 
 `wiki:lint` is deliberately **not** part of `validate`: the `wiki/` clone is
 optional and gitignored, so `validate` must pass without it.
@@ -303,6 +303,17 @@ Nothing caught it, because nothing checks root scripts. It now lives in
 
 The rule that follows: a root script may **chain** commands, but the moment it
 encodes a **decision**, it belongs in a package.
+
+**And moving it into a package is not the end of it — mind the entry point.**
+`bin/wiki-push.ts` sat inside `packages/repo-tools`, so it was linted and
+type-checked, yet its argument handling was a bare `process.argv[2]` that no
+test touched: `push.test.ts` covered `pushWiki` and stopped at the module
+boundary. So `wiki:push --message "text"` committed the literal string
+`--message` as the wiki commit message, and, because a wiki push is live and
+un-reviewed, the mistake was public before anyone saw it. Argument parsing now
+lives in `src/wiki/push-args.ts` under test, and the bin is a thin wrapper that
+prints and exits. Keep bins that way — anything a bin decides for itself is
+code no test is looking at.
 
 ## Product and legal guardrails
 
