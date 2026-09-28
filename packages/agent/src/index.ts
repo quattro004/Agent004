@@ -4,6 +4,7 @@ import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { tool } from '@strands-agents/sdk';
 import type { JSONValue } from '@strands-agents/sdk';
 import { buildSystemPrompt } from './personality/systemPrompt.js';
+import { probeBedrockRuntime } from './bedrock/warmup.js';
 import { newsToolSchema, fetchNews } from './tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
 import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
@@ -253,17 +254,18 @@ export const __test = {
 const server = createServer(requestHandler);
 
 /**
- * Warm the Bedrock/Strands client so endpoint resolution and the connection
- * pool are captured by the V2 snapshot instead of being paid for on every
- * restored instance.
+ * Warm the Bedrock/Strands client so endpoint resolution, credential
+ * resolution and the connection pool are captured by the V2 snapshot instead
+ * of being paid for on every restored instance.
  *
- * NOTE: this currently *constructs* the client only. The infra plan also calls
- * for exercising it with a real round-trip, which costs tokens on every
- * container start and so is a budget decision (P2) rather than a code detail.
- * Tracked as the next cycle in infra-plan Phase 1.
+ * Constructing the client is not enough — the SDK does that work lazily, so it
+ * only lands in the snapshot if something drives it. `probeBedrockRuntime()`
+ * issues one real, zero-token request for that purpose; see the rationale in
+ * `src/bedrock/warmup.ts`.
  */
 async function warmBedrockClient(): Promise<void> {
   createMaxHeightAgent();
+  await probeBedrockRuntime();
 }
 
 /**
