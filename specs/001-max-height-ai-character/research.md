@@ -205,6 +205,20 @@ development and loses deployment.
 | Every AgentCore construct **except `Policy`** moved from the alpha package into stable `aws-cdk-lib/aws-bedrockagentcore` — including `Runtime`, `Memory` and `MemoryStrategy` | The alpha package's own README, *Migration to Stable* |
 | The stable module is **already installed** in this repo (we pin `aws-cdk-lib ^2.270.0`); the alpha package is declared but imported nowhere | `node_modules` inspection |
 
+**Two README claims corrected by direct import (2026-09-28, during the removal).**
+The alpha README is the source for the row above, and it is stale on both edges:
+
+| README says | Actually true in `aws-cdk-lib` 2.270.0 |
+|---|---|
+| "The Policy submodule remains experimental" | `Policy` **is** exported from stable. Nothing at all is left behind by dropping the alpha package — the migration is total, not "all except `Policy`". |
+| Lists **`Observability`** among the graduated constructs | There is no `Observability` *construct* in either package. It is a submodule of helpers — `LogType`, `LoggingConfig`, `LoggingDestination`, `configureTracingDelivery()`, `configureLoggingDelivery()`. Do not look for `new Observability(...)`. The stable version is a superset; it adds `RuntimeObservabilityOptions`. |
+
+Verified by importing the module and checking `typeof` on each name, not by
+reading the README a second time. `packages/infra/test/agentcore-constructs.test.ts`
+now pins the six constructs `T023b` and `T152` depend on, so a future
+`aws-cdk-lib` bump that drops or renames one fails in CI instead of surfacing
+when someone starts that task.
+
 **Rationale**:
 - The CLI/CDK split existed *only* because CDK could not express `platformVersion`. That premise is gone, so the split is no longer justified by anything.
 - One deploy path removes the drift surface that produced **C4** and **C6**. A runtime that exists only as a CLI invocation is a runtime nothing tests.
@@ -567,7 +581,7 @@ and align `@types/node` to the Node 24 LTS line.
 | `@strands-agents/sdk` | 1.4.0 | 1.15.0 |
 | `zod` | 4.4.3 | 4.5.2 |
 | `aws-cdk-lib` | 2.265.0 | 2.267.0 |
-| `@aws-cdk/aws-bedrock-agentcore-alpha` | 2.258.0-alpha.0 | 2.267.0-alpha.0 — **to be removed**, see R2d (constructs graduated to stable `aws-cdk-lib/aws-bedrockagentcore`) |
+| `@aws-cdk/aws-bedrock-agentcore-alpha` | 2.258.0-alpha.0 | **removed 2026-09-28** — see R2d; constructs graduated to stable `aws-cdk-lib/aws-bedrockagentcore` |
 | `aws-cdk` | 2.1136.0 | 2.1139.0 |
 | all `@aws-sdk/*` | 3.1110.0 | 3.1121.0 |
 | `@testing-library/jest-dom` | 6.10.0 | 7.0.1 |

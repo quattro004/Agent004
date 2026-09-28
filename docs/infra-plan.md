@@ -11,9 +11,10 @@ Two things drive this plan:
 
 1. **T023 was marked complete but only half-built.** `packages/infra/lib/agent-stack.ts`
    contains the WebSocket API, Lambda, and SSM parameters. It contains no AgentCore
-   Memory construct. `@aws-cdk/aws-bedrock-agentcore-alpha` is declared in
-   `packages/infra/package.json` and imported **nowhere in the repo**. On the agent
-   side, `agentCoreMemoryClient.ts` is a stub that throws. Tracked as **C4**.
+   Memory construct. `@aws-cdk/aws-bedrock-agentcore-alpha` was declared in
+   `packages/infra/package.json` and imported **nowhere in the repo** — that pin
+   is now removed (issue #34), but the missing Memory construct remains. On the
+   agent side, `agentCoreMemoryClient.ts` is a stub that throws. Tracked as **C4**.
 2. **AgentCore Runtime V2 is out, and we are targeting it.** V2 restores each
    instance from a snapshot instead of booting the container, which changes how the
    agent process must be structured. Getting this wrong is not a deploy failure —
@@ -63,8 +64,8 @@ Two things drive this plan:
 - **Toolchain refresh.** The AgentCore CLI was renamed `@aws/agentcore-cli` →
   `@aws/agentcore` (old name 404s on npm; now v0.30.0, specs said 0.9.1). The CLI
   internally uses `@aws/agentcore-cdk`, which is a *different* package from the
-  `@aws-cdk/aws-bedrock-agentcore-alpha` we pin — and that alpha pin is now
-  **removable** in favour of the stable module already present in `aws-cdk-lib`.
+  `@aws-cdk/aws-bedrock-agentcore-alpha` we used to pin — **removed 2026-09-28**
+  (issue #34) in favour of the stable module already present in `aws-cdk-lib`.
 
 ## Phases & Tasks
 
@@ -137,11 +138,10 @@ strategies, namespace `/max-height/{actorId}/`, 30-day retention — and export
 `memoryId`. Then replace the throwing client stub, keeping the injectable-client
 seam `memoryAdapter.test.ts` already mocks. CDK assertions first, per P10.
 
-Import `Memory` and `MemoryStrategy` from **stable `aws-cdk-lib/aws-bedrockagentcore`**,
-not from `@aws-cdk/aws-bedrock-agentcore-alpha` — the constructs graduated
-(research.md §R2d) and the stable module ships in the `aws-cdk-lib` we already
-pin. Remove the alpha dependency from `packages/infra/package.json` in the same
-change; it is imported nowhere, so nothing breaks.
+Import `Memory` and `MemoryStrategy` from **stable `aws-cdk-lib/aws-bedrockagentcore`**.
+The alpha package was removed on 2026-09-28 (issue #34), and
+`packages/infra/test/agentcore-constructs.test.ts` pins both exports, so they
+are proven present before this task starts.
 
 ### Phase 4 — Deploy (T152, T153)
 
@@ -216,11 +216,15 @@ the C4 audit exists precisely because that drifted last time.
   long-lived `AKIA` keys on disk (P11). CDK bootstrap and deploy need broader
   permissions than Polly did, so the least-privilege policy for `max-height-gen`
   will need revisiting as its own decision.
-- **Deps:** no new runtime dependencies — and one **removal**.
-  `@aws-cdk/aws-bedrock-agentcore-alpha@2.267.0-alpha.0` is declared in
-  `packages/infra/package.json` and imported nowhere; its constructs have
-  graduated into the stable `aws-cdk-lib` we already pin, so it should be deleted
-  rather than bumped. That is a net reduction in supply-chain surface (P6).
+- **Deps:** no new runtime dependencies — and one **removal**, done 2026-09-28
+  (issue #34). `@aws-cdk/aws-bedrock-agentcore-alpha@2.267.0-alpha.0` was
+  declared in `packages/infra/package.json` and imported nowhere; its constructs
+  had graduated into the stable `aws-cdk-lib` we already pin, so it was deleted
+  rather than bumped — a net reduction in supply-chain surface (P6). Dropping it
+  also took the transitive `@aws-cdk/aws-bedrock-alpha` out of the lockfile.
+  Verified by import that the stable module is a **complete** replacement: even
+  `Policy`, which the alpha README still calls experimental, is exported from
+  stable.
 
 ## Risks / Considerations
 
@@ -255,9 +259,9 @@ the C4 audit exists precisely because that drifted last time.
 1. ~~**spec-alignment** — Phase 0 research/tasks/quickstart corrections.~~ ✅ done
 2. ~~**agent-snapshot-safe** — Phase 1 T148–T150, TDD.~~ ✅ done in #30
 3. ~~**warm-client-exercise** — Phase 1 remainder, T154, TDD.~~ ✅ done
-4. **agentcore-cdk-migration** — drop the alpha dep, move to stable
-   `aws-cdk-lib/aws-bedrockagentcore` (research.md §R2d). ⬅️ **NEXT**
-5. **snapsafe-base-image** — Phase 2 T151.
+4. ~~**agentcore-cdk-migration** — drop the alpha dep, move to stable
+   `aws-cdk-lib/aws-bedrockagentcore` (research.md §R2d).~~ ✅ done in #34
+5. **snapsafe-base-image** — Phase 2 T151. ⬅️ **NEXT**
 6. **agentcore-memory** — Phase 3 T023b + T023c.
 7. **deploy-v2** — Phase 4 T152 + T153 (now a CDK deploy).
 8. **ops-alarms** — Phase 5 T111 + T113.
