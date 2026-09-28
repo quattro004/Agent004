@@ -47,6 +47,9 @@ Run every step, in order. Steps 4 and 5 are the ones that get skipped:
    on orphans, so the page also needs at least one inbound `[[wikilink]]` from a
    page body — `related:` in the metadata block does **not** count.
 5. **Append a row to `Log.md`.** Newest last. Record *why*, not just *what*.
+   Never leave a blank line between table rows — GitHub ends the table there
+   and everything below renders as literal pipe-prefixed prose. The `table`
+   lint rule catches this, and a row with no closing `|`.
 6. Run `pnpm run wiki:lint` and fix every finding.
 7. Ask for approval, then `pnpm run wiki:push`.
 

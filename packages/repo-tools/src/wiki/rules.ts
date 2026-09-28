@@ -19,6 +19,7 @@ export type LintRule =
   | 'filename'
   | 'page-length'
   | 'log-freshness'
+  | 'table'
   | 'secret';
 
 export type Finding = {
@@ -64,6 +65,69 @@ const SECRET_PATTERNS: ReadonlyArray<[RegExp, string]> = [
 
 const PERMALINK = /^(.+)@[0-9a-f]{7,40}$/;
 const ISO_DATE = /\d{4}-\d{2}-\d{2}/g;
+
+const TABLE_DELIMITER = /^\|[\s:|-]+\|$/;
+const FENCE = /^\s*(?:```|~~~)/;
+
+/**
+ * GitHub ends a table at the first blank line, so a blank line between rows
+ * silently dumps everything after it as literal pipe-prefixed prose, and a row
+ * missing its closing pipe swallows the last cell. Both render as damage rather
+ * than as an error, which is how they survived unnoticed on Log.
+ */
+function findTableFindings(content: string): string[] {
+  const problems: string[] = [];
+  const lines = content.split('\n').map((line) => line.replace(/\r$/, ''));
+  let fenced = false;
+  let inTable = false;
+  let pendingBlanks = 0;
+
+  for (const [index, line] of lines.entries()) {
+    if (FENCE.test(line)) {
+      fenced = !fenced;
+      inTable = false;
+      continue;
+    }
+    if (fenced) continue;
+
+    const isRow = line.startsWith('|');
+
+    if (!isRow) {
+      if (inTable && line.trim() === '') pendingBlanks += 1;
+      else if (line.trim() !== '') {
+        inTable = false;
+        pendingBlanks = 0;
+      }
+      continue;
+    }
+
+    if (!inTable) {
+      // A header only starts a table when the next line is its delimiter.
+      const next = lines[index + 1]?.trim() ?? '';
+      if (TABLE_DELIMITER.test(next)) inTable = true;
+      pendingBlanks = 0;
+      continue;
+    }
+
+    if (pendingBlanks > 0) {
+      // A blank line legitimately ends one table and starts another, but only
+      // when what follows is a fresh header + delimiter pair.
+      const next = lines[index + 1]?.trim() ?? '';
+      pendingBlanks = 0;
+      if (TABLE_DELIMITER.test(next)) continue;
+      problems.push(
+        `Line ${index + 1} continues a table after a blank line; ` +
+          'the rows below it render as literal text, not as table rows.',
+      );
+    }
+
+    if (!line.trimEnd().endsWith('|')) {
+      problems.push(`Line ${index + 1} is a table row with no closing "|".`);
+    }
+  }
+
+  return problems;
+}
 
 function escapeForRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -157,6 +221,11 @@ export function lintWiki(pages: WikiPage[], options: LintOptions): Finding[] {
     const lines = p.content.split('\n').length;
     if (lines > MAX_PAGE_LINES) {
       add(p.name, 'page-length', `${lines} lines exceeds the ${MAX_PAGE_LINES}-line maximum.`);
+    }
+
+    // table
+    for (const problem of findTableFindings(p.content)) {
+      add(p.name, 'table', problem);
     }
 
     // secret
