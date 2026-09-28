@@ -113,6 +113,36 @@ them.
 - Do not hide failures with broad catches or silent fallbacks; surface errors clearly.
 - Keep dependency hygiene strict: review new dependencies and keep `pnpm-lock.yaml` committed.
 
+## Transitive advisories: nudge, then remove the nudge
+
+`pnpm audit` queries the **live** advisory database, so the Audit job can go red
+on a commit that passed an hour earlier, with nothing in this repo having
+changed. That is normal — treat it as news, not as a regression you caused.
+
+Fixing one is a two-step trap:
+
+1. **pnpm will not re-resolve a dependency the lockfile already satisfies.**
+   `pnpm update <pkg> -r` and `--depth Infinity` both no-op on a transitive
+   package — they match direct dependencies only. An `overrides:` entry in
+   `pnpm-workspace.yaml` is usually the only lever that actually moves it.
+2. **Once the lockfile carries the patched version, that override is inert.**
+   Parent ranges are typically permissive (`express-rate-limit` asks for
+   `ip-address: ^10.2.0`), and pnpm resolves to the highest satisfying version,
+   so the patched version sticks on its own. Remove the override in the same PR
+   or the next one, and verify by deleting it, re-installing, and confirming no
+   resolved version changes and `pnpm audit` stays clean.
+
+Do not leave inert overrides behind. Each is a floor someone must revisit by
+hand, it hides whether the upstream graph recovered, and it can hold a
+dependency _back_ once ranges move on. Five accumulated this way and were
+removed on 2026-09-28. The standing protection is the Audit job on every PR —
+detection in review, not a pin nobody re-reads.
+
+Dependabot covers the ordinary case: its security updates bump a transitive
+dependency in the lockfile whenever the parent's range permits the patch. It
+cannot help when a parent pins an exact vulnerable version, which is the one
+situation that justifies keeping an override until the parent moves.
+
 ## When a guard test earns its keep
 
 Most tests here assert **behavior** and need no justification. A **guard test**
