@@ -42,3 +42,11 @@ overrides:
   # GHSA-2883-xcg3-v3hh (high): maxTotalMergeKeys does not limit CPU use for
   # empty merge sources. Patched in 3.15.2.
   js-yaml: ^3.15.2
+  # Transitive-only, reached via @strands-agents/sdk >
+  # @modelcontextprotocol/sdk > express-rate-limit, so it can only be cleared by
+  # an override until the SDK bumps its own graph.
+  # GHSA-rpw4-54j3-4h4q, GHSA-2vr4-cq9g-pvrc (moderate): isLinkLocal() matches
+  # fe80::/64 instead of fe80::/10, and no classifier recognizes the NAT64
+  # local-use range 64:ff9b:1::/48 — both allow SSRF and trust-boundary bypass
+  # to on-link hosts. Patched in 10.5.1.
+  ip-address: ^10.5.1
