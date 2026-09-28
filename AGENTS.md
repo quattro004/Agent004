@@ -187,6 +187,21 @@ in catalog"_ forever. Keep the **default** catalog
 in that file whenever anything else is added, and leave unvetted public
 catalogs at `install_allowed: false`, per the CLI's own guidance.
 
+**Never hand-edit `.specify/extensions.yml`.** It is generated from each
+installed extension's own `extension.yml`, and `extension update` removes and
+reinstalls the extension, regenerating the file wholesale — a fresh
+`specify init --extension git` reproduces every hook stanza, so local deletions
+silently come back. To drop a hook, disable it in the extension's own config
+(for the git extension, `auto_commit` in
+`.specify/extensions/git/git-config.yml`), which install does not overwrite.
+
+Hooks are **pull-based**: each `before_<x>`/`after_<x>` stanza is read by the
+`speckit.<x>` command itself. A hook for a command that no longer exists is
+therefore inert rather than broken — and correspondingly invisible, which is
+why `packages/infra/test/speckit-hooks.test.ts` asserts both directions of that
+mapping. It is the thing that will tell us when upstream finally removes
+`taskstoissues`.
+
 ## MCP configuration
 
 `.mcp.json` is for AI coding assistants only; it is not part of the build.
