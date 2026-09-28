@@ -214,10 +214,11 @@ The alpha README is the source for the row above, and it is stale on both edges:
 | Lists **`Observability`** among the graduated constructs | There is no `Observability` *construct* in either package. It is a submodule of helpers — `LogType`, `LoggingConfig`, `LoggingDestination`, `configureTracingDelivery()`, `configureLoggingDelivery()`. Do not look for `new Observability(...)`. The stable version is a superset; it adds `RuntimeObservabilityOptions`. |
 
 Verified by importing the module and checking `typeof` on each name, not by
-reading the README a second time. `packages/infra/test/agentcore-constructs.test.ts`
-now pins the six constructs `T023b` and `T152` depend on, so a future
-`aws-cdk-lib` bump that drops or renames one fails in CI instead of surfacing
-when someone starts that task.
+reading the README a second time. That verification was deliberately **not**
+frozen into a guard test: `tsc` fails on a missing export the moment T023b and
+T152 write the `import`, which is earlier and more precise than a `typeof`
+assertion, so the guard would have been redundant the day it mattered. See
+`AGENTS.md` § *When a guard test earns its keep*.
 
 **Rationale**:
 - The CLI/CDK split existed *only* because CDK could not express `platformVersion`. That premise is gone, so the split is no longer justified by anything.

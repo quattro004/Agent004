@@ -139,9 +139,9 @@ strategies, namespace `/max-height/{actorId}/`, 30-day retention — and export
 seam `memoryAdapter.test.ts` already mocks. CDK assertions first, per P10.
 
 Import `Memory` and `MemoryStrategy` from **stable `aws-cdk-lib/aws-bedrockagentcore`**.
-The alpha package was removed on 2026-09-28 (issue #34), and
-`packages/infra/test/agentcore-constructs.test.ts` pins both exports, so they
-are proven present before this task starts.
+The alpha package was removed on 2026-09-28 (issue #34); both constructs were
+confirmed present in the stable module at that time, and the `import` itself is
+what proves it at build time.
 
 ### Phase 4 — Deploy (T152, T153)
 
