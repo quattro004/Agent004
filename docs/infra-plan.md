@@ -79,20 +79,32 @@ Two things drive this plan:
 - `.mcp.json`: added the AWS MCP Server over plain HTTP (OAuth), giving AWS API
   access and docs with no local proxy, no `uvx`, and no credentials on disk.
 
-### Phase 1 — Make the agent snapshot-safe (TDD) — _blocks any V2 deploy_ 🟡 PARTLY DONE
+### Phase 1 — Make the agent snapshot-safe (TDD) — _blocks any V2 deploy_ ✅ DONE
 
-**Status (2026-09-27).** PR #30 landed T148 and T149: `initialize()` gates the
+**Status (2026-09-28).** PR #30 landed T148 and T149: `initialize()` gates the
 listener, `/ping` returns 503 until init resolves, and init fails loudly at the
 120 s deadline. T150's audit is satisfied — no module-scope randomness, UUIDs,
 timestamps or PID/hostname-derived ids remain in `packages/agent/src`, and the
 stale "lifetime of the Lambda execution environment" comment is corrected.
 
-**One gap remains.** `warmBedrockClient()` currently only *constructs* the
-client. The whole point of the warm-up is to capture endpoint resolution,
-service-model parsing and the connection pool **in the snapshot**, which requires
-*exercising* it. As written, Phase 1's stated benefit is not actually realized.
-The code comments this honestly and defers it as a P2 budget question, since a
-real round-trip costs tokens on every container start. Tracked as **T154**.
+**T154 closes the last gap.** `warmBedrockClient()` used to only *construct* the
+client, so the setup the snapshot exists to capture — credential resolution,
+endpoint-ruleset evaluation, SigV4 signing, protocol serde, the TLS connection
+pool — was allocated lazily and re-paid on every restored instance.
+`src/bedrock/warmup.ts` now drives one real signed request,
+`ListAsyncInvokes(maxResults: 1)`, against the same `bedrock-runtime` host the
+`Converse` path uses.
+
+That operation was chosen on **P2** grounds: it runs no model and bills nothing,
+so the frequent container starts of a scale-to-zero service stay free. Rejected
+alternatives: `CountTokens` (free, but AWS documents Claude models offered only
+through cross-Region inference — which `global.anthropic.claude-haiku-4-5-*`
+is — as unsupported on `bedrock-runtime`), and a small `maxTokens` invocation
+(bills every cold start). Failure propagates: a degraded snapshot would be
+inherited by every later instance, so the process stops rather than serving.
+
+**Carries an IAM prerequisite.** The runtime execution role built in **T152**
+must grant `bedrock:ListAsyncInvokes`, or the container fails to start.
 
 **T148 → T149 → T150.** Do this before provisioning anything, because a snapshot
 is taken on the first healthy `/ping` and then inherited by every instance.
@@ -242,9 +254,9 @@ the C4 audit exists precisely because that drifted last time.
 
 1. ~~**spec-alignment** — Phase 0 research/tasks/quickstart corrections.~~ ✅ done
 2. ~~**agent-snapshot-safe** — Phase 1 T148–T150, TDD.~~ ✅ done in #30
-3. **warm-client-exercise** — Phase 1 remainder, T154, TDD. ⬅️ **NEXT**
+3. ~~**warm-client-exercise** — Phase 1 remainder, T154, TDD.~~ ✅ done
 4. **agentcore-cdk-migration** — drop the alpha dep, move to stable
-   `aws-cdk-lib/aws-bedrockagentcore` (research.md §R2d).
+   `aws-cdk-lib/aws-bedrockagentcore` (research.md §R2d). ⬅️ **NEXT**
 5. **snapsafe-base-image** — Phase 2 T151.
 6. **agentcore-memory** — Phase 3 T023b + T023c.
 7. **deploy-v2** — Phase 4 T152 + T153 (now a CDK deploy).
