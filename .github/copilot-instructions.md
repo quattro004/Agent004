@@ -91,11 +91,13 @@ This project uses **extreme programming (XP)** practices. Specs drive what we bu
 
 1. **RED** — Write a test that asserts the desired behavior. Run it. It **must fail for the specific intended reason** — not a random import error, not a type mismatch, not an unrelated assertion. If it fails for the wrong reason, fix the test setup until the failure message matches the behavioral gap you're targeting.
 2. **GREEN** — Write the minimum production code to make the test pass. Run the test. If it still fails, iterate on the implementation (not the test) until it passes.
-3. **REFACTOR** — Review the code for clarity, duplication, and design. If the refactor changes behavior, write a new test for that behavior first (it should fail), then update the code until it passes. Re-run all related tests. This step is iterative — repeat until the code is clean and all tests are green.
+3. **REFACTOR** — Review the code for clarity, duplication, and design. If the refactor changes behavior, write a new test for that behavior first (it should fail), then update the code until it passes. Re-run all related tests. Review **the test** here too: RED→GREEN needs a failing test to drive the change, not to survive it. This step is iterative — repeat until the code is clean and all tests are green.
 
 **This cycle repeats for each behavior.** A single user request may require multiple Red-Green-Refactor cycles.
 
 When the user asks to fix a bug, add a feature, or change behavior — even without mentioning TDD — start by writing a failing test. Do not ask "should I use TDD?" — the answer is always yes.
+
+**The subject is behavior, not files touched.** A few changes have no behavioral delta and so cannot have a RED test — removing a dependency nothing imports, a rename, formatting, docs. Manufacturing a test for those produces a test with no subject, and then pressure to keep it. Name the absence out loud and state the check replacing RED→GREEN (normally: the suite stays green). That is following the method, not skipping it — and if you are unsure whether the delta is real, assume it is and write the test. The skill covers this, plus which tests are worth checking in.
 
 ---
 

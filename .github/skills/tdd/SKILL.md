@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: 'MANDATORY for all code changes in this project — no exceptions. Test-Driven Development using Red-Green-Refactor. Always invoke this skill before writing or modifying any production code. Write a failing test that describes the desired behavior before writing the implementation. The test MUST fail for the specific intended reason, not an unrelated error. Refactoring is iterative: if a refactor changes behavior, write a new failing test first. Repeat until all tests are green and the code is clean. Works with GitHub issues, feature specs, or plain descriptions as context.'
+description: 'MANDATORY before writing or modifying any code that changes behavior — bug fixes, features, behavior changes. No exceptions, and invoke it even when the user did not mention testing. Test-Driven Development using Red-Green-Refactor: write a failing test that specifies the desired behavior before writing the implementation. The test MUST fail for the specific intended reason, not an unrelated error. Refactoring is iterative: if a refactor changes behavior, write a new failing test first. Also invoke this skill to decide whether a change has a behavioral delta at all, and whether a test that helped you get there is worth checking in. Works with GitHub issues, feature specs, or plain descriptions as context.'
 ---
 
 # Test-Driven Development (Red-Green-Refactor)
@@ -10,14 +10,74 @@ Refactoring means that we review the code for clarity, maintainability, and desi
 
 **Core Principle:** Tests are a specification. A failing test is not a problem — it's a contract that defines what correct behavior looks like. The test exists first; the implementation serves the test.
 
+**The subject of TDD is behavior, not files touched.** This distinction does the
+real work. The reason you write the test first is that it forces you to define
+*done* before you define *how* — so where there is no behavioral delta, there is
+nothing to define, and a test written anyway is ceremony. Asking "what behavior
+am I changing?" is therefore the first step of the cycle, not an escape from it.
+If the answer is "none", say so out loud and name the check you are running
+instead. That is following the method, not skipping it.
+
 ## When to Use This Skill
 
-**Always.** This project mandates TDD for all production code changes. Do not ask "should I use TDD?" — invoke this skill automatically whenever code needs to be written or modified.
+**Whenever a change alters behavior.** That mandate is absolute — do not ask
+"should I use TDD?", and do not wait for the user to raise it.
 
 - **Bug fixes:** Write a test that reproduces the bug (fails against current code), then fix the code until the test passes.
 - **New features:** Write a test that asserts the desired behavior (fails because the feature doesn't exist yet), then implement the feature.
 - **Behavior changes:** Write a test asserting the new behavior (fails against old behavior), then update the code.
 - **Refactoring:** If a refactor changes observable behavior, write a test for the new behavior first (it should fail), then update the code until it passes. Pure structural refactors (no behavior change) just need all existing tests to stay green.
+
+### When there is no behavioral delta
+
+Some changes cannot have a RED test because they change nothing observable:
+removing a dependency nothing imports, a pure rename, formatting, documentation,
+comments, a lockfile refresh. Manufacturing a failing test for these produces a
+test with no subject, and — worse — creates pressure to keep it afterwards
+merely because it exists.
+
+For these, the honest process is:
+
+1. **Say that the change has no behavioral delta, and why.** Silence looks like
+   skipping TDD; naming it is the opposite.
+2. **State the check that replaces RED → GREEN.** Usually: the existing suite
+   still passes, and `pnpm run validate` is green. That is regression safety,
+   which is what the change actually needs.
+3. **Prove the premise, if the change rests on one.** "Nothing imports it" is a
+   claim — grep for it, or import the module and check. A throwaway probe is
+   the right tool here (see below).
+
+If you find yourself unsure whether the delta is real, assume it is and write
+the test. The failure mode of a missing behavior test is far worse than one
+redundant test.
+
+## What to check in
+
+A test you wrote to *get somewhere* and a test that belongs in the repo are not
+the same artifact. Before committing any test, answer three questions:
+
+1. **What future mistake does this catch?**
+2. **Who realistically makes that mistake?**
+3. **Does the failure message tell them what to do?**
+
+If you cannot answer all three, do not check it in. Keep the knowledge in the
+PR body, `AGENTS.md`, or the wiki, where nothing has to break for it to be read.
+
+| Kind | Proves | Check in? |
+| --- | --- | --- |
+| **Specification** — asserts behavior a caller depends on | Our code does what we promised | **Always.** This is the output of the cycle |
+| **Regression** — pins a bug that actually occurred | The bug cannot come back silently | **Always** |
+| **Probe / spike** — answers a one-time factual question about the world ("does this module export `Memory`?", "what does this API return?") | Something *was* true once, at the moment you looked | **No.** Delete it. Record the answer in prose |
+| **Scaffolding** — drove a mechanical change that leaves no lasting subject | The change was safe to make | **Usually no.** It did its job in RED → GREEN |
+| **Guard** — asserts on config, deps or toolchain rather than behavior | A hand-edited invariant still holds | **Only if all four conditions** in `AGENTS.md` § *When a guard test earns its keep* are met |
+
+**Writing a throwaway probe is good practice, not a lapse.** Reaching for one to
+answer a factual question is exactly right; the discipline is deleting it
+afterwards. Beware the trap that a probe saved as a `.test.ts` file starts
+looking like a test and gets committed on momentum. The file extension is not
+the thing that makes it worth keeping — the three questions above are.
+
+**Never delete a test that pins behavior**, even a redundant-looking one.
 
 ## The Red-Green-Refactor Cycle
 
@@ -80,6 +140,7 @@ Refactoring means that we review the code for clarity, maintainability, and desi
 2. **If the refactor is purely structural** (no behavior change): make the change, run all tests, confirm green.
 3. **If the refactor changes behavior** (different output, different side effects, different API): write a new test asserting the new behavior first (RED — it should fail), then update the code (GREEN), then continue refactoring.
 4. **This step is iterative.** Repeat the review-refactor-test loop until the code is clean, well-named, and all tests are green.
+5. **Review the test you just wrote, too.** RED → GREEN requires a failing test to *drive* the change; it does not require that test to survive it. Run it through the three questions in § *What to check in* — what mistake it catches, who makes that mistake, and whether the failure says what to do. Scaffolding and probes get deleted here, and their knowledge moves to the PR body or the wiki. **Never delete a test that pins behavior.**
 
 ## Phase 0: Gather Context
 
