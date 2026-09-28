@@ -42,3 +42,6 @@ playwright-report/
 
 # Local clone of the GitHub wiki (separate git repo — see docs/llm-wiki-plan.md D5)
 /wiki/
+
+# Spec Kit's extension-catalog HTTP cache (refetched on a miss; 1-hour TTL)
+.specify/extensions/.cache/
