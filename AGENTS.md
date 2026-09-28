@@ -178,6 +178,15 @@ the tier with no per-file hashing, where `extension update` deletes and
 reinstalls without a diff. `.specify/feature.json` is machine-local and
 gitignored.
 
+`.specify/extension-catalogs.yml` **replaces** Spec Kit's built-in catalog
+stack; it does not extend it. Adding one catalog therefore drops every catalog
+you did not list, and any installed extension that only the dropped catalog
+knows about is silently orphaned — `extension update` skips it with _"Not found
+in catalog"_ forever. Keep the **default** catalog
+(`extensions/catalog.json`, the one carrying bundled extensions such as `git`)
+in that file whenever anything else is added, and leave unvetted public
+catalogs at `install_allowed: false`, per the CLI's own guidance.
+
 ## MCP configuration
 
 `.mcp.json` is for AI coding assistants only; it is not part of the build.

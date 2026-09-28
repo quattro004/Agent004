@@ -237,6 +237,56 @@ describe('lintWiki', () => {
     });
   });
 
+  describe('rule: table', () => {
+    const TABLE = ['| # | Note |', '| --- | --- |', '| 1 | First. |', '| 2 | Second. |'];
+
+    it('accepts a well-formed table', () => {
+      const pages = baseWiki();
+      pages[3] = page('Guide-Local-Setup', `# Guide\n\n${TABLE.join('\n')}\n\n[[Home]] [[Index]]`);
+      expect(rulesFired(pages)).not.toContain('table');
+    });
+
+    it('fails when a blank line splits a table, orphaning later rows', () => {
+      const body = ['| # | Note |', '| --- | --- |', '| 1 | First. |', '', '| 2 | Second. |'];
+      const pages = baseWiki();
+      pages[3] = page('Guide-Local-Setup', `# Guide\n\n${body.join('\n')}\n\n[[Home]] [[Index]]`);
+      expect(lintWiki(pages, ok)).toContainEqual(
+        expect.objectContaining({ page: 'Guide-Local-Setup', rule: 'table' }),
+      );
+    });
+
+    it('fails when a table row is missing its closing pipe', () => {
+      const body = ['| # | Note |', '| --- | --- |', '| 1 | First.'];
+      const pages = baseWiki();
+      pages[3] = page('Guide-Local-Setup', `# Guide\n\n${body.join('\n')}\n\n[[Home]] [[Index]]`);
+      expect(lintWiki(pages, ok)).toContainEqual(
+        expect.objectContaining({ page: 'Guide-Local-Setup', rule: 'table' }),
+      );
+    });
+
+    it('accepts two separate tables divided by a blank line', () => {
+      const body = [
+        '| # | Note |',
+        '| --- | --- |',
+        '| 1 | First. |',
+        '',
+        '| Code | Meaning |',
+        '| --- | --- |',
+        '| 1000 | normal |',
+      ];
+      const pages = baseWiki();
+      pages[3] = page('Guide-Local-Setup', `# Guide\n\n${body.join('\n')}\n\n[[Home]] [[Index]]`);
+      expect(rulesFired(pages)).not.toContain('table');
+    });
+
+    it('ignores pipe-led lines inside a fenced code block', () => {
+      const body = ['```sh', '| 1 | not a table', '', '| 2 | still not a table |', '```'];
+      const pages = baseWiki();
+      pages[3] = page('Guide-Local-Setup', `# Guide\n\n${body.join('\n')}\n\n[[Home]] [[Index]]`);
+      expect(rulesFired(pages)).not.toContain('table');
+    });
+  });
+
   describe('rule: secret', () => {
     it.each([
       ['an access key id', 'AKIAIOSFODNN7EXAMPLE'],
