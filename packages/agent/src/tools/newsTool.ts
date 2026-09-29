@@ -23,6 +23,7 @@ type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Resp
 export async function fetchNews(
   input: NewsInput,
   fetchFn: FetchFn = globalThis.fetch,
+  signal?: AbortSignal,
 ): Promise<NewsResult> {
   const topic = input.topic ?? 'general';
   const apiKey = process.env.NEWS_API_KEY;
@@ -32,7 +33,7 @@ export async function fetchNews(
   const url = `https://newsapi.org/v2/top-headlines?category=${encodeURIComponent(topic)}&country=us&pageSize=5&apiKey=${apiKey}`;
 
   try {
-    const response = await fetchFn(url);
+    const response = await fetchFn(url, { signal });
     if (!response.ok) {
       return {
         success: false,

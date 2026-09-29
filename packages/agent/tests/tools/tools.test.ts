@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { newsToolSchema, fetchNews } from '../../src/tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from '../../src/tools/weatherTool.js';
+import { fetchWebSearch } from '../../src/tools/webSearchTool.js';
 
 describe('newsTool', () => {
   describe('schema validation', () => {
@@ -148,5 +149,45 @@ describe('weatherTool', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('WEATHER_API_KEY');
     });
+  });
+});
+
+describe('cancellation signal forwarding', () => {
+  // Without this, cancelling an invocation leaves the tool's HTTP request
+  // in flight — the guest has gone but the upstream call still completes.
+  const okResponse = { ok: true, json: () => Promise.resolve({}) };
+
+  beforeEach(() => {
+    process.env.NEWS_API_KEY = 'test-key';
+    process.env.WEATHER_API_KEY = 'test-key';
+    process.env.SEARCH_API_KEY = 'test-key';
+    process.env.SEARCH_ENGINE_ID = 'test-engine';
+  });
+  afterEach(() => {
+    delete process.env.NEWS_API_KEY;
+    delete process.env.WEATHER_API_KEY;
+    delete process.env.SEARCH_API_KEY;
+    delete process.env.SEARCH_ENGINE_ID;
+  });
+
+  it('fetchNews forwards the signal to fetch', async () => {
+    const controller = new AbortController();
+    const mockFetch = vi.fn().mockResolvedValue(okResponse);
+    await fetchNews({ topic: 'tech' }, mockFetch, controller.signal);
+    expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
+  });
+
+  it('fetchWeather forwards the signal to fetch', async () => {
+    const controller = new AbortController();
+    const mockFetch = vi.fn().mockResolvedValue(okResponse);
+    await fetchWeather({ location: 'Seattle' }, mockFetch, controller.signal);
+    expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
+  });
+
+  it('fetchWebSearch forwards the signal to fetch', async () => {
+    const controller = new AbortController();
+    const mockFetch = vi.fn().mockResolvedValue(okResponse);
+    await fetchWebSearch({ query: 'max height' }, mockFetch, controller.signal);
+    expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
   });
 });

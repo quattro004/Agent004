@@ -56,8 +56,8 @@ const newsTool = tool({
   description:
     'Fetch current news headlines. Use when the user asks about news, current events, or what is happening in the world. Returns real headlines — never fabricate news.',
   inputSchema: newsToolSchema,
-  callback: async (input) => {
-    const result = await fetchNews(input);
+  callback: async (input, context) => {
+    const result = await fetchNews(input, undefined, context?.cancelSignal);
     return result as unknown as JSONValue;
   },
 });
@@ -67,8 +67,8 @@ const weatherTool = tool({
   description:
     'Fetch current weather for a location. Use when the user asks about weather, temperature, or conditions in a specific city or region. Returns real weather data — never fabricate weather.',
   inputSchema: weatherToolSchema,
-  callback: async (input) => {
-    const result = await fetchWeather(input);
+  callback: async (input, context) => {
+    const result = await fetchWeather(input, undefined, context?.cancelSignal);
     return result as unknown as JSONValue;
   },
 });
@@ -78,8 +78,8 @@ const webSearchTool = tool({
   description:
     'Search the web for current information. Use when the user asks about recent events, facts you are unsure about, or anything requiring up-to-date information beyond your training data. Returns real search results — never fabricate URLs or content.',
   inputSchema: webSearchToolSchema,
-  callback: async (input) => {
-    const result = await fetchWebSearch(input);
+  callback: async (input, context) => {
+    const result = await fetchWebSearch(input, undefined, context?.cancelSignal);
     return result as unknown as JSONValue;
   },
 });
@@ -179,6 +179,14 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
 
   const agent = createMaxHeightAgent({ displayAlias: parsed.displayAlias });
 
+  // A guest who closes the tab mid-turn must stop costing us tokens. The
+  // response emitting 'close' before it has finished writing is Node's signal
+  // that the client went away, not that we completed. Constitution P2.
+  const cancellation = new AbortController();
+  res.on('close', () => {
+    if (!res.writableFinished) cancellation.abort();
+  });
+
   // Stream the response
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -190,7 +198,9 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
   let firstTokenEmitted = false;
 
   try {
-    const result = await agent.invoke(parsed.message ?? 'Hello');
+    const result = await agent.invoke(parsed.message ?? 'Hello', {
+      cancelSignal: cancellation.signal,
+    });
 
     // Extract text from the result
     const text =
@@ -218,10 +228,14 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     res.write(`data: ${JSON.stringify({ type: 'text', content: text, sessionId })}\n\n`);
     res.write(`data: ${JSON.stringify({ type: 'done', sessionId })}\n\n`);
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage })}\n\n`);
+    // An aborted turn is a guest who left, not a failure: there is no one to
+    // report it to and the socket is already gone.
+    if (!cancellation.signal.aborted) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage })}\n\n`);
+    }
   } finally {
-    endSpan('session.cold_start');
+    endSpan('session.cold_start', cancellation.signal.aborted ? { cancelled: 'true' } : undefined);
     res.end();
   }
 }

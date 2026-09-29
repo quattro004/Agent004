@@ -25,6 +25,7 @@ type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Resp
 export async function fetchWebSearch(
   input: WebSearchInput,
   fetchFn: FetchFn = globalThis.fetch,
+  signal?: AbortSignal,
 ): Promise<WebSearchResult> {
   const apiKey = process.env.SEARCH_API_KEY;
   if (!apiKey) {
@@ -39,7 +40,7 @@ export async function fetchWebSearch(
   const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${engineId}&q=${encodeURIComponent(input.query)}&num=${MAX_RESULTS}`;
 
   try {
-    const response = await fetchFn(url);
+    const response = await fetchFn(url, { signal });
     if (!response.ok) {
       return {
         success: false,
