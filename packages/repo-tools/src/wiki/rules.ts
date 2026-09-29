@@ -74,13 +74,23 @@ const FENCE = /^\s*(?:```|~~~)/;
  * silently dumps everything after it as literal pipe-prefixed prose, and a row
  * missing its closing pipe swallows the last cell. Both render as damage rather
  * than as an error, which is how they survived unnoticed on Log.
+ *
+ * Line endings are normalized across all three CommonMark terminators. A lone
+ * CR breaks a table exactly as a blank line does, but splitting on "\n" alone
+ * leaves it as a *leading* CR on the next row — so that row fails the
+ * startsWith("|") test, the walker concludes the table already ended, and the
+ * rule goes blind to the very defect it exists to catch.
  */
 function findTableFindings(content: string): string[] {
   const problems: string[] = [];
-  const lines = content.split('\n').map((line) => line.replace(/\r$/, ''));
+  const lines = content.split(/\r\n|\r|\n/);
+  // terminators[i] is the line ending that closed line i, so a blank line
+  // closed by a bare "\r" is a stray CR rather than a real empty line.
+  const terminators = content.match(/\r\n|\r|\n/g) ?? [];
   let fenced = false;
   let inTable = false;
   let pendingBlanks = 0;
+  let pendingStrayCr = false;
 
   for (const [index, line] of lines.entries()) {
     if (FENCE.test(line)) {
@@ -93,10 +103,13 @@ function findTableFindings(content: string): string[] {
     const isRow = line.startsWith('|');
 
     if (!isRow) {
-      if (inTable && line.trim() === '') pendingBlanks += 1;
-      else if (line.trim() !== '') {
+      if (inTable && line.trim() === '') {
+        pendingBlanks += 1;
+        if (terminators[index] === '\r') pendingStrayCr = true;
+      } else if (line.trim() !== '') {
         inTable = false;
         pendingBlanks = 0;
+        pendingStrayCr = false;
       }
       continue;
     }
@@ -106,6 +119,7 @@ function findTableFindings(content: string): string[] {
       const next = lines[index + 1]?.trim() ?? '';
       if (TABLE_DELIMITER.test(next)) inTable = true;
       pendingBlanks = 0;
+      pendingStrayCr = false;
       continue;
     }
 
@@ -113,11 +127,17 @@ function findTableFindings(content: string): string[] {
       // A blank line legitimately ends one table and starts another, but only
       // when what follows is a fresh header + delimiter pair.
       const next = lines[index + 1]?.trim() ?? '';
+      const strayCr = pendingStrayCr;
       pendingBlanks = 0;
+      pendingStrayCr = false;
       if (TABLE_DELIMITER.test(next)) continue;
       problems.push(
-        `Line ${index + 1} continues a table after a blank line; ` +
-          'the rows below it render as literal text, not as table rows.',
+        strayCr
+          ? `Line ${index + 1} continues a table after a stray carriage return — ` +
+            'an invisible lone CR, not a blank line you can see. The rows below it ' +
+            'render as literal text. Re-save the page with LF line endings.'
+          : `Line ${index + 1} continues a table after a blank line; ` +
+            'the rows below it render as literal text, not as table rows.',
       );
     }
 
