@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PassThrough } from 'node:stream';
+import { EventEmitter } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 vi.mock('@strands-agents/sdk', () => {
@@ -57,10 +58,12 @@ function makeRes(): {
   let resolveEnd!: () => void;
   const ended = new Promise<void>((r) => (resolveEnd = r));
 
-  const res = {
+  const emitter = new EventEmitter();
+  const res = Object.assign(emitter, {
+    writableFinished: false,
     writeHead(code: number) {
       status = code;
-      return this;
+      return res;
     },
     write(chunk: string) {
       chunks.push(chunk);
@@ -68,10 +71,11 @@ function makeRes(): {
     },
     end(chunk?: string) {
       if (chunk) chunks.push(chunk);
+      (res as unknown as { writableFinished: boolean }).writableFinished = true;
       resolveEnd();
-      return this;
+      return res;
     },
-  } as unknown as ServerResponse;
+  }) as unknown as ServerResponse;
 
   return {
     res,

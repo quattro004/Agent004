@@ -19,6 +19,7 @@ type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Resp
 export async function fetchWeather(
   input: WeatherInput,
   fetchFn: FetchFn = globalThis.fetch,
+  signal?: AbortSignal,
 ): Promise<WeatherResult> {
   const apiKey = process.env.WEATHER_API_KEY;
   if (!apiKey) {
@@ -27,7 +28,7 @@ export async function fetchWeather(
   const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(input.location)}&units=imperial&appid=${apiKey}`;
 
   try {
-    const response = await fetchFn(url);
+    const response = await fetchFn(url, { signal });
     if (!response.ok) {
       return {
         success: false,
