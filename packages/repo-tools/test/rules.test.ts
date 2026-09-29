@@ -255,6 +255,35 @@ describe('lintWiki', () => {
       );
     });
 
+    it('fails when a lone carriage return splits a table, orphaning later rows', () => {
+      // A stray CR is an old-Mac line terminator: GitHub breaks the table on it
+      // exactly as it does on a blank line, but `split('\n')` leaves it as a
+      // *leading* CR on the next row rather than as an empty line.
+      const body = ['| # | Note |', '| --- | --- |', '| 1 | First. |', '\r| 2 | Second. |'];
+      const pages = baseWiki();
+      pages[3] = page('Guide-Local-Setup', `# Guide\n\n${body.join('\n')}\n\n[[Home]] [[Index]]`);
+      expect(lintWiki(pages, ok)).toContainEqual(
+        expect.objectContaining({ page: 'Guide-Local-Setup', rule: 'table' }),
+      );
+    });
+
+    it('accepts a well-formed table written with CRLF line endings', () => {
+      const pages = baseWiki();
+      pages[3] = page(
+        'Guide-Local-Setup',
+        `# Guide\r\n\r\n${TABLE.join('\r\n')}\r\n\r\n[[Home]] [[Index]]`,
+      );
+      expect(rulesFired(pages)).not.toContain('table');
+    });
+
+    it('names a stray carriage return rather than reporting a blank line', () => {
+      const body = ['| # | Note |', '| --- | --- |', '| 1 | First. |', '\r| 2 | Second. |'];
+      const pages = baseWiki();
+      pages[3] = page('Guide-Local-Setup', `# Guide\n\n${body.join('\n')}\n\n[[Home]] [[Index]]`);
+      const message = lintWiki(pages, ok).find((f) => f.rule === 'table')?.message ?? '';
+      expect(message).toMatch(/carriage return/i);
+    });
+
     it('fails when a table row is missing its closing pipe', () => {
       const body = ['| # | Note |', '| --- | --- |', '| 1 | First.'];
       const pages = baseWiki();
