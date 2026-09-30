@@ -1,4 +1,5 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { Agent } from '@strands-agents/sdk';
 import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { tool } from '@strands-agents/sdk';
@@ -145,9 +146,10 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
 
   // Get-or-create the per-session record. We key off sessionId from the
   // request; if missing, we mint one and surface it back to the client so
-  // subsequent turns share the same token/turn budget.
-  const sessionId =
-    parsed.sessionId ?? `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  // subsequent turns share the same token/turn budget. The identifier gates
+  // that budget, so it comes from a cryptographic source — a Math.random()
+  // id is guessable, which would let a caller ride someone else's session.
+  const sessionId = parsed.sessionId ?? `s-${randomUUID()}`;
   let session = sessions.get(sessionId);
   if (!session) {
     session = createSession({
