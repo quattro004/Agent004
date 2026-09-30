@@ -118,6 +118,15 @@ them.
 `pnpm audit` queries the **live** advisory database, so the Audit job can go red
 on a commit that passed an hour earlier, with nothing in this repo having
 changed. That is normal — treat it as news, not as a regression you caused.
+On 2026-09-30 the gap was 41 minutes: a PR run went green at 23:03 UTC, four
+`brace-expansion` and `fast-uri` advisories were published between 23:44 and
+23:54, and the identical tree failed on merge the next morning.
+
+**Check the patched version's publish date before assuming urgency.** Those four
+fixes had been on npm since 2026-09-14/15 — a fortnight before disclosure. The
+common case is a maintainer shipping the fix quietly and the advisory landing
+later, which means the repo was carrying the vulnerable version all along and
+the red build is the disclosure catching up, not a new exposure.
 
 Fixing one is a two-step trap:
 
@@ -125,6 +134,16 @@ Fixing one is a two-step trap:
    `pnpm update <pkg> -r` and `--depth Infinity` both no-op on a transitive
    package — they match direct dependencies only. An `overrides:` entry in
    `pnpm-workspace.yaml` is usually the only lever that actually moves it.
+
+   When one package is vulnerable in **two major lines at once**, reach for a
+   selector override per line (`'brace-expansion@^2.0.2': ^2.1.7` alongside
+   `'brace-expansion@^5.0.8': ^5.0.12`). A _convergence_ override — the
+   `"pkg@": <exact version>` form added in pnpm 11.13 — cannot express this:
+   it takes a single exact version per key, and one key cannot satisfy both
+   `^2.0.2` and `^5.0.8`. Convergence overrides are the better tool for the
+   single-line case, since they only rewrite edges whose declared range already
+   admits the version and pnpm warns when one goes stale.
+
 2. **Once the lockfile carries the patched version, that override is inert.**
    Parent ranges are typically permissive (`express-rate-limit` asks for
    `ip-address: ^10.2.0`), and pnpm resolves to the highest satisfying version,
