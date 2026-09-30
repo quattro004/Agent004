@@ -162,6 +162,28 @@ dependency in the lockfile whenever the parent's range permits the patch. It
 cannot help when a parent pins an exact vulnerable version, which is the one
 situation that justifies keeping an override until the parent moves.
 
+**Dependabot PRs arriving is not evidence that security updates are on.** The
+two halves come from different places and fail independently:
+
+| Half                 | Configured by                                                                 | Produces                                                    |
+| -------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Version** updates  | `.github/dependabot.yml`, in the repo                                         | The weekly "Bump the dependencies group with N updates" PRs |
+| **Security** updates | A repo **setting**, and it requires Dependabot **alerts** to be enabled first | A PR targeting one advisory, as soon as a fix exists        |
+
+This repo ran the first without the second from its creation until
+**2026-09-30**. Nine Dependabot PRs merged over that period, all version
+updates, so the safety net looked healthy while the half that reacts to
+advisories had never run. That is why the `brace-expansion` and `fast-uri`
+fixes sat unproposed on npm for a fortnight and the Audit job was the only
+thing that noticed — after a merge to `main`, where it blocked everyone.
+
+Check the setting rather than inferring it from the PR list:
+
+```sh
+gh api /repos/quattro004/Agent004/vulnerability-alerts          # 204 = on, 404 = off
+gh api /repos/quattro004/Agent004 --jq '.security_and_analysis.dependabot_security_updates'
+```
+
 ## When a guard test earns its keep
 
 Most tests here assert **behavior** and need no justification. A **guard test**
@@ -329,6 +351,18 @@ OAuth over local proxies holding credentials (constitution P11). See
 - Branches: `type/kebab-case-description` (e.g. `docs/agentcore-v2-infra-plan`).
 - Commits: Conventional Commits (`docs:`, `fix:`, `feat:`).
 - Explain _why_ in the body, not just what; note trade-offs taken.
+
+**`main` is protected — never push to it directly.** Since 2026-09-30 the
+"Main Branch Protection" ruleset requires a pull request and requires the `CI`
+and `Audit` checks to pass before merge. Branches are deleted on merge. A repo
+admin can bypass, but bypassing is a deliberate act with a reason, not a way
+around a red build.
+
+The `Audit` gate has one sharp edge worth knowing before it bites: `pnpm audit`
+queries the **live** advisory database, so a newly published advisory turns
+every open PR red at once, including ones that change nothing related. That is
+the gate working, not a flake — fix the advisory rather than bypassing, unless
+the fix is genuinely blocked upstream.
 
 ## Keep this file current
 
