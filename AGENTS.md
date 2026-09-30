@@ -364,6 +364,14 @@ every open PR red at once, including ones that change nothing related. That is
 the gate working, not a flake — fix the advisory rather than bypassing, unless
 the fix is genuinely blocked upstream.
 
+Required checks match the GitHub Actions **job name**, not the workflow's
+filename. If `CI` or `Audit` is renamed without updating the ruleset's
+required context, the old check stays pending and **blocks** merging; it does
+not silently turn off protection. A job skipped by a conditional can report
+success and satisfy a required check, whereas a workflow skipped by path,
+branch or commit-message filtering leaves it pending. See the wiki's
+`Guide-Validation-Gate` and GitHub's required-check troubleshooting guide.
+
 ## Keep this file current
 
 When you learn something durable about this repo — a convention, a constraint, a
