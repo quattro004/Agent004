@@ -198,6 +198,28 @@ Package names, versions, and service limits in `specs/` were true when written.
 command that 404s. When a spec drives an external action (install, deploy, API
 call), check the current reality first and update the spec in the same change.
 
+**Two traps specific to verifying AWS pricing and lifecycle facts**, both of
+which have already put a wrong number in this repo:
+
+- **AWS renders its pricing tables client-side.** `aws.amazon.com/bedrock/pricing/`
+  returns prose and no token rates when fetched — confirmed repeatedly. Ask a
+  human to read it in a browser rather than reporting "unobtainable", and prefer
+  `aws___read_documentation` over a plain fetch for `docs.aws.amazon.com`.
+- **A provider's own page is not a proxy for Bedrock's.** Anthropic's pricing
+  and deprecation pages are server-rendered and tempting. They are fine for
+  orientation and unsafe for a budget number: Anthropic lists Haiku 4.5 cache
+  reads at $0.10/MTok, which is the `us-east-1` rate and wrong for the
+  `us-west-2` we deploy to — the single cell that differs between those Regions
+  for any Anthropic model. Anthropic also lists models as retired that Bedrock
+  still serves.
+
+Lifecycle dates carry their own misreading. **"EOL no sooner than \<date\>" is a
+floor, not a schedule** — but the deadline that matters is earlier and quieter
+than EOL: a Legacy model enters **public extended access** after roughly three
+months, where AWS says to expect **higher pricing set by the provider**. That is
+a price rise with no code change and no traffic growth. See the wiki's
+`Source-Bedrock-Model-Lifecycle`.
+
 ## Maintaining the Spec Kit toolchain
 
 To change a feature's artifacts _after_ the `specify → clarify → plan → tasks`
