@@ -381,23 +381,27 @@ change. Keep `.github/copilot-instructions.md` a small, stable steering layer;
 operational conventions belong here.
 
 Knowledge that is about the _project_ rather than about _working in this repo_
-belongs on the wiki instead — and traps belong on the wiki's `Gotchas` page, so
-they reach humans as well as agents.
+belongs on the wiki instead.
 
-**Storing an agent memory is a trigger to check the wiki.** A memory is private
-to one agent and one user; it reaches no contributor and no human reader. So
-whenever something is durable enough to remember, ask in the same change whether
-it is also durable enough to publish:
+**Memories are tribal knowledge; the wiki is opt-in.** Storing an agent memory
+does not by itself mean publishing anything. Copilot memories come in two
+scopes: a **user** memory follows one builder across their repos, and a
+**repository** memory is shared with every contributor whose agent has Copilot
+Memory enabled. Both reach agents only, never a human reader, and repository
+memories expire after 28 days unless something reuses them. So route by what
+the fact is, not by the act of remembering it:
 
-| If the fact is…                                 | It goes…                                              |
-| ----------------------------------------------- | ----------------------------------------------------- |
-| A personal working preference                   | Memory only — not the wiki                            |
-| A repo convention, constraint or corrected fact | Memory **and** the owning wiki page                   |
-| A non-obvious trap                              | Memory, the owning page, **and** the wiki's `Gotchas` |
+| If the fact is…                                                                      | It goes…                                        |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| Builder-specific — one person's workflow, tools or preferences                       | User memory only                                |
+| Tribal knowledge — how to work here: tool quirks, verified commands, agent traps     | Repository memory only                          |
+| Project truth — architecture, decisions, current behavior — or a trap humans hit too | The owning wiki page, plus `Gotchas` for a trap |
 
-If it reaches the wiki, follow the ingest workflow — update `Index`, append to
-`Log`, run `pnpm run wiki:lint` — and get approval before `wiki:push`, because
-wiki pushes are live and public.
+Publish to the wiki when a human reader, or a contributor without Copilot
+Memory, would lose an hour without the fact. When it does reach the wiki,
+follow the ingest workflow — update `Index`, append to `Log`, run
+`pnpm run wiki:lint` — and get approval before `wiki:push`, because wiki pushes
+are live and public.
 
 ## Root scripts are invisible to the toolchain
 

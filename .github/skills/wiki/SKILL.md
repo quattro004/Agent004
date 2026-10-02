@@ -68,18 +68,21 @@ owns it **and** add a pointer line to `Gotchas.md`, in the same change. Both
 halves, always — `Gotchas` is an index, so the full story belongs in context on
 the owning page.
 
-### 4. Publish what you remember
+### 4. Memory or wiki?
 
-Storing an agent memory is a trigger to check the wiki. A memory reaches one
-agent and one user; it reaches no contributor and no human reader.
+Memories are tribal knowledge, and the wiki is opt-in. Storing a memory does not
+by itself mean publishing anything. A **user** memory follows one builder; a
+**repository** memory is shared with every contributor whose agent has Copilot
+Memory enabled. Neither reaches a human reader.
 
 | If the fact is… | It goes… |
 | --- | --- |
-| A personal working preference | Memory only — **not** the wiki |
-| A repo convention, constraint or corrected fact | Memory **and** the owning page |
-| A non-obvious trap | Memory, the owning page, **and** `Gotchas` |
+| Builder-specific (workflow, tools, preferences) | User memory only |
+| Tribal knowledge (tool quirks, verified commands, agent traps) | Repository memory only |
+| Project truth (architecture, decisions, current behavior) or a trap humans hit too | The wiki: owning page, plus `Gotchas` for a trap |
 
-The test: *would the next contributor lose an hour without this?*
+The test for the wiki: *would a human reader, or a contributor without Copilot
+Memory, lose an hour without this?* See `AGENTS.md` § Keep this file current.
 
 ## Validating
 
