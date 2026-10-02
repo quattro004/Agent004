@@ -68,18 +68,27 @@ owns it **and** add a pointer line to `Gotchas.md`, in the same change. Both
 halves, always — `Gotchas` is an index, so the full story belongs in context on
 the owning page.
 
-### 4. Publish what you remember
+### 4. Memory or wiki?
 
-Storing an agent memory is a trigger to check the wiki. A memory reaches one
-agent and one user; it reaches no contributor and no human reader.
+Durability decides where a fact goes; a memory is a cache. Storing a memory does
+not by itself mean publishing anything. A **user** memory follows one builder; a
+**repository** memory is shared with every contributor whose agent has Copilot
+Memory enabled, but it expires after 28 days unless reused and no human reads
+it. Knowledge that expires cannot compound, so no durable fact lives _only_ in a
+repository memory.
 
 | If the fact is… | It goes… |
 | --- | --- |
-| A personal working preference | Memory only — **not** the wiki |
-| A repo convention, constraint or corrected fact | Memory **and** the owning page |
-| A non-obvious trap | Memory, the owning page, **and** `Gotchas` |
+| Builder-specific (workflow, tools, preferences) | User memory only |
+| Durable, about working here (conventions, verified commands) | A rule in `AGENTS.md` or a skill — the schema layer |
+| A durable trap, tooling or project | The story on the owning page plus a `Gotchas` row; a one-line rule in `AGENTS.md` if agents need it |
+| Durable, about the project (architecture, decisions, current behavior) | The owning wiki page |
+| Short-lived, or a shortcut to any of the above | Repository memory, citing where the fact lives |
 
-The test: *would the next contributor lose an hour without this?*
+State rules in `AGENTS.md`; tell the story here, linked rather than restated.
+
+The test for durability: *would it still be true, and still cost someone an
+hour, in a month?* See `AGENTS.md` § Keep this file current.
 
 ## Validating
 
