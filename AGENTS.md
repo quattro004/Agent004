@@ -383,25 +383,26 @@ operational conventions belong here.
 Knowledge that is about the _project_ rather than about _working in this repo_
 belongs on the wiki instead.
 
-**Memories are tribal knowledge; the wiki is opt-in.** Storing an agent memory
-does not by itself mean publishing anything. Copilot memories come in two
+**Durability decides where a fact goes; a memory is a cache.** Storing an agent
+memory does not by itself mean publishing anything. Copilot memories come in two
 scopes: a **user** memory follows one builder across their repos, and a
 **repository** memory is shared with every contributor whose agent has Copilot
 Memory enabled. Both reach agents only, never a human reader, and repository
-memories expire after 28 days unless something reuses them. So route by what
-the fact is, not by the act of remembering it:
+memories expire after 28 days unless something reuses them. Knowledge that
+expires cannot compound, so no durable fact may live _only_ in a repository
+memory. That was the alternative `Decision-Wiki-As-Knowledge-Base` rejected.
 
-| If the fact is…                                                                      | It goes…                                        |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| Builder-specific — one person's workflow, tools or preferences                       | User memory only                                |
-| Tribal knowledge — how to work here: tool quirks, verified commands, agent traps     | Repository memory only                          |
-| Project truth — architecture, decisions, current behavior — or a trap humans hit too | The owning wiki page, plus `Gotchas` for a trap |
+| If the fact is…                                                                   | It goes…                                        |
+| --------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Builder-specific — one person's workflow, tools or preferences                    | User memory only                                |
+| Durable, about working here — conventions, verified commands, tooling traps       | `AGENTS.md` or a skill (the schema layer)       |
+| Durable, about the project — architecture, decisions, current behavior, its traps | The owning wiki page, plus `Gotchas` for a trap |
+| Short-lived, or a shortcut to any of the above                                    | Repository memory — losing it costs nothing     |
 
-Publish to the wiki when a human reader, or a contributor without Copilot
-Memory, would lose an hour without the fact. When it does reach the wiki,
-follow the ingest workflow — update `Index`, append to `Log`, run
-`pnpm run wiki:lint` — and get approval before `wiki:push`, because wiki pushes
-are live and public.
+A repository memory may cache a fact recorded in the schema or on the wiki, and
+should cite where it lives. When something reaches the wiki, follow the ingest
+workflow — update `Index`, append to `Log`, run `pnpm run wiki:lint` — and get
+approval before `wiki:push`, because wiki pushes are live and public.
 
 ## Root scripts are invisible to the toolchain
 

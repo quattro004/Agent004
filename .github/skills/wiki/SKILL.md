@@ -70,19 +70,22 @@ the owning page.
 
 ### 4. Memory or wiki?
 
-Memories are tribal knowledge, and the wiki is opt-in. Storing a memory does not
-by itself mean publishing anything. A **user** memory follows one builder; a
+Durability decides where a fact goes; a memory is a cache. Storing a memory does
+not by itself mean publishing anything. A **user** memory follows one builder; a
 **repository** memory is shared with every contributor whose agent has Copilot
-Memory enabled. Neither reaches a human reader.
+Memory enabled, but it expires after 28 days unless reused and no human reads
+it. Knowledge that expires cannot compound, so no durable fact lives _only_ in a
+repository memory.
 
 | If the fact is… | It goes… |
 | --- | --- |
 | Builder-specific (workflow, tools, preferences) | User memory only |
-| Tribal knowledge (tool quirks, verified commands, agent traps) | Repository memory only |
-| Project truth (architecture, decisions, current behavior) or a trap humans hit too | The wiki: owning page, plus `Gotchas` for a trap |
+| Durable, about working here (conventions, verified commands, tooling traps) | `AGENTS.md` or a skill — the schema layer |
+| Durable, about the project (architecture, decisions, current behavior, its traps) | The owning wiki page, plus `Gotchas` for a trap |
+| Short-lived, or a shortcut to any of the above | Repository memory, citing where the fact lives |
 
-The test for the wiki: *would a human reader, or a contributor without Copilot
-Memory, lose an hour without this?* See `AGENTS.md` § Keep this file current.
+The test for durability: *would it still be true, and still cost someone an
+hour, in a month?* See `AGENTS.md` § Keep this file current.
 
 ## Validating
 
