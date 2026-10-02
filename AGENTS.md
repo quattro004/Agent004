@@ -113,71 +113,25 @@ them.
 - Do not hide failures with broad catches or silent fallbacks; surface errors clearly.
 - Keep dependency hygiene strict: review new dependencies and keep `pnpm-lock.yaml` committed.
 
-## Transitive advisories: nudge, then remove the nudge
+## Dependencies and advisories
 
-`pnpm audit` queries the **live** advisory database, so the Audit job can go red
-on a commit that passed an hour earlier, with nothing in this repo having
-changed. That is normal — treat it as news, not as a regression you caused.
-On 2026-09-30 the gap was 41 minutes: a PR run went green at 23:03 UTC, four
-`brace-expansion` and `fast-uri` advisories were published between 23:44 and
-23:54, and the identical tree failed on merge the next morning.
+`AGENTS.md` states the rules; the wiki's `Concept-Supply-Chain-Discipline`
+tells the story, with dates and worked examples.
 
-**Check the patched version's publish date before assuming urgency.** Those four
-fixes had been on npm since 2026-09-14/15 — a fortnight before disclosure. The
-common case is a maintainer shipping the fix quietly and the advisory landing
-later, which means the repo was carrying the vulnerable version all along and
-the red build is the disclosure catching up, not a new exposure.
-
-Fixing one is a two-step trap:
-
-1. **pnpm will not re-resolve a dependency the lockfile already satisfies.**
-   `pnpm update <pkg> -r` and `--depth Infinity` both no-op on a transitive
-   package — they match direct dependencies only. An `overrides:` entry in
-   `pnpm-workspace.yaml` is usually the only lever that actually moves it.
-
-   When one package is vulnerable in **two major lines at once**, reach for a
-   selector override per line (`'brace-expansion@^2.0.2': ^2.1.7` alongside
-   `'brace-expansion@^5.0.8': ^5.0.12`). A _convergence_ override — the
-   `"pkg@": <exact version>` form added in pnpm 11.13 — cannot express this:
-   it takes a single exact version per key, and one key cannot satisfy both
-   `^2.0.2` and `^5.0.8`. Convergence overrides are the better tool for the
-   single-line case, since they only rewrite edges whose declared range already
-   admits the version and pnpm warns when one goes stale.
-
-2. **Once the lockfile carries the patched version, that override is inert.**
-   Parent ranges are typically permissive (`express-rate-limit` asks for
-   `ip-address: ^10.2.0`), and pnpm resolves to the highest satisfying version,
-   so the patched version sticks on its own. Remove the override in the same PR
-   or the next one, and verify by deleting it, re-installing, and confirming no
-   resolved version changes and `pnpm audit` stays clean.
-
-Do not leave inert overrides behind. Each is a floor someone must revisit by
-hand, it hides whether the upstream graph recovered, and it can hold a
-dependency _back_ once ranges move on. Five accumulated this way and were
-removed on 2026-09-28. The standing protection is the Audit job on every PR —
-detection in review, not a pin nobody re-reads.
-
-Dependabot covers the ordinary case: its security updates bump a transitive
-dependency in the lockfile whenever the parent's range permits the patch. It
-cannot help when a parent pins an exact vulnerable version, which is the one
-situation that justifies keeping an override until the parent moves.
-
-**Dependabot PRs arriving is not evidence that security updates are on.** The
-two halves come from different places and fail independently:
-
-| Half                 | Configured by                                                                 | Produces                                                    |
-| -------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **Version** updates  | `.github/dependabot.yml`, in the repo                                         | The weekly "Bump the dependencies group with N updates" PRs |
-| **Security** updates | A repo **setting**, and it requires Dependabot **alerts** to be enabled first | A PR targeting one advisory, as soon as a fix exists        |
-
-This repo ran the first without the second from its creation until
-**2026-09-30**. Nine Dependabot PRs merged over that period, all version
-updates, so the safety net looked healthy while the half that reacts to
-advisories had never run. That is why the `brace-expansion` and `fast-uri`
-fixes sat unproposed on npm for a fortnight and the Audit job was the only
-thing that noticed — after a merge to `main`, where it blocked everyone.
-
-Check the setting rather than inferring it from the PR list:
+- **A red `pnpm audit` on an unchanged commit is news, not a regression.** It
+  queries the live advisory database. Check the patched version's npm publish
+  date before assuming new exposure — fixes often ship weeks before disclosure.
+- **pnpm will not re-resolve a transitive dependency the lockfile already
+  satisfies.** `pnpm update <pkg> -r` and `--depth Infinity` both no-op on one.
+  Use an `overrides:` entry in `pnpm-workspace.yaml` (pnpm 11 reads them nowhere
+  else). Two vulnerable major lines need a selector override per line; a
+  convergence override (`"pkg@": <exact version>`) takes one exact version.
+- **An override is a one-time nudge.** Once the lockfile holds the patch, remove
+  it in the same PR or the next one, and verify no resolved version changes and
+  `pnpm audit` stays clean. Keep one only while a parent pins an exact vulnerable
+  version.
+- **Dependabot PRs arriving do not prove security updates are on** — that half
+  is a repo setting, not `dependabot.yml`. Check it rather than inferring it:
 
 ```sh
 gh api /repos/quattro004/Agent004/vulnerability-alerts          # 204 = on, 404 = off
@@ -187,148 +141,88 @@ gh api /repos/quattro004/Agent004 --jq '.security_and_analysis.dependabot_securi
 ## When a guard test earns its keep
 
 Most tests here assert **behavior** and need no justification. A **guard test**
-is different: it asserts on configuration, dependencies, or toolchain state —
+asserts on configuration, dependencies, or toolchain state —
 `mcp-config.test.ts`, `workflow-pins.test.ts`, `toolchain.test.ts`,
-`speckit-hooks.test.ts`. These are cheap to write, feel responsible, and are
-easy to over-produce. Two have now been written and deleted in review.
+`speckit-hooks.test.ts`. They are cheap to write and easy to over-produce; two
+have been written and deleted in review (wiki `Log` entries 25 and 28).
 
-A guard test must satisfy **all four** conditions. They are necessary, not
-sufficient individually — the earlier bar was "guards a file we hand-edit and
-names a human mistake", and a test satisfying only that still got cut:
+A guard test must satisfy **all four** conditions:
 
 1. **We author the file it guards.** Not generated, not vendored, not a third
-   party's. (Removed in review: a test asserting `.specify/extensions.yml`
-   agreed with Spec Kit's own agent files — both generated by upstream from one
-   manifest, so it could only restate upstream's invariant.)
+   party's.
 2. **The failure names a human mistake, and the fix is an action we are allowed
    to take.** A guard whose red build pressures someone toward a forbidden
    remedy is worse than no guard.
 3. **No earlier or cheaper gate already catches it.** If `tsc`, ESLint, the
    build, or the package manager fails on the same mistake, the guard is
-   redundant. (Removed in review: assertions that `aws-cdk-lib` exports
-   `Runtime` and `Memory` — `tsc` fails on the `import` sooner and more
-   precisely, so the guard expired exactly when it became relevant.)
+   redundant.
 4. **It does not expire.** If planned work makes it redundant, it is scaffolding,
    not a guard.
 
 **Corollary for TDD.** RED → GREEN requires a failing test to _drive_ the
 change; it does not require that test to survive it. When the change is a
-deletion or a config edit, the test is often scaffolding — it proved the thing
-was safe to remove and has no lasting subject. Delete it in REFACTOR and keep
-the reasoning in the PR, the wiki or here, where nothing has to break for it to
-be read. Never delete a test that pins behavior.
+deletion or a config edit, the test is often scaffolding. Delete it in REFACTOR
+and keep the reasoning in the PR or on the wiki. Never delete a test that pins
+behavior.
 
 ## Trust, but verify, task status
 
-A task marked `[x]` in `tasks.md` is a claim, not proof. T023 was checked off
-while half its scope — the AgentCore Memory construct — was never written, and
-the gap survived a "completed" phase because nothing re-checked it.
-
-Before building on a task marked complete, confirm the code actually exists.
-A declared-but-unimported dependency is a strong tell: grep for the import, not
-just the `package.json` entry.
-
-When you find drift, record it in the deviations table at the top of `tasks.md`
-(`C1`, `C2`, … ) and split the task rather than silently re-scoping it, so the
-correction is reviewable.
+A task marked `[x]` in `tasks.md` is a claim, not proof (the wiki's
+`Source-Tasks-001` has the cases). Before building on one, confirm the code
+exists — grep for the import, not just the `package.json` entry. When you find
+drift, record it in the deviations table at the top of `tasks.md` (`C1`, `C2`, …)
+and split the task rather than silently re-scoping it.
 
 ## External facts go stale — verify before relying on them
 
-Package names, versions, and service limits in `specs/` were true when written.
-`@aws/agentcore-cli` was renamed and unpublished, leaving a documented install
-command that 404s. When a spec drives an external action (install, deploy, API
-call), check the current reality first and update the spec in the same change.
+Package names, versions, prices and service limits in `specs/` were true when
+written. When a spec drives an external action (install, deploy, API call),
+check the current reality first and update the spec in the same change.
 
-**Two traps specific to verifying AWS pricing and lifecycle facts**, both of
-which have already put a wrong number in this repo:
+- **AWS pricing tables render client-side**, so a fetch returns no rates. Ask a
+  human to read them in a browser rather than reporting "unobtainable", and
+  prefer `aws___read_documentation` over a plain fetch for `docs.aws.amazon.com`.
+- **A provider's own page is not a proxy for Bedrock's** — rates differ by
+  Region, and Bedrock serves models the provider lists as retired.
+- **"EOL no sooner than" is a floor, not a schedule.** The clock that matters is
+  a Legacy model entering public extended access after ~3 months, at higher
+  provider-set prices.
 
-- **AWS renders its pricing tables client-side.** `aws.amazon.com/bedrock/pricing/`
-  returns prose and no token rates when fetched — confirmed repeatedly. Ask a
-  human to read it in a browser rather than reporting "unobtainable", and prefer
-  `aws___read_documentation` over a plain fetch for `docs.aws.amazon.com`.
-- **A provider's own page is not a proxy for Bedrock's.** Anthropic's pricing
-  and deprecation pages are server-rendered and tempting. They are fine for
-  orientation and unsafe for a budget number: Anthropic lists Haiku 4.5 cache
-  reads at $0.10/MTok, which is the `us-east-1` rate and wrong for the
-  `us-west-2` we deploy to — the single cell that differs between those Regions
-  for any Anthropic model. Anthropic also lists models as retired that Bedrock
-  still serves.
-
-Lifecycle dates carry their own misreading. **"EOL no sooner than \<date\>" is a
-floor, not a schedule** — but the deadline that matters is earlier and quieter
-than EOL: a Legacy model enters **public extended access** after roughly three
-months, where AWS says to expect **higher pricing set by the provider**. That is
-a price rise with no code change and no traffic growth. See the wiki's
-`Source-Bedrock-Model-Lifecycle`.
+Stories on the wiki: `Decision-LLM-Model-Selection`,
+`Source-Bedrock-Model-Lifecycle`, and `Gotchas`.
 
 ## Maintaining the Spec Kit toolchain
 
-To change a feature's artifacts _after_ the `specify → clarify → plan → tasks`
-pipeline has run, read the wiki's `Guide-Spec-Kit-Iteration` first. The short
-version: `speckit.plan` and `speckit.tasks` **regenerate destructively**,
-`speckit.analyze` is read-only, and `speckit.converge` is append-only and is the
-right default for closing code-versus-artifact drift.
+Read the wiki's `Guide-Spec-Kit-Iteration` before changing a feature's
+artifacts after the `specify → clarify → plan → tasks` pipeline has run, and
+`Decision-Spec-Kit-Upgrade` before upgrading. The rules:
 
-Upgrade with the **manifest-aware** path, not `specify init --here --force`
-(upstream calls that an escape hatch — it skips per-file integrity checks):
+- `speckit.plan` and `speckit.tasks` **regenerate destructively**;
+  `speckit.analyze` is read-only; `speckit.converge` is append-only and is the
+  default for closing code-versus-artifact drift.
+- Upgrade with the manifest-aware path, never `specify init --here --force`:
 
-```sh
-uv tool install specify-cli --force --from git+https://github.com/github/spec-kit.git@<tag>
-specify integration status                  # review before changing anything
-specify integration upgrade copilot --force
-specify extension update
-```
+  ```sh
+  uv tool install specify-cli --force --from git+https://github.com/github/spec-kit.git@<tag>
+  specify integration status                  # review before changing anything
+  specify integration upgrade copilot --force
+  specify extension update
+  ```
 
-`integration status` is trustworthy only because
-`.specify/scripts/powershell/*.ps1` are pinned to **LF** in `.gitattributes`.
-Spec Kit records a SHA-256 per managed file and writes those scripts with LF, so
-the repo-wide `*.ps1 text eol=crlf` rule made all of them report as modified on
-every Windows checkout. Never "fix" that by relaxing the LF rule — the advertised
-remedy for the warning is `--force`, which overwrites real customizations.
-
-Two tiers of protection, and only one is safe:
-
-- **Integration-managed** files (`.github/prompts/`, `.github/agents/`,
-  `.specify/scripts/`, `.specify/templates/`, `.vscode/settings.json`) carry
-  per-file hashes. Local edits are detected and preserved; upgrade refuses until
-  you resolve them.
-- **Extension-provided** files carry only a whole-manifest hash. `extension
-update` has no `--force` and no per-file comparison — it removes and reinstalls,
-  so any local patch is lost silently. Do not patch extensions in place; prefer
-  an extension that needs no patching.
-
-Untracked files are never deleted by any Spec Kit command — removal iterates
-manifest keys only, so hand-authored files such as `.github/prompts/tdd.prompt.md`,
-`.github/prompts/wiki.prompt.md` and everything under `.github/skills/` are safe.
-Put our own skills and prompts there, never in `.specify/extensions/` — that is
-the tier with no per-file hashing, where `extension update` deletes and
-reinstalls without a diff. `.specify/feature.json` is machine-local and
-gitignored.
-
-`.specify/extension-catalogs.yml` **replaces** Spec Kit's built-in catalog
-stack; it does not extend it. Adding one catalog therefore drops every catalog
-you did not list, and any installed extension that only the dropped catalog
-knows about is silently orphaned — `extension update` skips it with _"Not found
-in catalog"_ forever. Keep the **default** catalog
-(`extensions/catalog.json`, the one carrying bundled extensions such as `git`)
-in that file whenever anything else is added, and leave unvetted public
-catalogs at `install_allowed: false`, per the CLI's own guidance.
-
-**Never hand-edit `.specify/extensions.yml`.** It is generated from each
-installed extension's own `extension.yml`, and `extension update` removes and
-reinstalls the extension, regenerating the file wholesale — a fresh
-`specify init --extension git` reproduces every hook stanza, so local deletions
-silently come back. To drop a hook, disable it in the extension's own config
-(for the git extension, `auto_commit` in
-`.specify/extensions/git/git-config.yml`), which install does not overwrite.
-
-Hooks are **pull-based**: each `before_<x>`/`after_<x>` stanza is read by the
-`speckit.<x>` command itself. A hook for a command that no longer exists is
-therefore inert rather than broken, so a leftover stanza — `taskstoissues`
-being the one upstream is retiring — needs no action from us. Do not add a CI
-guard for it: both sides of that mapping are generated by Spec Kit from the
-same manifest, so the check only ever restates upstream's own invariant, and a
-red build would push someone toward the hand-edit forbidden above.
+- Keep `.specify/scripts/powershell/*.ps1` pinned to **LF** in
+  `.gitattributes`. Never relax it to quiet `integration status`; the
+  advertised remedy, `--force`, overwrites real customizations.
+- Never patch files under `.specify/extensions/` — `extension update` reinstalls
+  without a diff. Our own skills and prompts go in `.github/skills/` and
+  `.github/prompts/`, which no Spec Kit command deletes.
+- Keep the default catalog (`extensions/catalog.json`) in
+  `.specify/extension-catalogs.yml`, because that file **replaces** the built-in
+  stack. Leave unvetted public catalogs at `install_allowed: false`.
+- Never hand-edit `.specify/extensions.yml`; it is regenerated. Disable a hook
+  in the extension's own config instead (git: `auto_commit` in
+  `.specify/extensions/git/git-config.yml`). Hooks are pull-based, so a stale
+  stanza is inert — do not add a CI guard for it.
+- `.specify/feature.json` is machine-local and gitignored.
 
 ## MCP configuration
 
@@ -337,8 +231,7 @@ red build would push someone toward the hand-edit forbidden above.
 **There are two MCP config files and they must be edited together.** `.mcp.json`
 keys servers under `mcpServers`; `.vscode/mcp.json` uses VS Code's `servers`
 key. Adding a server to one and not the other silently leaves that client
-short — which is exactly what happened when `aws-mcp` landed. Parity is now
-enforced by `packages/infra/test/mcp-config.test.ts`.
+short. Parity is enforced by `packages/infra/test/mcp-config.test.ts`.
 
 **Every entry must be a plain HTTP endpoint.** Do not add `stdio` servers that
 shell out to `uvx`, `npx`, or similar — that makes a package manager a new
@@ -358,19 +251,12 @@ and `Audit` checks to pass before merge. Branches are deleted on merge. A repo
 admin can bypass, but bypassing is a deliberate act with a reason, not a way
 around a red build.
 
-The `Audit` gate has one sharp edge worth knowing before it bites: `pnpm audit`
-queries the **live** advisory database, so a newly published advisory turns
-every open PR red at once, including ones that change nothing related. That is
-the gate working, not a flake — fix the advisory rather than bypassing, unless
-the fix is genuinely blocked upstream.
-
-Required checks match the GitHub Actions **job name**, not the workflow's
-filename. If `CI` or `Audit` is renamed without updating the ruleset's
-required context, the old check stays pending and **blocks** merging; it does
-not silently turn off protection. A job skipped by a conditional can report
-success and satisfy a required check, whereas a workflow skipped by path,
-branch or commit-message filtering leaves it pending. See the wiki's
-`Guide-Validation-Gate` and GitHub's required-check troubleshooting guide.
+- `pnpm audit` hits the live advisory database, so a new advisory can turn every
+  open PR red at once. That is the gate working: fix the advisory rather than
+  bypassing, unless the fix is blocked upstream.
+- Required checks match the Actions **job name**. Renaming `CI` or `Audit`
+  without updating the ruleset leaves the old check pending and blocks merging.
+  See the wiki's `Guide-Validation-Gate`.
 
 ## Keep this file current
 
@@ -392,12 +278,18 @@ memories expire after 28 days unless something reuses them. Knowledge that
 expires cannot compound, so no durable fact may live _only_ in a repository
 memory. That was the alternative `Decision-Wiki-As-Knowledge-Base` rejected.
 
-| If the fact is…                                                                   | It goes…                                        |
-| --------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Builder-specific — one person's workflow, tools or preferences                    | User memory only                                |
-| Durable, about working here — conventions, verified commands, tooling traps       | `AGENTS.md` or a skill (the schema layer)       |
-| Durable, about the project — architecture, decisions, current behavior, its traps | The owning wiki page, plus `Gotchas` for a trap |
-| Short-lived, or a shortcut to any of the above                                    | Repository memory — losing it costs nothing     |
+| If the fact is…                                                        | It goes…                                                                                       |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Builder-specific — one person's workflow, tools or preferences         | User memory only                                                                               |
+| Durable, about working here — conventions, verified commands           | A rule in `AGENTS.md` or a skill (the schema layer)                                            |
+| A durable trap, whether in the tooling or the project                  | The story on the owning wiki page plus a `Gotchas` row; a one-line rule here if agents need it |
+| Durable, about the project — architecture, decisions, current behavior | The owning wiki page                                                                           |
+| Short-lived, or a shortcut to any of the above                         | Repository memory — losing it costs nothing                                                    |
+
+**State rules here; tell stories on the wiki.** Agents always load `AGENTS.md`,
+but the `wiki/` clone is optional, so a rule an agent must follow belongs here
+even when the wiki explains it. The incident behind the rule — dates, evidence,
+what broke — belongs on the wiki, linked rather than restated.
 
 A repository memory may cache a fact recorded in the schema or on the wiki, and
 should cite where it lives. When something reaches the wiki, follow the ingest
@@ -407,31 +299,17 @@ approval before `wiki:push`, because wiki pushes are live and public.
 ## Root scripts are invisible to the toolchain
 
 `eslint.config.mjs` ignores both `scripts/` and `*.mjs`, and
-`vitest.workspace.ts` covers only the workspace packages. Anything written as a
-root-level script is therefore neither linted nor tested. Put real logic in a
-workspace package — `packages/repo-tools` exists for exactly this — and keep
-root `package.json` scripts to inline, logic-free commands.
+`vitest.workspace.ts` covers only the workspace packages, so a root-level script
+is neither linted nor tested. A root script may **chain** commands; the moment
+it encodes a **decision**, it belongs in a workspace package —
+`packages/repo-tools` exists for exactly this.
 
-`wiki:push` is the cautionary example. As a root one-liner,
-`git add -A && git commit -m "..." && git push`, its `&&` chain encoded a
-decision — push _only if_ the commit succeeded — so a clone whose work was
-already committed hit "nothing to commit", exited non-zero, and never pushed.
-Nothing caught it, because nothing checks root scripts. It now lives in
-`packages/repo-tools` under types, lint and tests.
-
-The rule that follows: a root script may **chain** commands, but the moment it
-encodes a **decision**, it belongs in a package.
-
-**And moving it into a package is not the end of it — mind the entry point.**
-`bin/wiki-push.ts` sat inside `packages/repo-tools`, so it was linted and
-type-checked, yet its argument handling was a bare `process.argv[2]` that no
-test touched: `push.test.ts` covered `pushWiki` and stopped at the module
-boundary. So `wiki:push --message "text"` committed the literal string
-`--message` as the wiki commit message, and, because a wiki push is live and
-un-reviewed, the mistake was public before anyone saw it. Argument parsing now
-lives in `src/wiki/push-args.ts` under test, and the bin is a thin wrapper that
-prints and exits. Keep bins that way — anything a bin decides for itself is
-code no test is looking at.
+**Mind the entry point, too.** Keep bins thin: anything a bin decides for itself,
+argument parsing included, is code no test is looking at. `wiki:push --message
+"text"` once committed the literal `--message` to the live wiki, because the bin
+read `process.argv[2]` directly. Parsing now lives in `src/wiki/push-args.ts`
+under test. The `wiki:push` short-circuit story is on the wiki's
+`Guide-Validation-Gate`.
 
 ## Product and legal guardrails
 

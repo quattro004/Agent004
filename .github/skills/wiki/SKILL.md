@@ -80,9 +80,12 @@ repository memory.
 | If the fact is… | It goes… |
 | --- | --- |
 | Builder-specific (workflow, tools, preferences) | User memory only |
-| Durable, about working here (conventions, verified commands, tooling traps) | `AGENTS.md` or a skill — the schema layer |
-| Durable, about the project (architecture, decisions, current behavior, its traps) | The owning wiki page, plus `Gotchas` for a trap |
+| Durable, about working here (conventions, verified commands) | A rule in `AGENTS.md` or a skill — the schema layer |
+| A durable trap, tooling or project | The story on the owning page plus a `Gotchas` row; a one-line rule in `AGENTS.md` if agents need it |
+| Durable, about the project (architecture, decisions, current behavior) | The owning wiki page |
 | Short-lived, or a shortcut to any of the above | Repository memory, citing where the fact lives |
+
+State rules in `AGENTS.md`; tell the story here, linked rather than restated.
 
 The test for durability: *would it still be true, and still cost someone an
 hour, in a month?* See `AGENTS.md` § Keep this file current.
