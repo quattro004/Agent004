@@ -8,7 +8,17 @@
 
 **Input**: User description: "Architecture review and first AWS deployment for Max Height (spec 003). Much of the AWS infrastructure and AWS's own agent guidance has changed since spec 001. Review the current codebase, the project wiki, and issues #42–#61 against the latest AWS guidance for building AI agents (Well-Architected Agentic AI Lens and Generative AI Lens; Bedrock AgentCore Runtime, Memory, Identity, Observability), always under the constitution's $10/month hard budget — the builder believes an agent can run for $10/month and this feature tests that. Then take the stack to its first real deployment. The UI is close enough to MVP; UI work is limited to what deployment needs. Goal: get the AWS architecture running soon."
 
-Primary inputs: `docs/architecture-review-plan.md` (outcomes O1–O8, questions Q1–Q8, spikes S1–S3), `docs/infra-plan.md` (Phases 2–6), `docs/tdd-plans/budget-warning-routing-TDD-Plan.md` (Plan 1, issue #56), `.specify/memory/constitution.md` (v1.4.0), spec 001 (`specs/001-max-height-ai-character/`), the bodies and comments of issues #42–#61, and the project wiki (<https://github.com/quattro004/Agent004/wiki>, local clone at `2bac2b4`). This spec extends the plan's outcomes with O9–O14 and its questions with Q0 and Q9. The builder's access decisions of 2026-10-03 are also an input; see the Builder decisions note below.
+Primary inputs: `docs/architecture-review-plan.md` (outcomes O1–O8, questions Q1–Q8, spikes S1–S3), `docs/infra-plan.md` (Phases 2–6), Plan 1 (issue #56, merged as #62; its local TDD plan was retired after merge, so its findings are listed below), `.specify/memory/constitution.md` (v1.4.0), spec 001 (`specs/001-max-height-ai-character/`), the bodies and comments of issues #42–#61, and the project wiki (<https://github.com/quattro004/Agent004/wiki>, local clone at `2bac2b4`). This spec extends the plan's outcomes with O9–O14 and its questions with Q0 and Q9. The builder's access decisions of 2026-10-03 are also an input; see the Builder decisions note below.
+
+Plan 1 findings, cited below as F1–F7 (verified 2026-10-01 against `budget-stack.ts` and AWS documentation; full story in #62 and the wiki's Component-Infra-Stacks and Concept-Budget-Ceiling):
+
+- **F1** (fixed by #62): all three thresholds published to the one topic whose Lambda revokes access, so a $5 warning could have stopped service.
+- **F2** (fixed by #62): no email subscriber, so P2's $5 and $8 email alarms reached nobody.
+- **F3** (fixed by #62): the topic had no policy granting `budgets.amazonaws.com` `SNS:Publish`, so no notification, including the hard stop, could arrive. F3 hid F1, so they had to change together.
+- **F4**: Budgets SNS message bodies are undocumented and probably plain text, so threshold filtering (SNS filter policy or parsing in the Lambda) was rejected.
+- **F5**: each budget notification allows one SNS subscriber and up to ten email subscribers.
+- **F6** (open, FR-023): the $8 soft-degrade has a frontend consumer and no producer.
+- **F7** (handled by spec 001 deviation C8): T111 would have sent ops alarms to the hard-stop topic.
 
 Wiki pages read as inputs:
 
