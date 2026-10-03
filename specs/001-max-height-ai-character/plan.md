@@ -119,7 +119,7 @@ packages/
   │   ├── cognito-stack.ts      # Guest identity pool + IAM roles
   │   ├── agent-stack.ts        # AgentCore Memory, WebSocket API + Lambda
   │   ├── frontend-stack.ts     # S3 + CloudFront distribution
-  │   └── budget-stack.ts       # Cost alerts ($5/$8 SNS) + hard-stop ($10 Lambda)
+  │   └── budget-stack.ts       # Owner email at $5/$8/$10; hard stop at $10 via SNS → Lambda
   └── test/              # Jest + CDK assertions
 
 docs/                    # Supporting design documents
