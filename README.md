@@ -117,8 +117,11 @@ Per-package development:
 ```bash
 cd packages/frontend && pnpm run dev     # Vite dev server
 cd packages/agent    && pnpm run dev     # Agent watch mode
-cd packages/infra    && npx cdk synth    # Synthesize CDK stacks
+cd packages/infra    && npx cdk synth -c budgetAlertEmail=<owner email>   # Synthesize CDK stacks
 ```
+
+The budget stack refuses to synthesize without an owner email for its alerts.
+Pass it with `-c` and never commit it: the repo is public.
 
 Deploying to AWS additionally requires the AWS CLI, CDK CLI, Docker, and
 credentials. See

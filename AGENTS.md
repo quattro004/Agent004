@@ -89,7 +89,7 @@ Package-level commands:
 
 - Frontend: `cd packages/frontend && pnpm run dev` / `pnpm run test` / `pnpm run test:e2e`
 - Agent: `cd packages/agent && pnpm run dev` / `pnpm run test`
-- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff`
+- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email>` (every `cdk synth`, `diff` and `deploy` needs it; never commit the address)
 - Repo tools: `cd packages/repo-tools && pnpm run test`
 
 ## Required engineering workflow
@@ -130,6 +130,12 @@ tells the story, with dates and worked examples.
   it in the same PR or the next one, and verify no resolved version changes and
   `pnpm audit` stays clean. Keep one only while a parent pins an exact vulnerable
   version.
+- **No patch? Ask whether a fresh install would even have the package.** A
+  lockfile can keep an optional peer that fresh resolution never adds. Probe
+  with `pnpm add <parent>@<version> --lockfile-only` in an empty directory. A
+  `-` override does not remove such a peer, and remove/re-add re-resolves the
+  parent's whole subtree. Prune the unreachable entries instead, and prove the
+  result with `pnpm install --frozen-lockfile` in a clean `git worktree`.
 - **Dependabot PRs arriving do not prove security updates are on** — that half
   is a repo setting, not `dependabot.yml`. Check it rather than inferring it:
 

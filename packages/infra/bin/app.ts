@@ -16,6 +16,8 @@ const cognito = new CognitoStack(app, 'MaxHeight-Cognito', { agentRuntimeArn });
 new BudgetStack(app, 'MaxHeight-Budget', {
   unauthRole: cognito.unauthRole,
   unauthPolicyName: cognito.unauthPolicyName,
+  // Never committed (public repo): cdk deploy -c budgetAlertEmail=<owner email>
+  alertEmail: app.node.tryGetContext('budgetAlertEmail'),
 });
 
 new AgentStack(app, 'MaxHeight-Agent');
