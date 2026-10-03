@@ -89,7 +89,7 @@ Package-level commands:
 
 - Frontend: `cd packages/frontend && pnpm run dev` / `pnpm run test` / `pnpm run test:e2e`
 - Agent: `cd packages/agent && pnpm run dev` / `pnpm run test`
-- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff`
+- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email>` (every `cdk synth`, `diff` and `deploy` needs it; never commit the address)
 - Repo tools: `cd packages/repo-tools && pnpm run test`
 
 ## Required engineering workflow

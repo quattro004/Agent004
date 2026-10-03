@@ -236,9 +236,11 @@ pnpm run dev
 
 ```bash
 cd packages/infra
-npx cdk synth          # Validate templates
-npx cdk diff           # Preview changes
-npx cdk deploy         # Deploy all stacks
+# BudgetStack needs the owner's alert email on every synth, diff and deploy.
+# Pass it with -c and never commit it: the repo is public.
+npx cdk synth -c budgetAlertEmail=<owner email>          # Validate templates
+npx cdk diff -c budgetAlertEmail=<owner email>           # Preview changes
+npx cdk deploy --all -c budgetAlertEmail=<owner email>   # Deploy all stacks
 ```
 
 ---
@@ -343,14 +345,14 @@ visitor off at 16 minutes.
 
 ```bash
 cd packages/infra
-npx cdk deploy --all
+npx cdk deploy --all -c budgetAlertEmail=<owner email>
 ```
 
 This deploys:
 1. **CognitoStack** — Guest identity pool + IAM roles.
 2. **AgentStack** — AgentCore Runtime + Memory, WebSocket API + Lambda integration.
 3. **FrontendStack** — S3 bucket + CloudFront distribution.
-4. **BudgetStack** — Cost alerts ($5/$8 SNS) + hard-stop ($10 Lambda).
+4. **BudgetStack** — Owner email at $5/$8/$10 + hard stop at $10 (SNS → Lambda).
 
 Deploy **BudgetStack first**, before the runtime, so the cost guardrail predates
 the thing it guards.
