@@ -94,7 +94,7 @@ The builder can trust that the deployed Max Height never spends more than the co
 - The hard stop deletes a policy name that CDK never synthesizes (#61).
 - The hard stop treats a missing policy as success.
 - The hard stop covers only the guest role, which the builder's 2026-10-03 decision removes (FR-041). It touches neither the Lambda nor the runtime spend path, nor the signed-in path that replaces the guest role (O2).
-- The alert topic cannot receive Budgets notifications, and no threshold sends email (#56, Plan 1).
+- ~~The alert topic cannot receive Budgets notifications, and no threshold sends email (#56, Plan 1).~~ Fixed on `main` by #62 (2026-10-03). Delivery stays unproven until the deployed demonstration (SC-003).
 - Credits hide spend from a default budget (O10).
 - Budgets data lags real usage (O11).
 - Log retention defaults to never-expire (O13).
@@ -211,6 +211,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - Its policy-name fix is not made, because FR-041 removes the unauthenticated role it targets, and nothing is deployed for the latent bug to harm.
   - Its fail-loud half is FR-019, and the redesigned hard stop is decided under Q6 (FR-018).
   - #61 closes when that hard stop ships with a test that fails when the hard stop's target is missing.
+  - **Satisfied 2026-10-03:** Plan 1 merged as #62 (`fb9a6e2`), which closed #56.
 - **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7).
 - **FR-003**: Each spike (S0–S3) MUST have a written cost estimate and explicit builder approval before it runs.
   - **S0**: Free-plan model-access smoke test. Invoke the Haiku 4.5 global cross-Region profile (expected denial) and Nova 2 Lite's in-Region model ID (expected success).

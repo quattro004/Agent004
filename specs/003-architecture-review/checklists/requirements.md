@@ -141,4 +141,4 @@
   - The wiki was not edited.
 
   The builder's decisions on 2026-10-03 resolved FR-015's former access-gating marker. The same day, dropping Apple removed the FR-045 Apple marker. Each remaining marker affects scope or cost and has no source-backed default. Resolve them with `/speckit.clarify` before `/speckit.plan`.
-- **Sequencing gate.** Plan 1 (#56) and #61 must merge before `/speckit.plan` (FR-001).
+- **Sequencing gate.** Plan 1 (#56) must merge before `/speckit.plan` (FR-001); #61 is folded into Q6 and does not gate planning. Satisfied 2026-10-03 by #62 (`fb9a6e2`).
