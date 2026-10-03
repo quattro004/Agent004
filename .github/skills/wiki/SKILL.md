@@ -57,7 +57,12 @@ Run every step, in order. Steps 4 and 5 are the ones that get skipped:
 
 1. Read `Index.md` first, then drill into the specific pages.
 2. Answer **with citations** — name the page you got it from.
-3. If the answer is durable and the wiki did not already hold it, **file it back
+3. **Trust, but verify.** A wiki page is a claim, not proof. Before an answer
+   drives a decision, a spec or code, check the load-bearing facts against the
+   code, the pinned package's `.d.ts`, or a primary source. Cite what you
+   checked, or label the claim unverified. If the page is wrong, correct it and
+   append to `Log` (see `AGENTS.md` § Trust, but verify).
+4. If the answer is durable and the wiki did not already hold it, **file it back
    as a new page or a page edit.** This is what makes exploration compound
    instead of evaporating into chat history.
 

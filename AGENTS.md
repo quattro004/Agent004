@@ -165,13 +165,28 @@ deletion or a config edit, the test is often scaffolding. Delete it in REFACTOR
 and keep the reasoning in the PR or on the wiki. Never delete a test that pins
 behavior.
 
-## Trust, but verify, task status
+## Trust, but verify, task status and wiki claims
 
 A task marked `[x]` in `tasks.md` is a claim, not proof (the wiki's
 `Source-Tasks-001` has the cases). Before building on one, confirm the code
 exists — grep for the import, not just the `package.json` entry. When you find
 drift, record it in the deviations table at the top of `tasks.md` (`C1`, `C2`, …)
 and split the task rather than silently re-scoping it.
+
+**A wiki page is a claim too.** It is the best current summary, not proof: the
+wiki has recorded APIs that never existed (`Source-Strands-Harness-SDK-Docs`,
+corrected 2026-10-01). Before a wiki claim drives a decision, a spec
+requirement or code, verify it against the code (`file:line`), the pinned
+package's `.d.ts`, or a primary source, and cite what you checked. Reuse the
+wiki's research rather than redoing it. Just confirm the facts a decision depends on.
+
+- When the wiki is wrong, correct the owning page **and** append the
+  disagreement to `Log`. When it is silent, that is an ingest. Either way, get
+  approval before `wiki:push`.
+- Unverified wiki claims may inform a spec only when labelled as unverified.
+  Verification then becomes plan or research work.
+- Verification happens at the point of use. Issue #58 proposes a periodic
+  sweep; until it lands, nothing else catches a stale page.
 
 ## External facts go stale — verify before relying on them
 
