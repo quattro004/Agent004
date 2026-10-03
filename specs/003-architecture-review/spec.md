@@ -37,6 +37,14 @@ Wiki pages read as inputs:
 >
 > FR-041–FR-056 carry these decisions. Details they leave open are decided at plan under Q9 (FR-004). Where "guest" still appears in this spec, it describes the identity-pool path being removed or paraphrases a wiki claim.
 
+## Clarifications
+
+### Session 2026-10-03
+
+- Q: Should the account stay on the AWS Free plan or be upgraded to the Paid plan before the first deployment? → A: Stay on the Free plan. The builder upgrades to Paid when the Free plan ends in December 2026, and that upgrade is out of scope. The goal is to get a deployment out, operate it for about a month, and see what it costs (FR-028, FR-033, SC-019).
+- Q: Does the first deployment include long-term memory, or is it deferred with conversations kept session-only? → A: Deferred. Conversations are session-only, and long-term memory follows as spec 001's V1 feature (FR-014, FR-030).
+- Q: Does #61 still need to merge before `/speckit.plan`, now that the guest role it fixes is being removed? → A: No. #61 is folded into the Q6 hard-stop redesign (FR-018, FR-019), and only Plan 1 (#56) gates planning. #61 closes when the redesigned hard stop ships with its fail-loud test (FR-001, FR-038).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An invited friend holds a conversation on the first real deployment (Priority: P1)
@@ -118,7 +126,7 @@ A signed-in friend cannot reset their own caps or rate limits, impersonate anoth
 
 1. **Given** a friend sends a request carrying another friend's actor identifier, **When** the server processes it, **Then** the server uses the identity in the requester's verified sign-in token, and the forged value has no effect on budgets, limits or memory.
 2. **Given** a friend has reached a per-session cap (spec 001 FR-010) or rate limit (spec 001 FR-020), **When** they reconnect, start a new session or clear browser storage, **Then** the limits are not reset, because they are keyed to the sign-in identity. A person who signs in through a second provider is handled as FR-046 decides.
-3. **Given** long-term memory is part of the first deployment (see this spec's FR-014 clarification), **When** memory is read, written, exported (spec 001 FR-018) or wiped (spec 001 FR-017), **Then** the operation touches only the namespace derived from the requester's verified sign-in identity.
+3. **Given** long-term memory has been built (it is deferred from the first deployment by FR-014), **When** memory is read, written, exported (spec 001 FR-018) or wiped (spec 001 FR-017), **Then** the operation touches only the namespace derived from the requester's verified sign-in identity.
 
 ---
 
@@ -174,7 +182,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 - **Hard stop mid-conversation**: no new spend-bearing work starts, and the friend sees the in-character break state rather than a raw error (spec 001 FR-014 and spec 001 FR-015).
 - **Budgets never fires because credits absorb spend**: prevented by gross-spend measurement (FR-017).
-- **Free plan ends** (6 months or credit exhaustion, then account closure without upgrade, per AWS documentation the builder cited): the deployment must not be stranded without warning. See the FR-028 clarification.
+- **Free plan ends** (6 months or credit exhaustion, then account closure without upgrade, per AWS documentation the builder cited): the builder upgrades to Paid when the plan ends in December 2026, which is out of scope (FR-028). Until then the deployment must not be stranded without warning. The plan's end date and remaining credits are recorded before deploy (FR-033), and the hard stop and breaker keep spend from exhausting the credits early.
 - **Model access denied at deploy time** (for example, a cross-Region profile on the Free plan): deployment is blocked by S0's evidence before shipping, never discovered by a friend.
 - **New-account Bedrock quotas fall below what spec 001 FR-020's rate limits could demand**: recorded as a deploy prerequisite, and requests above quota surface as in-character refusals, not system errors.
 - **Hard-stop target name differs from the synthesized name** (#61): the hard stop fails loudly (FR-019).
@@ -199,7 +207,10 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 #### Sequencing and governance
 
-- **FR-001**: Plan 1 (#56, budget warning routing) and #61 (hard-stop policy name) MUST be merged to `main` before `/speckit.plan` runs for this feature, so the review starts from a correct baseline. Note: the builder's 2026-10-03 decision removes the unauthenticated role whose policy name #61 fixes (FR-041). The fail-loud half of #61 (FR-019) still applies to whatever the hard stop targets. Whether #61 is re-scoped before it merges is the builder's call.
+- **FR-001**: Plan 1 (#56, budget warning routing) MUST be merged to `main` before `/speckit.plan` runs for this feature, so the review starts from a correct alert-routing baseline. #61 (hard-stop policy name) is **folded into this feature** and does not gate planning (builder, 2026-10-03):
+  - Its policy-name fix is not made, because FR-041 removes the unauthenticated role it targets, and nothing is deployed for the latent bug to harm.
+  - Its fail-loud half is FR-019, and the redesigned hard stop is decided under Q6 (FR-018).
+  - #61 closes when that hard stop ships with a test that fails when the hard stop's target is missing.
 - **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7).
 - **FR-003**: Each spike (S0–S3) MUST have a written cost estimate and explicit builder approval before it runs.
   - **S0**: Free-plan model-access smoke test. Invoke the Haiku 4.5 global cross-Region profile (expected denial) and Nova 2 Lite's in-Region model ID (expected success).
@@ -213,7 +224,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
   | Q  | Question | Issues / outcomes |
   | -- | -------- | ----------------- |
-  | Q0 | Account plan and inference path: which inference path is supported on the account's plan; this gates Q2 | O9 |
+  | Q0 | Inference path. The plan is decided: the account stays on the Free plan (FR-028). Open: which models the Free plan can invoke in-Region in the pinned Region; this gates Q2 | O9 |
   | Q1 | Voice: Polly Neural, Nova 2 Sonic, browser TTS, and conformance with P1 | #47, #48, O5 |
   | Q2 | Text model: Haiku 4.5 or Nova 2 Lite | #50, O4 |
   | Q3 | Personality placement: Strands hooks or post-processing (may be recorded as deferred with #42) | #42 |
@@ -221,7 +232,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   | Q5 | Session identity, caps and edge rate limiting. The basis is decided: the verified sign-in identity (builder, 2026-10-03). Open: which token claim keys it, and how caps and edge rate limits apply | #55, O1, O14 |
   | Q6 | Hard-stop mechanism, recovery policy, and in-path circuit breaker | Plan 1, #61, O2, O11 |
   | Q7 | Cost-model corrections: cache rates, Polly dual billing, free-tier applicability, gross-spend measurement | #47, #49, O6, O10 |
-  | Q8 | Platform and IaC ownership (CDK vs AgentCore CLI), memory path, Strands harness, where Guardrails are enforced, observability cost | O7, O8, O13 |
+  | Q8 | Platform and IaC ownership (CDK vs AgentCore CLI), the memory path (for the later memory build, which does not block deployment; FR-014), Strands harness, where Guardrails are enforced, observability cost | O7, O8, O13 |
   | Q9 | Access and sign-in details. The core was decided by the builder on 2026-10-03 (FR-041–FR-049). Open: the allowlist enforcement and revocation mechanism and its timing, linking identities across providers, the Cognito feature plan, the sign-in page domain, the subdomain name, identity-provider secret storage, Microsoft email verification, and confirming that each adopted provider is fee-free (FR-045) | O14 |
 
 - **FR-005**: The review MUST assess the current codebase and architecture against current AWS guidance: the Well-Architected Agentic AI Lens and Generative AI Lens, and Bedrock AgentCore Runtime, Memory, Identity and Observability. Findings are recorded in the decision register where they bear on Q0–Q9.
@@ -246,7 +257,11 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-011**: Per-session caps (spec 001 FR-010) and rate limits (spec 001 FR-020) MUST be keyed to the verified sign-in identity (FR-010) and MUST NOT be resettable through any client-controlled value.
 - **FR-012**: Memory namespaces MUST be derived only from the verified sign-in identity, providing tenant isolation between friends (O8, deviation C4).
 - **FR-013**: Forget-me (spec 001 FR-017) and Export (spec 001 FR-018) MUST operate only on the requester's own data.
-- **FR-014**: Long-term memory scope for the first deployment: [NEEDS CLARIFICATION: Does the first deployment include long-term memory (AgentCore Memory with the constitution's 30-day rolling window; infra-plan T023b/c), or is long-term memory deferred until after the first deployment, with conversations kept session-only?]
+- **FR-014**: **Long-term memory is deferred** from the first deployment (builder, 2026-10-03). Conversations are session-only: the agent carries nothing from one session to the next. This matches spec 001, which places returning-visitor memory in V1 (spec 001 User Story 4 and SC-007). No memory infrastructure exists today anyway (W2, W3; deviation C4). When long-term memory is built:
+  - FR-010, FR-012 and FR-013 govern it.
+  - The Q8 memory-path decision chooses between AgentCore Memory, with the constitution's 30-day rolling window (`constitution.md:230`), and the alternatives in W35.
+
+  The trade-off: the month of operation (SC-019) and the FR-024 projection exclude memory's cost, which is projected when memory is planned. Forget-me and Export (spec 001 FR-017 and FR-018) still ship. Today they act only on browser storage (`packages/frontend/src/services/dataManager.ts:13,31`), and FR-053 extends deletion to the sign-in record.
 - **FR-015**: Access MUST require sign-in, and only invited friends on the allowlist may get past it (builder, 2026-10-03; P7; O14). Guest (signed-out) access is removed entirely, including the identity pool's unauthenticated identities (`cognito-stack.ts:20`). FR-041–FR-056 define sign-in and access. This decision resolved the access-gating clarification formerly here.
 
 #### Spend control and observability
@@ -271,14 +286,19 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-025**: Q0 MUST be decided first, using spike S0's evidence. The model inference path used by the deployment MUST be one the account's plan supports.
 - **FR-026**: The text model (Q2) MUST be chosen by comparing Haiku 4.5 and Nova 2 Lite on re-verified price, availability on the account's plan and pinned Region, Guardrails support, and S1 character fidelity. Following the builder's rule, the Nova model is adopted if it is cheaper and passes those gates.
 - **FR-027**: The voice path (Q1) MUST be chosen by comparing Polly Neural, Nova 2 Sonic and browser TTS at spec 001's usage assumptions. Nova 2 Sonic is adopted only if cheaper. Any departure from P1 (cloud-only TTS) requires an amendment under FR-002.
-- **FR-028**: The deployment account MUST be on a plan that supports the chosen models and keeps the deployment alive past the first-deploy period: [NEEDS CLARIFICATION: Should the account stay on the AWS Free plan (no cross-Region inference, credits mask spend, the plan ends after 6 months or when credits run out) or be upgraded to the Paid plan before the first deployment?]
+- **FR-028**: **The account stays on the AWS Free plan** through the first deployment and its month of operation (builder, 2026-10-03). Upgrading to the Paid plan is out of scope; the builder expects to do it when the Free plan ends in December 2026. Consequences:
+  - **Inference path.** The deployment MUST invoke its models through a path the Free plan supports. That means in-Region only, with no global or geographic cross-Region inference profile. The code's global Haiku 4.5 profile (`index.ts:96`, W12) therefore cannot ship as is. Q0 and spike S0 establish which models qualify in the pinned Region (FR-025, FR-031).
+  - **No Organization.** Nothing in this feature may create or join an AWS Organization, including the deploy identity (FR-034), because joining one upgrades the account to Paid automatically (builder-cited; re-verified under FR-007; D10).
+  - **Always Free offers only.** Any free usage the cost projection (FR-024) counts MUST be an "Always Free" offer, because Free-plan accounts receive no 12-month trials (D5, FR-051).
+  - **Spend is credit-funded.** Credits absorb the month's charges, so the gross-spend measurement (FR-017, SC-010) is what makes the month's real cost visible. The hard stop and in-path breaker are still required (P2). They protect the credits, whose exhaustion ends the Free plan and closes the account. And they must be proven working before the Paid upgrade turns spend into real money.
+  - **Timeline.** The Free plan's end date and remaining credits MUST be recorded as a deploy prerequisite (FR-033). The first deployment MUST go live early enough to finish its month of operation (SC-019) before that date.
 - **FR-029**: Prompt caching MUST be either shown reachable for the adopted model or struck from the cost model (#49, S2).
 
 #### First deployment
 
 - **FR-030**: Infra-plan Phases 2–6 MUST be complete:
   - T151: snapsafe base image
-  - T023b/c: AgentCore Memory, subject to the FR-014 clarification
+  - T023b/c (AgentCore Memory) is excluded: it is deferred by FR-014
   - T152/T153: CDK deployment of AgentCore Runtime V2
   - T111/T113: alarms
   - Phase 6
@@ -297,7 +317,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - the budget stack deployed first (infra-plan)
   - the third-party sign-in app registrations (FR-054)
   - the custom subdomain's certificate, its DNS validation record, and the subdomain's own DNS record at GoDaddy (FR-049), as manual steps documented in the deployment guide
-- **FR-034**: Deployment MUST use a least-privilege deploy identity, with no long-lived credentials committed (P11). Whether that identity is a manual role session or GitHub OIDC is decided in planning.
+  - the Free plan's end date and remaining credits, read from the account's billing console (FR-028)
+- **FR-034**: Deployment MUST use a least-privilege deploy identity, with no long-lived credentials committed (P11). Whether that identity is a manual role session or GitHub OIDC is decided in planning. Neither option may create or join an AWS Organization (FR-028).
 - **FR-035**: Until the infrastructure library offers a typed property for the runtime platform version, the infrastructure MUST keep the low-level override that sets it, with a test assertion that pins it. Verified on 2026-10-03: infra resolves `aws-cdk-lib` 2.270.0, whose `aws-bedrockagentcore/lib/bedrockagentcore.generated.d.ts` has no `platformVersion` property (W17). Re-check at plan time.
 - **FR-036**: Frontend changes MUST be limited to what deployment needs, which now includes sign-in:
   - endpoint and configuration injection at deploy time
@@ -314,8 +335,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   | Disposition | Issues |
   | ----------- | ------ |
   | Done (closed issue or merged PR); no action | #43, #44, #46, #51, #52, #53, #54, #57, #59, #60 |
-  | Prerequisite, merged before `/speckit.plan` | #56 (Plan 1), #61 |
-  | Open and in scope, resolved by Q0–Q9 | #45, #47, #48, #49, #50, #55 |
+  | Prerequisite, merged before `/speckit.plan` | #56 (Plan 1) |
+  | Open and in scope, resolved by Q0–Q9 | #45, #47, #48, #49, #50, #55, #61 (folded into Q6, FR-018 and FR-019; FR-001) |
   | Deferred until after the first deployment | #42 |
   | Related, out of scope | #58 (semantic wiki maintenance workflow; relates to FR-006) |
 
@@ -419,13 +440,14 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **SC-016**: After the builder removes an email from the allowlist, that person makes zero spend-bearing actions once the plan-defined revocation time has passed, including in a session open at the time of removal.
 - **SC-017**: An audit of the deployment finds no signed-out path to any spend-bearing action.
 - **SC-018**: Every site, sign-in and callback URL in the deployment is served over HTTPS, and a plain-HTTP request is redirected or refused.
+- **SC-019**: The first deployment serves invited friends for one month before the Free plan ends (builder, 2026-10-03: "operationalize it ideally for a month so I can see the cost"). That month's gross spend before credits is recorded by service and compared with the FR-024 projection and with an AWS Pricing Calculator estimate of the as-built infrastructure (see Assumptions). The comparison is recorded with the Q7 cost-model decision.
 
 ## Assumptions
 
 - **Methodology.** The review produces decisions, not behavior, so it has no RED test. Its checks are `speckit.analyze` and `wiki:lint`. Every implementation task that comes out of the review follows RED → GREEN → REFACTOR.
 - **Usage assumptions** are spec 001's: the session-cost and sessions-per-month figures in `specs/001-max-height-ai-character/plan.md` and `research.md`. They are corrected under Q7 where #47 and #49 found errors, and are not re-invented here.
 - **Account plan facts** come from AWS documentation the builder cited, and are re-verified under FR-007. The wiki records none of them (D1, D10, D11):
-  - the account is on the Free plan (created after 2025-07-15)
+  - the account is on the Free plan (created after 2025-07-15). It stays there through the first deployment, and the builder expects the plan to end in December 2026 (FR-028).
   - the Free plan does not support global or geographic cross-Region inference
   - it excludes certain Marketplace offers that can incur charges (whether this blocks Claude models is unverified)
   - it ends after 6 months or when credits run out, with 90 days to upgrade before closure
@@ -434,6 +456,10 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **Free-tier voice usage**: Free-plan accounts receive only "Always Free" offers, so Polly's 12-month free usage is assumed not to apply until verified. Several wiki pages say it may apply (D5).
 - **Budgets behavior** (AWS documentation, re-verified under FR-007): credits are included by default, and data refreshes up to three times a day with a lag of hours. The hard stop is therefore a lagging backstop, and FR-020's breaker covers the gap. The wiki records neither fact (D6, D7).
 - **Pricing figures** on the wiki (Source-Amazon-Nova-Lite, Decision-LLM-Model-Selection, Source-Nova-Sonic, Source-Amazon-Polly, Source-AgentCore-Pricing, Source-AgentCore-Web-Search-Tool) are treated as unverified until a human reads the pricing pages under FR-007 (W29).
+- **Pricing Calculator** (builder, 2026-10-03):
+  - Once the infrastructure choices are implemented, the builder prices the as-built stack in the AWS Pricing Calculator (<https://calculator.aws/#/>). That estimate is compared with the month's measured spend (SC-019).
+  - The estimate comes after implementation, so it does not replace the FR-024 projection, which gates deployment.
+  - The calculator renders in the browser, like the pricing pages, so a human builds the estimate and cites it.
 - **Region** defaults to `us-west-2`, the Region `docs/infra-plan.md:58-60` names. That document's claim that it is one of five AgentCore Runtime V2 Regions is unverified (W24), and so is Nova 2 Lite's in-Region availability there (Q0).
 - **Message length** is not assumed. FR-036 makes the shared limit a planning decision, because the contract (2,000 characters) and the server (500) disagree (W7).
 - **Session expiry**: the runtime idle timeout is the 1800 seconds decided on Decision-AgentCore-Runtime-V2 and Guide-Deployment, which matches spec 001's 30-minute session cap. The wiki's claim that the service default is shorter is unverified (W25). In-character behavior on mid-conversation expiry is defined in planning and is an expected `/speckit.clarify` topic.
@@ -453,10 +479,12 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - spec 002 and issues #10–#14 (volume knob)
   - #42 personality hooks (deferred until after the first deployment)
   - #58 semantic wiki maintenance workflow
+  - upgrading the account to the Paid plan (the builder does this when the Free plan ends, FR-028)
+  - long-term memory (deferred to spec 001's V1, FR-014)
   - spec 001 V1 features not needed for the first deployment
   - public or self-service registration, and any audience beyond invited friends (the builder will consider scaling later if friends like it)
 - **Dependencies**:
-  - Plan 1 (#56) and #61 merge before `/speckit.plan` (FR-001)
+  - Plan 1 (#56) merges before `/speckit.plan`; #61 is folded into Q6 and does not gate planning (FR-001)
   - constitution amendments merge before dependent implementation (FR-002)
   - spikes run only with approval (FR-003)
   - wiki pushes, including the discrepancy entries below, happen only with builder approval (FR-040)
@@ -508,7 +536,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | W32 | Nova 2 Lite Guardrails support is unconfirmed | Source-Amazon-Nova-Lite | Unverified (FR-007; gates S1) | AWS documentation |
 | W33 | `CountTokens` is unsupported for cross-Region-only Claude models | Gotchas, Decision-AgentCore-Runtime-V2 | Unverified; S2 uses invocation-reported usage regardless | AWS documentation |
 | W34 | Strands caching `strategy: 'auto'` skips application inference profile ARNs; native invocation limits reset per call | Source-Strands-Harness-SDK-Docs | Unverified (check the 1.19.0 `.d.ts` at plan time) | SDK type definitions |
-| W35 | AgentCore Memory and Strands session persistence are alternatives for the same job | Source-AgentCore-Platform-2026, Source-Strands-Harness-SDK-Docs | Unverified; open under Q8 and FR-014 | AWS and SDK documentation |
+| W35 | AgentCore Memory and Strands session persistence are alternatives for the same job | Source-AgentCore-Platform-2026, Source-Strands-Harness-SDK-Docs | Unverified; open under Q8 for the later memory build (FR-014 defers memory) | AWS and SDK documentation |
 | W36 | AgentCore Runtime accepts browser OAuth over WebSocket | Source-AgentCore-Bidirectional-Streaming | Unverified (Q4) | AWS documentation |
 
 ## Wiki Discrepancies to Log

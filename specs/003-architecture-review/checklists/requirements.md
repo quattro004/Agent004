@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — **2 remain by design** (FR-014 memory scope, FR-028 account plan); awaiting the builder's answers
+- [x] No [NEEDS CLARIFICATION] markers remain — resolved by `/speckit.clarify` on 2026-10-03 (FR-014 memory deferred, FR-028 Free plan)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details) — *domain-vocabulary exception, see Notes*
@@ -122,6 +122,23 @@
 - **Clarification markers (2).**
   - FR-014: long-term memory in the first deployment, or deferred
   - FR-028: AWS Free plan or Paid plan
+- **Iteration 6: `/speckit.clarify` (session 2026-10-03).** Three questions, recorded under the spec's Clarifications section:
+  1. FR-028: the account stays on the Free plan through the first deployment and its month of operation. The Paid upgrade happens when the plan ends in December 2026 and is out of scope. Consequences recorded in FR-028:
+     - in-Region inference only
+     - no AWS Organization (FR-034)
+     - Always Free offers only
+     - credit-funded spend still needs the hard stop
+     - the plan's end date is recorded as a deploy prerequisite (FR-033)
+     - new SC-019: one month of measured operation
+  2. FR-014: long-term memory is deferred to spec 001's V1. Also updated: FR-030 (T023b/c excluded), US4 scenario 3, the Q8 row, W35, and the out-of-scope list.
+  3. FR-001: #61 is folded into the Q6 hard-stop redesign, so only #56 gates planning. Also updated: the FR-038 table and Dependencies.
+  - The builder's AWS Pricing Calculator note is added to Assumptions and SC-019. The calculator estimate prices the as-built stack after implementation; it does not replace FR-024's pre-deploy gate.
+- **Iteration 6 hard-number audit.** The new figures are "December 2026" (when the Free plan ends) and "one month" (SC-019). Both are the builder's, quoted in the Clarifications section and SC-019.
+- **Iteration 6 result.** All items pass.
+  - Zero clarification markers remain.
+  - FR-001–FR-056 and SC-001–SC-019 are sequential, with no dangling references.
+  - The banned-name scan finds no hits.
+  - The wiki was not edited.
 
   The builder's decisions on 2026-10-03 resolved FR-015's former access-gating marker. The same day, dropping Apple removed the FR-045 Apple marker. Each remaining marker affects scope or cost and has no source-backed default. Resolve them with `/speckit.clarify` before `/speckit.plan`.
 - **Sequencing gate.** Plan 1 (#56) and #61 must merge before `/speckit.plan` (FR-001).
