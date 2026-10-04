@@ -13,16 +13,16 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.1139.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1144.0",
     "@strands-agents/sdk": "1.19.0",
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@types/node": "^26.6.3",
+    "@vitest/coverage-v8": "^5.0.3",
     "aws-sdk-client-mock": "^4.1.0",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.3"
   }
 }
