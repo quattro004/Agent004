@@ -55,6 +55,14 @@ Wiki pages read as inputs:
 - Q: Does the first deployment include long-term memory, or is it deferred with conversations kept session-only? → A: Deferred. Conversations are session-only, and long-term memory follows as spec 001's V1 feature (FR-014, FR-030).
 - Q: Does #61 still need to merge before `/speckit.plan`, now that the guest role it fixes is being removed? → A: No. #61 is folded into the Q6 hard-stop redesign (FR-018, FR-019), and only Plan 1 (#56) gates planning. #61 closes when the redesigned hard stop ships with its fail-loud test (FR-001, FR-038).
 
+### Session 2026-10-04
+
+- Q: When a friend uses up a session's cap and then starts a new session, does the new session get a fresh cap? → A: Yes. The server opens and counts sessions, and each new session started after spec 001's in-character sign-off gets a fresh cap (spec 001 FR-010). Rate limits (spec 001 FR-020) and the one-session-at-a-time rule are keyed to the sign-in identity, and no client-controlled value resets them (FR-011, US4).
+- Q: After the builder removes a friend's email from the allowlist, how soon must they lose access? → A: At their next session start. The server checks the allowlist whenever it opens a session, and a session already open ends within spec 001's 30-minute session cap, which is the worst case. The plan picks the mechanism under Q9 (FR-042, SC-016).
+- Q: Should the sign-in constitution amendment (FR-055) merge now, before `/speckit.plan`, or wait and go in one PR with the review's other amendments? → A: Now. It goes in its own PR off `main` (v1.4.0 → v1.5.0) and merges before `/speckit.plan`, so the plan's constitution check runs against the amended text. The review's other amendments each get their own PR once decided (FR-002, FR-055).
+- Q: When should the wiki corrections D1–D11 be pushed? → A: Split them. D3 (what remains), D8 and D9 were checked against code, so they're pushed now, before planning, once the builder approves the diff. D1, D2, D5, D6, D7, D10 and D11 are builder-cited AWS facts, pushed as one approved batch during plan research once each is verified against AWS documentation (FR-007). Wiki commit `c6c193c` already resolved D4 (FR-040).
+- Q: If a friend's conversation is cut off before spec 001's cap, for example because the runtime restarts or is redeployed, what happens when they send their next message? → A: It continues in a fresh session. After spec 001 FR-028's signal-lost state, the friend's next message opens a new server-counted session with a fresh cap and the same rate limits. Max acknowledges the dropout in character. The earlier transcript stays on screen, but Max no longer remembers it (FR-037, FR-014).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An invited friend holds a conversation on the first real deployment (Priority: P1)
@@ -73,6 +81,7 @@ An invited friend opens Max Height on the project's own subdomain over HTTPS in 
 4. **Given** the runtime has been idle, **When** a friend starts a fresh session, **Then** Max begins replying within spec 001 FR-011's cold-start target, with the in-character "buffering" UX covering the wait.
 5. **Given** a friend composes a message, **When** it exceeds the length limit decided under FR-036, **Then** the client stops them before sending using the same limit the server enforces and the contract states. The friend never gets a server rejection for a message the UI allowed.
 6. **Given** the backend becomes unavailable, **When** a friend sends a message, **Then** the existing graceful-degradation paths (spec 001 FR-014 and spec 001 FR-028) behave on the deployment as they do locally.
+7. **Given** a session was cut off before spec 001's cap (for example by a runtime restart or redeploy) and the friend has seen the signal-lost state, **When** they send their next message, **Then** a new session opens, Max acknowledges the dropout in character, and the new session counts against the same rate limits (FR-011, FR-037).
 
 ---
 
@@ -82,14 +91,14 @@ An invited friend signs in with Google, Microsoft (personal account) or Login wi
 
 **Why this priority**: The builder decided on 2026-10-03 that an open public site would overrun the constitution's $10/month cap (P2), so sign-in plus an invite-only allowlist is the access control for the first deployment (O14). Without the allowlist, anyone with a provider account could spend the budget. Verified: today there is no sign-in at all. The identity pool admits unauthenticated identities (`packages/infra/lib/cognito-stack.ts:20`), and no user pool, OAuth flow, custom domain or certificate exists in infra or frontend code.
 
-**Independent Test**: With a test allowlist, sign in with an allowlisted account through each adopted provider and hold a conversation. Then sign in with a provider account that is not allowlisted, and with one whose email the provider has not verified. Confirm both are turned away, and that telemetry and billing show no spend-bearing action for them. Remove an allowlisted email and confirm access ends within the plan-defined time.
+**Independent Test**: With a test allowlist, sign in with an allowlisted account through each adopted provider and hold a conversation. Then sign in with a provider account that is not allowlisted, and with one whose email the provider has not verified. Confirm both are turned away, and that telemetry and billing show no spend-bearing action for them. Remove an allowlisted email and confirm access ends no later than the next session start, with an already-open session ending within spec 001's 30-minute cap (FR-042).
 
 **Acceptance Scenarios**:
 
 1. **Given** a friend's provider-verified email is on the allowlist, **When** they sign in with any adopted provider, **Then** they reach Max and can hold a conversation.
 2. **Given** a person's email is not on the allowlist, **When** they complete sign-in at their provider, **Then** Max Height turns them away before any model, voice, runtime or tool invocation, and the message they see reveals nothing about who is on the allowlist.
 3. **Given** a provider returns an email it has not verified, **When** the person signs in, **Then** access is denied even if that email matches an allowlist entry (FR-043).
-4. **Given** a friend has signed in before, **When** the builder removes their email from the allowlist, **Then** their access is revoked within the time decided at plan, both on later sign-ins and in a session already open (FR-042, FR-047).
+4. **Given** a friend has signed in before, **When** the builder removes their email from the allowlist, **Then** they cannot open another session, and a session already open ends within spec 001's 30-minute session cap (FR-042, FR-047).
 5. **Given** no one is signed in, **When** any spend-bearing endpoint is called directly, **Then** it refuses the call (FR-041).
 6. **Given** a request for a site, sign-in or callback URL over plain HTTP, **When** it arrives, **Then** it is redirected to HTTPS or refused (FR-048).
 
@@ -135,7 +144,7 @@ A signed-in friend cannot reset their own caps or rate limits, impersonate anoth
 **Acceptance Scenarios**:
 
 1. **Given** a friend sends a request carrying another friend's actor identifier, **When** the server processes it, **Then** the server uses the identity in the requester's verified sign-in token, and the forged value has no effect on budgets, limits or memory.
-2. **Given** a friend has reached a per-session cap (spec 001 FR-010) or rate limit (spec 001 FR-020), **When** they reconnect, start a new session or clear browser storage, **Then** the limits are not reset, because they are keyed to the sign-in identity. A person who signs in through a second provider is handled as FR-046 decides.
+2. **Given** a friend has reached a rate limit (spec 001 FR-020) or their session's cap (spec 001 FR-010), **When** they reconnect, change or omit a session identifier, or clear browser storage, **Then** neither limit resets. The server opens and counts sessions, and rate limits are keyed to the sign-in identity. Only a new session started after the in-character sign-off gets a fresh session cap, and that session still counts against the same rate limits (FR-011). A person who signs in through a second provider is handled as FR-046 decides.
 3. **Given** long-term memory has been built (it is deferred from the first deployment by FR-014), **When** memory is read, written, exported (spec 001 FR-018) or wiped (spec 001 FR-017), **Then** the operation touches only the namespace derived from the requester's verified sign-in identity.
 
 ---
@@ -197,15 +206,15 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **New-account Bedrock quotas fall below what spec 001 FR-020's rate limits could demand**: recorded as a deploy prerequisite, and requests above quota surface as in-character refusals, not system errors.
 - **Hard-stop target name differs from the synthesized name** (#61): the hard stop fails loudly (FR-019).
 - **Budget notification cannot publish to its topic** (#56): delivery is verified as part of the demonstration (SC-003).
-- **A friend clears browser storage**: identity comes from the sign-in token, so caps and rate limits persist (FR-010, SC-006).
-- **Runtime session expires mid-conversation** (infra-plan idle timeout): behavior is defined in planning, and a friend sees an in-character state, not a failure.
+- **A friend clears browser storage**: identity comes from the sign-in token, so rate limits and an open session's cap persist (FR-010, FR-011, SC-006).
+- **Runtime session ends mid-conversation** (a runtime restart or redeploy; the idle timeout equals spec 001's 30-minute cap, so going idle cannot end a session early): the friend sees spec 001 FR-028's signal-lost state, and their next message continues in a fresh session that Max acknowledges in character (FR-037).
 - **In-path breaker and Budgets disagree on spend**: the stricter signal wins.
 - **A wiki claim proves false mid-review**: the claim is logged, corrected on its owning page, and any decision that relied on it is re-evaluated.
 - **Cost-allocation tags not yet active at deploy time**: early spend is unattributable, so deployment waits for activation (FR-033).
 - **Model-invocation logging would capture friends' messages**: it stays off unless a recorded decision accepts the privacy trade-off (FR-022).
 - **A price changed since the wiki recorded it**: the re-verified price wins, and the wiki is corrected.
 - **One person signs in through two providers**: two identities mean two sets of caps and rate limits unless they are linked. The plan decides between linking and one allowlist entry per identity (FR-046).
-- **An email is removed from the allowlist mid-session**: access ends within the plan-defined revocation time, with an in-character state rather than a raw error (FR-042, FR-047).
+- **An email is removed from the allowlist mid-session**: the open session runs at most to spec 001's 30-minute cap, and the next session start is refused with an in-character state rather than a raw error (FR-042, FR-047).
 - **The sign-in token expires mid-conversation**: the friend never sees a raw error. The plan decides between silent renewal and signing in again, presented in character (FR-047).
 - **A sign-in provider has an outage**: sign-in through it fails gracefully per P8, in character where possible, and the other providers keep working (FR-047).
 - **A provider returns an unverified email** (possible with Microsoft, unverified): the sign-in is denied even if the email matches an allowlist entry (FR-043).
@@ -222,7 +231,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - Its fail-loud half is FR-019, and the redesigned hard stop is decided under Q6 (FR-018).
   - #61 closes when that hard stop ships with a test that fails when the hard stop's target is missing.
   - **Satisfied 2026-10-03:** Plan 1 merged as #62 (`fb9a6e2`), which closed #56.
-- **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7).
+- **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7). The sign-in amendment (FR-055) goes further and merges before `/speckit.plan` (clarified 2026-10-04).
 - **FR-003**: Each spike (S0–S3) MUST have a written cost estimate and explicit builder approval before it runs.
   - **S0**: Free-plan model-access smoke test. Invoke the Haiku 4.5 global cross-Region profile (expected denial) and Nova 2 Lite's in-Region model ID (expected success).
   - **S1**: Golden-set character comparison of Haiku 4.5 and Nova 2 Lite. Runs only if the Guardrails gate passes.
@@ -244,7 +253,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   | Q6 | Hard-stop mechanism, recovery policy, and in-path circuit breaker | Plan 1, #61, O2, O11 |
   | Q7 | Cost-model corrections: cache rates, Polly dual billing, free-tier applicability, gross-spend measurement | #47, #49, O6, O10 |
   | Q8 | Platform and IaC ownership (CDK vs AgentCore CLI), the memory path (for the later memory build, which does not block deployment; FR-014), Strands harness, where Guardrails are enforced, observability cost | O7, O8, O13 |
-  | Q9 | Access and sign-in details. The core was decided by the builder on 2026-10-03 (FR-041–FR-049). Open: the allowlist enforcement and revocation mechanism and its timing, linking identities across providers, the Cognito feature plan, the sign-in page domain, the subdomain name, identity-provider secret storage, Microsoft email verification, and confirming that each adopted provider is fee-free (FR-045) | O14 |
+  | Q9 | Access and sign-in details. The core was decided by the builder on 2026-10-03 (FR-041–FR-049). Open: the allowlist enforcement and revocation mechanism (the timing is set by FR-042), linking identities across providers, the Cognito feature plan, the sign-in page domain, the subdomain name, identity-provider secret storage, Microsoft email verification, and confirming that each adopted provider is fee-free (FR-045) | O14 |
 
 - **FR-005**: The review MUST assess the current codebase and architecture against current AWS guidance: the Well-Architected Agentic AI Lens and Generative AI Lens, and Bedrock AgentCore Runtime, Memory, Identity and Observability. Findings are recorded in the decision register where they bear on Q0–Q9.
 - **FR-006**: **Trust but verify.** Every wiki claim the review relies on MUST be verified against code or a primary source (AWS documentation, SDK type definitions, `gh` output) before it informs a decision, and each verification MUST be cited. Any disagreement MUST be appended to the wiki's `Log` page and corrected on the owning page. FR-039 and FR-040 define the record and the correction workflow.
@@ -265,7 +274,9 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 #### Identity and isolation
 
 - **FR-010**: The server MUST derive session and actor identity from the verified sign-in token: the JWT `sub`, or the claim the plan decides under Q5. It MUST NOT accept identity from client-supplied request fields such as `sessionId` or `actorId` (#55). A verified sign-in identity is also what AgentCore Runtime inbound JWT authorization and AgentCore Memory fine-grained access control key on, both via the JWT `sub`. Those two are research-agent findings, unverified; verify at plan under Q4 and Q8.
-- **FR-011**: Per-session caps (spec 001 FR-010) and rate limits (spec 001 FR-020) MUST be keyed to the verified sign-in identity (FR-010) and MUST NOT be resettable through any client-controlled value.
+- **FR-011**: Rate limits (spec 001 FR-020) and the one-session-at-a-time rule (`specs/001-max-height-ai-character/contracts/websocket-api.md:210`) MUST be keyed to the verified sign-in identity (FR-010). Per-session caps (spec 001 FR-010) MUST apply to sessions the server opens and counts (clarified 2026-10-04):
+  - A new session started after spec 001's in-character sign-off gets a fresh session cap, and it still counts against the identity's rate limits.
+  - No limit may be reset through a client-controlled value: a forged, changed or omitted session identifier, a reconnect, or cleared browser storage.
 - **FR-012**: Memory namespaces MUST be derived only from the verified sign-in identity, providing tenant isolation between friends (O8, deviation C4).
 - **FR-013**: Forget-me (spec 001 FR-017) and Export (spec 001 FR-018) MUST operate only on the requester's own data.
 - **FR-014**: **Long-term memory is deferred** from the first deployment (builder, 2026-10-03). Conversations are session-only: the agent carries nothing from one session to the next. This matches spec 001, which places returning-visitor memory in V1 (spec 001 User Story 4 and SC-007). No memory infrastructure exists today anyway (W2, W3; deviation C4). When long-term memory is built:
@@ -279,7 +290,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 - **FR-016**: Budget alerts MUST route as Plan 1 decides: the constitution's alert tiers notify the builder by email, the hard-stop tier triggers the hard stop, and every notification target MUST permit the budgets service to publish to it.
 - **FR-017**: Spend measurement for alerts and the hard stop MUST reflect gross usage before credits, so the $10 experiment is measurable while promotional credits last (O10).
-- **FR-018**: The hard stop MUST block every path that can incur model, voice, runtime or tool spend (O2). That includes the WebSocket handler, the agent runtime, and the signed-in path that replaces the guest role: the authenticated role, token issuance, and the runtime authorizer. Today it touches only the unauthenticated guest role (`budget-stack.ts:64-66`, `cognito-stack.ts:71`), which FR-041 removes, so the existing hook is no longer enough.
+- **FR-018**: The hard stop MUST block every path that can incur model, voice, runtime or tool spend (O2). That includes the WebSocket handler, the agent runtime, and the signed-in path that replaces the guest role: the authenticated role, token issuance, and the runtime authorizer. Today it touches only the unauthenticated guest role (`budget-stack.ts:68-69,78`, `cognito-stack.ts:71`), which FR-041 removes, so the existing hook is no longer enough.
 - **FR-019**: The hard stop MUST fail loudly and alert the builder when its target cannot be found or modified. A missing target MUST NOT count as success (#61).
 - **FR-020**: An in-path circuit breaker MUST bound spend between Budgets refreshes (O11). Its limit and the signal it reads are decided in Q6 and derived from P2; no limit is set in this spec.
 - **FR-021**: The hard stop MUST have a defined recovery procedure (automatic at the start of the budget period, or manual, decided in Q6). The procedure MUST be documented and demonstrated once.
@@ -337,7 +348,10 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - the privacy page (FR-053)
   - content security policy allowances for exactly the deployed endpoints, including sign-in (FR-050). Today's policy (`frontend-stack.ts:24`) allows wildcard API Gateway and Cognito hosts but no voice endpoint, although the browser calls Polly directly (`useAudio.ts:13`); see D9.
   - one message-length limit shared by the client, the server and the spec 001 WebSocket contract. Today they disagree: the contract allows 1–2,000 characters (`specs/001-max-height-ai-character/contracts/websocket-api.md:65,209`), and so does the client (`TextInput.tsx:10`), but the server rejects more than 500 (`websocket-handler.ts:7,97`). Planning decides whether the server moves to the contract's limit or the contract is amended, and records the decision's effect on per-turn token cost.
-- **FR-037**: The deployment MUST preserve cloud-only AI behavior (no browser-side model inference) and the existing graceful-degradation paths: text fallback, signal-lost state and capability fallbacks.
+- **FR-037**: The deployment MUST preserve cloud-only AI behavior (no browser-side model inference) and the existing graceful-degradation paths: text fallback, signal-lost state and capability fallbacks. A session cut off before spec 001's cap (for example by a runtime restart or redeploy) MUST recover through spec 001 FR-028's signal-lost flow (clarified 2026-10-04):
+  - The friend's next message opens a new server-counted session (FR-011).
+  - Max acknowledges the dropout in character.
+  - The earlier transcript stays on screen but is not sent to the new session, because memory is session-only (FR-014).
 
 #### Issue disposition
 
@@ -367,12 +381,19 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - checked with `wiki:lint`
   - pushed only after explicit builder approval, because wiki pushes are live and public
 
-  This applies first to the items in [Wiki Discrepancies to Log](#wiki-discrepancies-to-log). A conflict between a builder-cited AWS fact and the constitution is resolved by amendment under FR-002, not by a wiki edit.
+  This applies first to the items in [Wiki Discrepancies to Log](#wiki-discrepancies-to-log), in two batches (clarified 2026-10-04):
+  - **Before `/speckit.plan`**: the items verified against code (D3, D8, D9).
+  - **During plan research**: the builder-cited AWS facts (D1, D2, D5, D6, D7, D10, D11), each pushed only after FR-007 verifies it against AWS documentation.
+
+  A conflict between a builder-cited AWS fact and the constitution is resolved by amendment under FR-002, not by a wiki edit.
 
 #### Sign-in and access (builder decisions, 2026-10-03)
 
 - **FR-041**: **Sign-in is required.** Every spend-bearing action (a model, voice, runtime or tool invocation) MUST require a signed-in, allowlisted identity, and no signed-out path to any of them may exist. The Cognito Identity Pool's unauthenticated access MUST be removed. Today it is enabled (`packages/infra/lib/cognito-stack.ts:20`), with an unauthenticated role (`:32`) attached at `:65`.
-- **FR-042**: **Invite-only allowlist.** Access MUST require the signed-in, provider-verified email to be on an allowlist the builder maintains. A person who completes sign-in at their provider but is not on the allowlist MUST be turned away before any spend-bearing action. Cognito's pre sign-up trigger runs on a user's first federated sign-in and can deny the user (AWS documentation "Pre sign-up Lambda trigger", verified by the builder on 2026-10-03). Because it runs at first sign-in, it cannot revoke access on its own. Removing an email from the allowlist MUST revoke that person's access, not only block their first sign-up. Which mechanism enforces revocation, and how soon it takes effect, are decided at plan under Q9; this spec sets no revocation time.
+- **FR-042**: **Invite-only allowlist.** Access MUST require the signed-in, provider-verified email to be on an allowlist the builder maintains. A person who completes sign-in at their provider but is not on the allowlist MUST be turned away before any spend-bearing action. Cognito's pre sign-up trigger runs on a user's first federated sign-in and can deny the user (AWS documentation "Pre sign-up Lambda trigger", verified by the builder on 2026-10-03). Because it runs at first sign-in, it cannot revoke access on its own. Removing an email from the allowlist MUST revoke that person's access, not only block their first sign-up (clarified 2026-10-04):
+  - The server MUST check the allowlist whenever it opens a session (FR-011), and refuse to open one for an email no longer listed.
+  - A session already open when the email is removed MAY continue until it ends, which spec 001's 30-minute session cap (spec 001 FR-010) bounds. That cap is the worst-case revocation time.
+  - Which mechanism enforces the check is decided at plan under Q9.
 - **FR-043**: **Verified emails only, and a denial that reveals nothing.** Allowlist matching MUST use only emails the provider marks as verified. A sign-in whose email claim is unverified MUST be denied, even if it matches an entry. Microsoft's `email` claim may not be verified, which would let someone spoof an invited email (unverified; verify at plan, and decide under Q9 which Microsoft claim to trust). The denied-access message MUST NOT reveal whether a given email is on the allowlist, or who is.
 - **FR-044**: **Providers.** Sign-in MUST offer Google, Microsoft (personal accounts) and Login with Amazon (builder, 2026-10-03). Google and Amazon are Cognito built-in social providers. Microsoft is configured as a generic OIDC provider with a fixed tenant issuer. Cognito's issuer validation likely rejects the multi-tenant "common" endpoint, and personal accounts likely need the consumer tenant's issuer; both are unverified, so verify at plan.
 - **FR-045**: **Fee-free providers only; Sign in with Apple excluded** (builder, 2026-10-03).
@@ -409,7 +430,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - the technology table's Auth row, "Amazon Cognito Identity Pool (guest/unauthenticated)" (`:229`)
   - P2's example of a hard stop, "Lambda disables Cognito guest role" (`:67-68`), which names the role being removed. This is an editorial update to the example only; P2's rule is unchanged.
 
-  This is a MINOR bump, because the principle is materially expanded and the stack changes. It lands in its own pull request before implementation, together with the review's other amendments.
+  This is a MINOR bump (v1.4.0 → v1.5.0), because the principle is materially expanded and the stack changes. It lands in its own pull request off `main` and merges **before `/speckit.plan`**, so the plan's constitution check runs against the amended text (clarified 2026-10-04). The review's other amendments (US6 scenario 4) each get their own pull request once their question is decided.
 - **FR-056**: **Spec 001 supersession.** For access, this spec supersedes:
   - spec 001's 2026-04-20 clarification, which removed the shared-password gate in favor of the unlisted URL, rate limits and the hard stop (`specs/001-max-height-ai-character/spec.md:42`)
   - spec 001's guest-identified Visitor entity (`:289`) and its guest-identity privacy disclosure (`:302`)
@@ -424,8 +445,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **Wiki Claim Verification Record**: The FR-039 collection of wiki claims the review relies on. Each entry holds the claim, its owning page, a Verification Citation, the date checked, and a status of *Verified*, *Refuted* or *Unverified*. Refuted claims and gaps link to their `Log` entry and owning-page correction (FR-040).
 - **Spike**: A bounded experiment (S0–S3) with an objective, a cost estimate, an approval record, and its result. It feeds one or more Decision Records.
 - **Spend Signal**: A measured or projected spend state that drives behavior. Kinds: alert tier, soft-degrade, hard stop, in-path circuit breaker. Each records its source (gross usage, in-path tally), threshold source (constitution or spec 001), action, and recovery.
-- **Invited Friend**: A person on the allowlist who has signed in. Identified by the verified identity in their sign-in token (the JWT `sub`, or the claim decided under Q5), from which session caps, rate-limit counters and the memory namespace are derived. The identity is never supplied by the client. For access, it replaces spec 001's guest-identified Visitor (FR-056).
-- **Allowlist**: The builder-maintained list of invited emails. Each entry holds a provider-verified email and, as the plan decides, a provider identity (FR-046). Adding an entry grants access; removing one revokes it within the plan-defined time (FR-042).
+- **Invited Friend**: A person on the allowlist who has signed in. Identified by the verified identity in their sign-in token (the JWT `sub`, or the claim decided under Q5), from which rate-limit counters, the one-session-at-a-time rule and the memory namespace are derived. Session caps apply to the server-counted sessions that identity opens (FR-011). The identity is never supplied by the client. For access, it replaces spec 001's guest-identified Visitor (FR-056).
+- **Allowlist**: The builder-maintained list of invited emails. Each entry holds a provider-verified email and, as the plan decides, a provider identity (FR-046). Adding an entry grants access; removing one revokes it no later than the person's next session start (FR-042).
 - **Deployment Environment**: The account and its plan, the pinned Region, model access and quotas, the deploy identity, bootstrap state and cost-allocation tag status that a deployment depends on, plus the custom subdomain with its certificate and DNS records, and the third-party sign-in app registrations.
 - **Issue Disposition**: The status of each issue #42–#61 (done, prerequisite, in scope, deferred, out of scope), with the decision or resolution comment that closes it.
 
@@ -448,7 +469,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **SC-013**: Every wiki claim that informs a recorded decision appears in the verification record with status *Verified* or *Refuted*, and none with *Unverified*. Every item in [Wiki Discrepancies to Log](#wiki-discrepancies-to-log), and every discrepancy found later, has a `Log` entry and an owning-page correction pushed with builder approval.
 - **SC-014**: In tests, an account that completes provider sign-in but is not on the allowlist, or presents an unverified email, reaches zero spend-bearing actions: no model, voice, runtime or tool invocation is attributable to it.
 - **SC-015**: An allowlisted friend can sign in with each adopted provider and hold a conversation.
-- **SC-016**: After the builder removes an email from the allowlist, that person makes zero spend-bearing actions once the plan-defined revocation time has passed, including in a session open at the time of removal.
+- **SC-016**: After the builder removes an email from the allowlist, that person opens zero new sessions, and makes zero spend-bearing actions once any session open at the time of removal has ended (at most spec 001's 30-minute session cap later).
 - **SC-017**: An audit of the deployment finds no signed-out path to any spend-bearing action.
 - **SC-018**: Every site, sign-in and callback URL in the deployment is served over HTTPS, and a plain-HTTP request is redirected or refused.
 - **SC-019**: The first deployment serves invited friends for one month before the Free plan ends (builder, 2026-10-03: "operationalize it ideally for a month so I can see the cost"). That month's gross spend before credits is recorded by service and compared with the FR-024 projection and with an AWS Pricing Calculator estimate of the as-built infrastructure (see Assumptions). The comparison is recorded with the Q7 cost-model decision.
@@ -473,7 +494,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - The calculator renders in the browser, like the pricing pages, so a human builds the estimate and cites it.
 - **Region** defaults to `us-west-2`, the Region `docs/infra-plan.md:58-60` names. That document's claim that it is one of five AgentCore Runtime V2 Regions is unverified (W24), and so is Nova 2 Lite's in-Region availability there (Q0).
 - **Message length** is not assumed. FR-036 makes the shared limit a planning decision, because the contract (2,000 characters) and the server (500) disagree (W7).
-- **Session expiry**: the runtime idle timeout is the 1800 seconds decided on Decision-AgentCore-Runtime-V2 and Guide-Deployment, which matches spec 001's 30-minute session cap. The wiki's claim that the service default is shorter is unverified (W25). In-character behavior on mid-conversation expiry is defined in planning and is an expected `/speckit.clarify` topic.
+- **Session expiry**: the runtime idle timeout is the 1800 seconds decided on Decision-AgentCore-Runtime-V2 and Guide-Deployment, which matches spec 001's 30-minute session cap. The wiki's claim that the service default is shorter is unverified (W25). Because the idle timeout equals the cap, going idle cannot end a session early. A session cut off by a fault recovers as FR-037 states (clarified 2026-10-04).
 - **Text-in first deployment**: speech input exists but is not wired into the app; only `TextInput` renders (`App.tsx:8,357`; W19). Wiring it is UI work beyond FR-036, so the first deployment takes typed input only, and voice output stays in scope.
 - **Operator**: the builder is the sole operator, the email recipient for every alert, and maintains the allowlist manually.
 - **Invited emails**: friends sign in with the email address the builder invited (FR-042).
@@ -496,9 +517,9 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - public or self-service registration, and any audience beyond invited friends (the builder will consider scaling later if friends like it)
 - **Dependencies**:
   - Plan 1 (#56) merges before `/speckit.plan`; #61 is folded into Q6 and does not gate planning (FR-001)
-  - constitution amendments merge before dependent implementation (FR-002)
+  - the sign-in constitution amendment (FR-055) merges before `/speckit.plan`; the review's other amendments merge before dependent implementation (FR-002)
   - spikes run only with approval (FR-003)
-  - wiki pushes, including the discrepancy entries below, happen only with builder approval (FR-040)
+  - wiki pushes, including the discrepancy entries below, happen only with builder approval: the code-verified items before `/speckit.plan`, the AWS-fact items during plan research (FR-040)
   - third-party sign-in app registrations and the GoDaddy DNS steps complete before the first deploy (FR-033, FR-054)
 
 ## Wiki Claims Relied On
@@ -520,9 +541,9 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | W5 | The browser hook neither presigns nor uses Cognito, though connect requires IAM | Component-WebSocket-Transport, Contract-WebSocket-API | Verified | `hooks/useWebSocket.ts:75`; `services/cognitoAuth.ts:76` (never called); `agent-stack.ts:62` |
 | W6 | Server and client payload fields disagree (`sessionId`/`agentCoreSessionId`, `state`/`newState`, `agent_turn_complete`) | Component-WebSocket-Transport | Verified | `websocket-handler.ts:115,121,128`; `useWebSocket.ts:41,56` |
 | W7 | Message length: the contract and client allow 2,000 characters; the server allows 500 | Contract-WebSocket-API | Verified | `specs/001-max-height-ai-character/contracts/websocket-api.md:65,209`; `components/TextInput.tsx:10`; `websocket-handler.ts:7,97` |
-| W8 | The hard stop deletes a literal policy name, treats a missing policy as success, and touches only the guest role (#61) | Component-Infra-Stacks, Gotchas | Verified in code; synthesized hash-suffixed name unverified here (no synth run) | `cognito-stack.ts:71`; `budget-stack.ts:40-47,64-66` |
-| W9 | Budget notifications are at 50%, 80% and 100% of a $10 monthly amount | Component-Infra-Stacks | Verified | `budget-stack.ts:79,88,97,108` |
-| W10 | The $5/$8 alarms and $10 hard stop are limits a caller cannot step around | Concept-Budget-Ceiling | **Conflict (D3)** | `budget-stack.ts:20-22,71,91,100,111`; Plan 1 F1–F3 |
+| W8 | The hard stop deletes a literal policy name, treats a missing policy as success, and touches only the guest role (#61) | Component-Infra-Stacks, Gotchas | Verified in code; synthesized hash-suffixed name unverified here (no synth run) | `cognito-stack.ts:71`; `budget-stack.ts:51-58,68-69` (lines as of `4d5a035`) |
+| W9 | Budget notifications are at 50%, 80% and 100% of a $10 monthly amount | Component-Infra-Stacks | Verified | `budget-stack.ts:114,123,132,143` |
+| W10 | The $5/$8 alarms and $10 hard stop are limits a caller cannot step around | Concept-Budget-Ceiling | **Conflict (D3)**; the alarm half was fixed by #62 | `budget-stack.ts:51-58,143-146`; #61 |
 | W11 | Prompt caching is unconfigured; the system prompt (~2,990 tokens) is below Haiku 4.5's 4,096-token checkpoint minimum | Concept-Budget-Ceiling, Decision-LLM-Model-Selection, Source-Strands-Harness-SDK-Docs | No cache config: Verified. Token count and minimum: Unverified (S2) | `index.ts:96-104` has no cache option; `personality/systemPrompt.ts` is 11,171 bytes, consistent with the wiki's character count |
 | W12 | The runtime uses the global Haiku 4.5 cross-Region profile with a 250-token reply cap | Component-Agent-Runtime, Decision-LLM-Model-Selection | Verified | `index.ts:96-97` |
 | W13 | The live handler performs no personality post-processing or stutter injection (#42) | Concept-Personality-Gate, Source-Strands-Harness-SDK-Docs | Verified | `index.ts` has no reference to either function |
@@ -552,14 +573,14 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 
 ## Wiki Discrepancies to Log
 
-Found while writing this spec. **The wiki was not edited.** After builder approval, each item is appended to the wiki's `Log` and corrected or added on its owning page under FR-040, with a `Gotchas` row where it is a trap. Builder-cited AWS facts below are themselves re-verified under FR-007 before the wiki states them as fact.
+Found while writing this spec, against wiki clone `2bac2b4`. **This spec did not edit the wiki.** After builder approval, each item is appended to the wiki's `Log` and corrected or added on its owning page under FR-040, with a `Gotchas` row where it is a trap. FR-040 sets the timing: code-verified items before `/speckit.plan`, builder-cited AWS facts during plan research. Builder-cited AWS facts below are themselves re-verified under FR-007 before the wiki states them as fact. Rows D3 and D4 were re-checked on 2026-10-04 against wiki `abf3608`, after wiki commit `c6c193c` (Log 46) recorded the #62 fix.
 
 | # | Kind | Owning page (others affected) | Discrepancy | Evidence |
 | -- | ---- | ----------------------------- | ----------- | -------- |
 | D1 | Gap | Decision-LLM-Model-Selection (Component-Agent-Runtime, Decision-AgentCore-Runtime-V2, Source-Amazon-Nova-Lite, Gotchas) | No page says the AWS Free plan does not support global or geographic cross-Region inference. Every page assumes the global Haiku 4.5 profile the code uses (`index.ts:96`) is invocable. | AWS "Supported AWS services for Sign up for AWS (new)" (builder-cited) |
 | D2 | Gap | Source-Amazon-Nova-Lite (Decision-LLM-Model-Selection) | Nova 2 Lite's in-Region model ID `amazon.nova-2-lite-v1:0` on `bedrock-runtime` is absent; the page prices only global cross-Region inference. Also absent: Haiku 4.5 being in-Region only via the `bedrock-mantle` endpoint. | Nova 2 Lite and Haiku 4.5 model cards (builder-cited) |
-| D3 | Conflict with code | Concept-Budget-Ceiling | The page says the $5/$8 alarms and $10 hard stop are limits a caller cannot step around. In code: no threshold emails anyone; the topic has no Budgets publish grant; all three thresholds publish to the topic the hard-stop Lambda subscribes to without filtering, so once delivery and #61 are fixed the $5 warning would also stop service (Plan 1's ordering trap); and the delete targets a name CDK does not synthesize (#61). | `budget-stack.ts:20-22,71,83-113`; Plan 1 F1–F3; W8 |
-| D4 | Incomplete | Component-Infra-Stacks | It records #61 and the guest-role-only scope, and says the 100% notification "is meant to" drive the hard stop. It omits that the 50% and 80% notifications reach the same topic (Plan 1 F1), the missing email subscribers (F2), and the missing publish grant (F3). Only `Log` entry 44 mentions the grant. | `budget-stack.ts:71,91,100,111` |
+| D3 | Conflict with code (narrowed 2026-10-04) | Concept-Budget-Ceiling | The page still says the $5/$8 alarms and the $10 hard stop are "the only limits that an uncooperative caller cannot step around" (`Concept-Budget-Ceiling.md:152-154` at `abf3608`), and it never mentions #61. In code, the hard stop deletes a policy name CDK does not synthesize and logs a missing policy as success, so as written it would do nothing (#61, W8). `c6c193c` already corrected the warning-routing and publish-grant half of this row (Plan 1 F1–F3). | `budget-stack.ts:51-58`; `cognito-stack.ts:71`; W8 |
+| D4 | **Resolved 2026-10-03** by wiki `c6c193c` (Log 46) | Component-Infra-Stacks | It was incomplete. It recorded #61 but omitted that the 50% and 80% notifications reached the hard-stop topic (Plan 1 F1), that no email subscriber existed (F2), and that the publish grant was missing (F3). The page now records all three and the fix (lines 65-86 at `abf3608`). No action. | `budget-stack.ts:86-89,104,143-146` |
 | D5 | Conflict with builder-cited fact | Source-Amazon-Polly (Decision-Polly-Voice, Concept-Budget-Ceiling, Decision-LLM-Model-Selection, Source-Amazon-Nova-Lite, Source-Nova-Sonic, Gotchas) | Pages treat Polly Neural's 12-month free tier as possibly applying "if the account is eligible". No page mentions the post-2025-07-15 Free plan, whose accounts receive "Always Free" offers and credits, not 12-month trials. | AWS Free plan documentation (builder-cited) |
 | D6 | Gap | Concept-Budget-Ceiling | AWS Budgets includes credits by default (`IncludeCredit`), so a $10 budget on a credit-funded account shows near-zero spend and never fires. The page says the account-wide budget and hard stop are "unaffected" by Marketplace billing; that holds only gross of credits. | AWS Budgets documentation (builder-cited) |
 | D7 | Gap | Concept-Budget-Ceiling | Budgets data refreshes up to three times a day with hours of lag, so the hard stop is a lagging backstop. No page says so or names an in-path breaker. | AWS Budgets documentation (builder-cited) |
