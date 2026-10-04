@@ -6,5 +6,5 @@
   "integration": "copilot",
   "preset": null,
   "script": "ps",
-  "speckit_version": "1.0.12"
+  "speckit_version": "1.1.0"
 }

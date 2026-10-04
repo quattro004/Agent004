@@ -230,6 +230,8 @@ artifacts after the `specify → clarify → plan → tasks` pipeline has run, a
   specify extension update
   ```
 
+- On Windows, use the `uv tool install` line above, never
+  `specify self upgrade` (wiki `Decision-Spec-Kit-Upgrade`).
 - Keep `.specify/scripts/powershell/*.ps1` pinned to **LF** in
   `.gitattributes`. Never relax it to quiet `integration status`; the
   advertised remedy, `--force`, overwrites real customizations.
