@@ -251,15 +251,23 @@ artifacts after the `specify → clarify → plan → tasks` pipeline has run, a
 
 `.mcp.json` is for AI coding assistants only; it is not part of the build.
 
-**There are two MCP config files and they must be edited together.** `.mcp.json`
-keys servers under `mcpServers`; `.vscode/mcp.json` uses VS Code's `servers`
-key. Adding a server to one and not the other silently leaves that client
-short. Parity is enforced by `packages/infra/test/mcp-config.test.ts`.
+**There are two repo-shared MCP config files and they must be edited together.**
+`.mcp.json` keys servers under `mcpServers`; `.vscode/mcp.json` uses VS Code's
+`servers` key. Adding a server to one and not the other silently leaves that
+client short. Parity is enforced by `packages/infra/test/mcp-config.test.ts`.
 
-**Every entry must be a plain HTTP endpoint.** Do not add `stdio` servers that
-shell out to `uvx`, `npx`, or similar — that makes a package manager a new
-onboarding prerequisite for every contributor. Prefer AWS-hosted servers with
-OAuth over local proxies holding credentials (constitution P11). See
+**Every entry in these two checked-in configs must be a plain HTTP endpoint.**
+Do not add `stdio` servers that shell out to `uvx`, `npx`, or similar — that
+makes a package manager a new onboarding prerequisite for every contributor.
+This restriction applies to repo-shared configuration; it does not prohibit
+personal or session-scoped stdio servers outside these files. Before using one,
+review its source, version and dependencies, exposed tools and side effects,
+data shared with the model provider, and possible service charges. Use
+temporary, least-privilege AWS credentials per constitution P11. Do not commit
+personal server entries or credentials. A team-shared stdio server would need
+an explicit onboarding and security decision before changing the configs or
+their test. Prefer AWS-hosted servers with OAuth over local proxies holding
+credentials (constitution P11). See
 `specs/001-max-height-ai-character/quickstart.md` § MCP servers.
 
 ## Git conventions

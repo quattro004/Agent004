@@ -32,10 +32,10 @@ describe('MCP server configuration', () => {
     expect(urls(vscode)).toEqual(urls(generic));
   });
 
-  // A `stdio` entry shelling out to uvx/npx makes a package manager a new
+  // A `stdio` entry in these repo-shared files makes its package manager a new
   // onboarding prerequisite for every contributor. See AGENTS.md § MCP
   // configuration and quickstart.md § MCP servers.
-  test('uses plain HTTP endpoints only', () => {
+  test('keeps repo-shared configs on plain HTTP endpoints', () => {
     const entries = [...Object.values(generic), ...Object.values(vscode)];
 
     expect(entries.length).toBeGreaterThan(0);
