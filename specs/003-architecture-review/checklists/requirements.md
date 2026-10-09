@@ -142,3 +142,20 @@
 
   The builder's decisions on 2026-10-03 resolved FR-015's former access-gating marker. The same day, dropping Apple removed the FR-045 Apple marker. Each remaining marker affects scope or cost and has no source-backed default. Resolve them with `/speckit.clarify` before `/speckit.plan`.
 - **Sequencing gate.** Plan 1 (#56) must merge before `/speckit.plan` (FR-001); #61 is folded into Q6 and does not gate planning. Satisfied 2026-10-03 by #62 (`fb9a6e2`).
+- **Iteration 7: refresh after three wiki ingests (2026-10-09).** Strands Bidi Agents GA, Nova 2.5 Sonic and the Strands Decider were ingested to the wiki (Log 52–53, `f03b8d9`). The builder approved these spec changes:
+  1. Nova 2.5 Sonic is named beside Nova 2 Sonic in US6 scenario 3, S3, the Q1 row and FR-027. The builder's "adopted only if cheaper" rule now applies to whichever Nova Sonic generation is compared, and 2.5 is compared only once its facts are verified.
+  2. FR-007 re-checks the lifecycle of every candidate model and which Bedrock lifecycle policy governs it, not just Haiku 4.5's. It also re-checks Nova 2.5 Sonic's model ID, context window, cross-Region support and feature support.
+  3. FR-027 records that Strands `BidiAgent` is Python-only, so a Strands-based Nova Sonic path needs a Python service beside the TypeScript agent.
+  4. Wiki claims: added the *Refuted* status (FR-039 already used it), revised W16, W29 and W31, and added W37 (Unverified) and W38 (Verified). W16's "latest release" is Refuted: 1.20.0 was published after the pin. That is recorded as D12 and corrected on the wiki under FR-040 (Log 54).
+  5. Source-Strands-Bidi-Agents is added to the input pages. The Decider changes nothing here: it bears on the personality gate (#42, Q3), which this spec may defer, and its open P5 question is recorded on the wiki's Concept-Personality-Gate.
+- **Iteration 7 hard-number audit.**
+  - "2026-09-07" and "45-day" are cited to AWS's [Bedrock model lifecycle](https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle.html) page, re-read 2026-10-09.
+  - "256K" is cited to the AWS announcement through Source-Nova-Sonic and marked Unverified (W37).
+  - 1.20.0's publish date (2026-10-08) is cited to `npm view @strands-agents/sdk time`.
+  - "43" `exports` subpaths is cited to `npm view @strands-agents/sdk@1.20.0 exports`.
+- **Iteration 7 result.** All items pass.
+  - Zero clarification markers remain.
+  - FR-001–FR-056 and SC-001–SC-019 are unchanged and sequential, with no dangling references.
+  - W1–W38 and D1–D12 are sequential.
+  - The banned-name scan finds no hits.
+  - The wiki was edited only for D12, under FR-040 (Log 54). It is pushed only with builder approval.

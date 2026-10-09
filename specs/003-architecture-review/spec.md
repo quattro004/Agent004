@@ -27,15 +27,16 @@ Wiki pages read as inputs:
 - **Contracts**: Contract-WebSocket-API, Contract-Message-Protocol, Contract-Polly-TTS
 - **Concepts**: Concept-Budget-Ceiling, Concept-Observability, Concept-Credential-Hygiene, Concept-Graceful-Degradation, Concept-Cloud-Only-Inference, Concept-Personality-Gate
 - **Decisions**: Decision-AgentCore-Runtime-V2, Decision-LLM-Model-Selection, Decision-Polly-Voice, Decision-Browser-TTS-Fallback, Decision-Strands-SDK
-- **Sources**: Source-AgentCore-Platform-2026, Source-AgentCore-Pricing, Source-AgentCore-Bidirectional-Streaming, Source-AgentCore-Web-Search-Tool, Source-Amazon-Nova-Lite, Source-Nova-Sonic, Source-Amazon-Polly, Source-Bedrock-Model-Lifecycle, Source-Infra-Plan, Source-Tasks-001, Source-Strands-Harness-SDK-Docs
+- **Sources**: Source-AgentCore-Platform-2026, Source-AgentCore-Pricing, Source-AgentCore-Bidirectional-Streaming, Source-AgentCore-Web-Search-Tool, Source-Amazon-Nova-Lite, Source-Nova-Sonic, Source-Amazon-Polly, Source-Bedrock-Model-Lifecycle, Source-Infra-Plan, Source-Tasks-001, Source-Strands-Harness-SDK-Docs, Source-Strands-Bidi-Agents
 - **Guides**: Guide-Deployment
 - **Context only** (spec 002 stays out of scope): Source-Spec-002, Feature-Volume-Knob
+- **Refreshed 2026-10-09** (wiki `f03b8d9`): Source-Nova-Sonic and Source-Bedrock-Model-Lifecycle gained Nova 2.5 Sonic, and Source-Strands-Bidi-Agents is new. W16, W29 and W31 were revised and W37 and W38 added to match.
 
 > **Reference convention.** A bare `FR-###` or `SC-###` means a requirement in this spec; spec 001 requirements are always written `spec 001 FR-###`.
 >
 > **Vocabulary note.** This feature is an architecture review plus a first deployment, so AWS service names, issue numbers and constitution principles are the domain vocabulary and appear deliberately. Every hard number in this spec is cited to the constitution, spec 001, or a named source document; none is invented here.
 >
-> **Wiki claims.** The wiki ranks second in authority, below the constitution, but under the builder's "trust but verify the wiki" rule every wiki statement is a **claim**, not a fact. A claim this spec relies on appears in [Wiki Claims Relied On](#wiki-claims-relied-on) with its status. A claim marked *Unverified* is not a requirement or an assumption; it is a fact to verify in plan or research (FR-039). Conflicts and gaps are listed in [Wiki Discrepancies to Log](#wiki-discrepancies-to-log). This spec did not edit the wiki.
+> **Wiki claims.** The wiki ranks second in authority, below the constitution, but under the builder's "trust but verify the wiki" rule every wiki statement is a **claim**, not a fact. A claim this spec relies on appears in [Wiki Claims Relied On](#wiki-claims-relied-on) with its status. A claim marked *Unverified* is not a requirement or an assumption; it is a fact to verify in plan or research (FR-039). Conflicts and gaps are listed in [Wiki Discrepancies to Log](#wiki-discrepancies-to-log). Apart from correcting W16 (D12), this spec did not edit the wiki.
 >
 > **Builder decisions (builder, 2026-10-03).** These are recorded as decided, not as open questions. They add outcome **O14**: only invited friends reach a spend-bearing action, over HTTPS, on the project's own subdomain.
 >
@@ -177,7 +178,7 @@ The builder can open one decision register and find, for each of Q0–Q9, the op
 
 1. **Given** any wiki claim used as evidence, **When** a reviewer follows its citation, **Then** it leads to code, an SDK type definition, AWS documentation, `gh` output, or a human-read pricing page. Disagreements with the wiki are appended to the wiki's `Log` page and corrected on the owning page.
 2. **Given** the cost model is re-derived (Q7), **When** prompt caching is evaluated, **Then** caching is either shown reachable by spike S2's measured prompt size against the verified per-checkpoint minimum, or struck from the cost model (O6, #49).
-3. **Given** the voice path is evaluated (Q1), **When** Polly, Nova 2 Sonic and browser TTS are compared, **Then** the comparison counts Polly's dual billing (speech plus speech marks) and excludes free-tier usage the account's plan does not receive (#47). Nova 2 Sonic is adopted only if cheaper at spec 001's usage assumptions (O5, #48).
+3. **Given** the voice path is evaluated (Q1), **When** Polly, Nova Sonic (Nova 2 Sonic or its October 2026 successor, Nova 2.5 Sonic) and browser TTS are compared, **Then** the comparison counts Polly's dual billing (speech plus speech marks) and excludes free-tier usage the account's plan does not receive (#47). A Nova Sonic generation is adopted only if cheaper at spec 001's usage assumptions (O5, #48).
 4. **Given** a decision conflicts with the constitution (IaC row "AWS CDK + AgentCore CLI", LLM row "Anthropic Haiku-class", P1 versus browser TTS, and the builder's sign-in decision versus P7, P11 and the Auth row per FR-055), **When** the conflict is resolved by amendment, **Then** the amendment lands in its own pull request with a MINOR version bump before dependent implementation tasks run (O7).
 
 ---
@@ -236,7 +237,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - **S0**: Free-plan model-access smoke test. Invoke the Haiku 4.5 global cross-Region profile (expected denial) and Nova 2 Lite's in-Region model ID (expected success).
   - **S1**: Golden-set character comparison of Haiku 4.5 and Nova 2 Lite. Runs only if the Guardrails gate passes.
   - **S2**: Measure real system-prompt plus tool-definition token usage from an invocation's reported usage, and verify the per-checkpoint cache minimum.
-  - **S3**: Measure Nova 2 Sonic's audio tokens per second and whether silence is billed. The current per-second figure is derived, not published.
+  - **S3**: Measure audio tokens per second and whether silence is billed, for the Nova Sonic generation Q1 would adopt. The current per-second figure is derived for Nova 2 Sonic, not published, and unchecked for Nova 2.5 Sonic (W31, W37).
 
 #### Review and decision register
 
@@ -245,7 +246,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   | Q  | Question | Issues / outcomes |
   | -- | -------- | ----------------- |
   | Q0 | Inference path. The plan is decided: the account stays on the Free plan (FR-028). Open: which models the Free plan can invoke in-Region in the pinned Region; this gates Q2 | O9 |
-  | Q1 | Voice: Polly Neural, Nova 2 Sonic, browser TTS, and conformance with P1 | #47, #48, O5 |
+  | Q1 | Voice: Polly Neural, Nova Sonic (Nova 2 Sonic or Nova 2.5 Sonic), browser TTS, and conformance with P1 | #47, #48, O5 |
   | Q2 | Text model: Haiku 4.5 or Nova 2 Lite | #50, O4 |
   | Q3 | Personality placement: Strands hooks or post-processing (may be recorded as deferred with #42) | #42 |
   | Q4 | Streaming and transport: Lambda proxy, direct Runtime call with inbound JWT auth (sign-in now supplies a JWT), or native AgentCore WebSocket | #45, O3, O12 |
@@ -258,8 +259,9 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-005**: The review MUST assess the current codebase and architecture against current AWS guidance: the Well-Architected Agentic AI Lens and Generative AI Lens, and Bedrock AgentCore Runtime, Memory, Identity and Observability. Findings are recorded in the decision register where they bear on Q0–Q9.
 - **FR-006**: **Trust but verify.** Every wiki claim the review relies on MUST be verified against code or a primary source (AWS documentation, SDK type definitions, `gh` output) before it informs a decision, and each verification MUST be cited. Any disagreement MUST be appended to the wiki's `Log` page and corrected on the owning page. FR-039 and FR-040 define the record and the correction workflow.
 - **FR-007**: These external facts MUST be re-verified at plan time:
-  - Haiku 4.5 lifecycle status
-  - latest Strands SDK version
+  - the lifecycle status of every candidate model (Haiku 4.5, Nova 2 Lite, Nova 2 Sonic, Nova 2.5 Sonic), and which Bedrock lifecycle policy governs it. Models launched on or after 2026-09-07 fall under the current policy, which allows a 45-day Legacy period as well as six months, so each model card's *Legacy period* is read rather than assumed ([Bedrock model lifecycle](https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle.html); Source-Bedrock-Model-Lifecycle; W27, W37)
+  - Nova 2.5 Sonic's model ID, context window, cross-Region inference support and Bedrock feature support, including Guardrails (W37)
+  - latest Strands SDK version (W16)
   - Nova 2 Lite Guardrails support
   - AgentCore Runtime V2 committed-baseline pricing status
   - Google Custom Search JSON API availability for existing customers
@@ -307,7 +309,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 - **FR-025**: Q0 MUST be decided first, using spike S0's evidence. The model inference path used by the deployment MUST be one the account's plan supports.
 - **FR-026**: The text model (Q2) MUST be chosen by comparing Haiku 4.5 and Nova 2 Lite on re-verified price, availability on the account's plan and pinned Region, Guardrails support, and S1 character fidelity. Following the builder's rule, the Nova model is adopted if it is cheaper and passes those gates.
-- **FR-027**: The voice path (Q1) MUST be chosen by comparing Polly Neural, Nova 2 Sonic and browser TTS at spec 001's usage assumptions. Nova 2 Sonic is adopted only if cheaper. Any departure from P1 (cloud-only TTS) requires an amendment under FR-002.
+- **FR-027**: The voice path (Q1) MUST be chosen by comparing Polly Neural, Nova Sonic and browser TTS at spec 001's usage assumptions. Nova Sonic means Nova 2 Sonic or its successor Nova 2.5 Sonic, and Nova 2.5 Sonic is compared only once its W37 facts are verified. A Nova Sonic generation is adopted only if cheaper. Strands `BidiAgent` is Python-only (W38), so a Strands-based Nova Sonic path would need a Python service beside the TypeScript agent; the comparison records that cost. Any departure from P1 (cloud-only TTS) requires an amendment under FR-002.
 - **FR-028**: **The account stays on the AWS Free plan** through the first deployment and its month of operation (builder, 2026-10-03). Upgrading to the Paid plan is out of scope; the builder expects to do it when the Free plan ends in December 2026. Consequences:
   - **Inference path.** The deployment MUST invoke its models through a path the Free plan supports. That means in-Region only, with no global or geographic cross-Region inference profile. The code's global Haiku 4.5 profile (`index.ts:96`, W12) therefore cannot ship as is. Q0 and spike S0 establish which models qualify in the pinned Region (FR-025, FR-031).
   - **No Organization.** Nothing in this feature may create or join an AWS Organization, including the deploy identity (FR-034), because joining one upgrades the account to Paid automatically (builder-cited; re-verified under FR-007; D10).
@@ -524,9 +526,10 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 ## Wiki Claims Relied On
 
-The seed of the FR-039 verification record, checked on 2026-10-03 against the wiki clone at `2bac2b4`. Status meanings:
+The seed of the FR-039 verification record, checked on 2026-10-03 against the wiki clone at `2bac2b4`. W16, W29 and W31 were revised, and W37 and W38 added, on 2026-10-09 against wiki `f03b8d9`. Status meanings:
 
 - **Verified**: confirmed against the cited source.
+- **Refuted**: a primary source disagrees with the wiki; the correction is logged under FR-040 (see the D-number).
 - **Conflict**: the code or a builder-cited fact disagrees; see the D-number.
 - **Unverified**: verify in plan or research before relying on it.
 
@@ -549,7 +552,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | W13 | The live handler performs no personality post-processing or stutter injection (#42) | Concept-Personality-Gate, Source-Strands-Harness-SDK-Docs | Verified | `index.ts` has no reference to either function |
 | W14 | `reply.first_token` spans the whole invocation, not the first token (#45) | Component-Agent-Runtime, Concept-Observability | Verified | `index.ts:199,203,215` |
 | W15 | Disconnect cancels the invocation and tools receive the cancel signal | Component-Agent-Runtime, Source-Strands-Harness-SDK-Docs | Verified | `index.ts:61,72,83,188,204` |
-| W16 | Strands SDK is pinned at 1.19.0, which is the latest release | Source-Strands-Harness-SDK-Docs, Decision-Strands-SDK | Pin Verified; "latest" Unverified (FR-007) | `packages/agent/package.json:17` |
+| W16 | Strands SDK is pinned at 1.19.0, which is the latest release | Source-Strands-Harness-SDK-Docs, Decision-Strands-SDK | Pin Verified. "Latest" **Refuted** 2026-10-09 (D12): 1.20.0 was published 2026-10-08 | `packages/agent/package.json:17`; `npm view @strands-agents/sdk time` |
 | W17 | `aws-cdk-lib` has no typed runtime `platformVersion`, so an override is needed | Guide-Deployment, Decision-AgentCore-Runtime-V2 | Verified | infra resolves 2.270.0; `aws-bedrockagentcore/lib/bedrockagentcore.generated.d.ts` has 0 `platformVersion` matches |
 | W18 | The constitution names AgentCore CLI for agent deployment | Decision-AgentCore-Runtime-V2, Guide-Deployment, Source-Tasks-001 | Verified | `.specify/memory/constitution.md:233` |
 | W19 | Speech input is not wired into the app | Component-Speech-Input | Verified | `App.tsx:8,357` renders only `TextInput`; `components/MicButton.tsx` is imported nowhere |
@@ -562,18 +565,20 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | W26 | The runtime role needs `bedrock:ListAsyncInvokes` for warm-up; deploy must poll the runtime until ready and confirm `platformVersion` | Component-Agent-Runtime, Guide-Deployment | Call in code: Verified (`bedrock/warmup.ts`). IAM and deploy behavior: Unverified | AWS documentation, at plan time |
 | W27 | Haiku 4.5 is Active, and "EOL no sooner than" is a floor, not a date | Source-Bedrock-Model-Lifecycle, Decision-LLM-Model-Selection | Unverified (FR-007) | Model card and lifecycle page |
 | W28 | Claude bills through AWS Marketplace | Concept-Budget-Ceiling, Source-Amazon-Nova-Lite | Unverified; bears on the Free-plan Marketplace exclusion (FR-028, D11) | Billing data or AWS documentation |
-| W29 | Unit prices: Nova 2 Lite, Haiku 4.5 including cache rates, Nova 2 Sonic, Polly Neural (speech marks billed like speech), Runtime V2, Memory, web search | Source-Amazon-Nova-Lite, Decision-LLM-Model-Selection, Source-Nova-Sonic, Source-Amazon-Polly, Source-AgentCore-Pricing, Source-AgentCore-Web-Search-Tool | Unverified (FR-007; human-read) | Pricing pages |
+| W29 | Unit prices: Nova 2 Lite, Haiku 4.5 including cache rates, Nova 2 Sonic, Nova 2.5 Sonic (announced at Nova 2 Sonic's price), Polly Neural (speech marks billed like speech), Runtime V2, Memory, web search | Source-Amazon-Nova-Lite, Decision-LLM-Model-Selection, Source-Nova-Sonic, Source-Amazon-Polly, Source-AgentCore-Pricing, Source-AgentCore-Web-Search-Tool | Unverified (FR-007; human-read) | Pricing pages |
 | W30 | Polly Neural's 12-month free tier may apply if the account is eligible | Source-Amazon-Polly, Decision-Polly-Voice, Gotchas | **Conflict with builder-cited fact (D5)** | AWS Free plan documentation (builder-cited) |
-| W31 | Nova 2 Sonic: in-Region only, a per-connection time limit, no Guardrails, no visemes | Source-Nova-Sonic | Unverified (S3, FR-007) | Model card |
+| W31 | Nova 2 Sonic: in-Region only, a per-connection time limit, no Guardrails, no visemes. AWS says Nova 2.5 Sonic keeps "the same API surface, voices, and language support" | Source-Nova-Sonic | Unverified (S3, FR-007) | Model card; Nova 2.5 Sonic service card |
 | W32 | Nova 2 Lite Guardrails support is unconfirmed | Source-Amazon-Nova-Lite | Unverified (FR-007; gates S1) | AWS documentation |
 | W33 | `CountTokens` is unsupported for cross-Region-only Claude models | Gotchas, Decision-AgentCore-Runtime-V2 | Unverified; S2 uses invocation-reported usage regardless | AWS documentation |
 | W34 | Strands caching `strategy: 'auto'` skips application inference profile ARNs; native invocation limits reset per call | Source-Strands-Harness-SDK-Docs | Unverified (check the 1.19.0 `.d.ts` at plan time) | SDK type definitions |
 | W35 | AgentCore Memory and Strands session persistence are alternatives for the same job | Source-AgentCore-Platform-2026, Source-Strands-Harness-SDK-Docs | Unverified; open under Q8 for the later memory build (FR-014 defers memory) | AWS and SDK documentation |
 | W36 | AgentCore Runtime accepts browser OAuth over WebSocket | Source-AgentCore-Bidirectional-Streaming | Unverified (Q4) | AWS documentation |
+| W37 | Nova 2.5 Sonic: same Regions and price as Nova 2 Sonic, model ID `amazon.nova-2-5-sonic`, a 256K context window, and governed by the current lifecycle policy (Legacy period of six months or 45 days) | Source-Nova-Sonic, Source-Bedrock-Model-Lifecycle | Unverified (FR-007). No Bedrock model card existed on 2026-10-09; the ID appears only in Strands examples and the context window only in the announcement. The policy's 45-day period is Verified | Nova 2.5 Sonic model card, when published; [Bedrock model lifecycle](https://docs.aws.amazon.com/bedrock/latest/userguide/model-lifecycle.html) |
+| W38 | Strands `BidiAgent` is GA in Python only; the TypeScript SDK has no bidirectional agent | Source-Strands-Bidi-Agents, Decision-Strands-SDK | Verified 2026-10-09 | 1.19.0 `dist/**/*.d.ts` declares no Bidi type (the only "bidi" match is a comment in `mime.d.ts`); none of 1.20.0's 43 `exports` subpaths mentions bidi, realtime, voice or audio (`npm view @strands-agents/sdk@1.20.0 exports`) |
 
 ## Wiki Discrepancies to Log
 
-Found while writing this spec, against wiki clone `2bac2b4`. **This spec did not edit the wiki.** After builder approval, each item is appended to the wiki's `Log` and corrected or added on its owning page under FR-040, with a `Gotchas` row where it is a trap. FR-040 sets the timing: code-verified items before `/speckit.plan`, builder-cited AWS facts during plan research. Builder-cited AWS facts below are themselves re-verified under FR-007 before the wiki states them as fact. Rows D3 and D4 were re-checked on 2026-10-04 against wiki `abf3608`, after wiki commit `c6c193c` (Log 46) recorded the #62 fix.
+Found while writing this spec, against wiki clone `2bac2b4`. **This spec did not edit the wiki**, except to correct D12. After builder approval, each item is appended to the wiki's `Log` and corrected or added on its owning page under FR-040, with a `Gotchas` row where it is a trap. FR-040 sets the timing: code-verified items before `/speckit.plan`, builder-cited AWS facts during plan research. Builder-cited AWS facts below are themselves re-verified under FR-007 before the wiki states them as fact. Rows D3 and D4 were re-checked on 2026-10-04 against wiki `abf3608`, after wiki commit `c6c193c` (Log 46) recorded the #62 fix.
 
 | # | Kind | Owning page (others affected) | Discrepancy | Evidence |
 | -- | ---- | ----------------------------- | ----------- | -------- |
@@ -588,6 +593,7 @@ Found while writing this spec, against wiki clone `2bac2b4`. **This spec did not
 | D9 | Gap | Component-Infra-Stacks (Component-Audio-Chain, Gotchas) | The page notes a CSP but not its content. Its outbound-connection list (`frontend-stack.ts:24`) allows wildcard API Gateway and Cognito hosts only, while the browser calls Polly directly (`useAudio.ts:13`), so the deployed voice path would be blocked. To confirm on deploy. | `frontend-stack.ts:24`; `hooks/useAudio.ts:13` |
 | D10 | Gap | Concept-Credential-Hygiene | The page says creating an Organization on the free plan conflicts with the budget ceiling. The constitution says it expires remaining credits (`constitution.md:27-28`). The builder-cited fact is that joining Organizations upgrades the account to the Paid plan automatically. The mechanism is missing, and whether credits survive the upgrade is unverified; if AWS contradicts the constitution, that is an FR-002 amendment, not a wiki edit. | `.specify/memory/constitution.md:27-28,185`; AWS Free plan documentation (builder-cited) |
 | D11 | Gap | Concept-Budget-Ceiling (or a new source page, proposed to the builder) | No page records the Free plan's lifecycle (it ends after 6 months or when credits run out, then the account closes unless upgraded within 90 days) or its exclusion of certain charge-incurring Marketplace offers, which may bear on Claude (W28). | AWS Free plan documentation (builder-cited) |
+| D12 | **Refuted; corrected 2026-10-09** in wiki Log 54 | Source-Strands-Harness-SDK-Docs | It said 1.19.0 "is still the latest release", but 1.20.0 was published on 2026-10-08 (W16). Found by this spec's own verification record, after the original D1–D11 pass. The page now dates both releases, and the pin is unchanged. | `npm view @strands-agents/sdk time`; `packages/agent/package.json:17` |
 
 Not discrepancies, checked and recorded here so they are not re-investigated:
 
