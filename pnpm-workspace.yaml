@@ -31,3 +31,6 @@ allowBuilds:
 # override can never resolve below the package's own declared dependency.
 overrides:
   zod: ^4.6.1
+  # Jest's coverage loader only calls js-yaml.load, which remains supported
+  # in v4. Its ^3 dependency pulls argparse 1 and unpatched sprintf-js.
+  '@istanbuljs/load-nyc-config>js-yaml': 4.3.2

@@ -32,6 +32,7 @@ Wiki pages read as inputs:
 - **Context only** (spec 002 stays out of scope): Source-Spec-002, Feature-Volume-Knob
 - **Refreshed 2026-10-09** (wiki `f03b8d9`): Source-Nova-Sonic and Source-Bedrock-Model-Lifecycle gained Nova 2.5 Sonic, and Source-Strands-Bidi-Agents is new. W16, W29 and W31 were revised and W37 and W38 added to match.
 - **Pre-plan corrections 2026-10-11** (wiki `78d29ac`, Log 56): D3, D8 and D9 were checked against code and corrected with builder approval. AWS-fact discrepancies remain for plan research (FR-007, FR-040).
+- **Planning gate cleared 2026-10-11**: Constitution v1.5.0 merged in #68 (`1727039`) and is now on this branch; the approved wiki reconciliation is `6a0407f` (Log 59). FR-055 is satisfied before `/speckit.plan`. The v1.4.0 references below record the original inputs and the text the amendment replaced, not current policy.
 
 > **Reference convention.** A bare `FR-###` or `SC-###` means a requirement in this spec; spec 001 requirements are always written `spec 001 FR-###`.
 >
@@ -434,6 +435,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - P2's example of a hard stop, "Lambda disables Cognito guest role" (`:67-68`), which names the role being removed. This is an editorial update to the example only; P2's rule is unchanged.
 
   This is a MINOR bump (v1.4.0 → v1.5.0), because the principle is materially expanded and the stack changes. It lands in its own pull request off `main` and merges **before `/speckit.plan`**, so the plan's constitution check runs against the amended text (clarified 2026-10-04). The review's other amendments (US6 scenario 4) each get their own pull request once their question is decided.
+
+  **Satisfied 2026-10-11:** #68 merged (`1727039`). The old text above is the amendment rationale; the current constitution on this branch is v1.5.0. No sign-in infrastructure has shipped.
 - **FR-056**: **Spec 001 supersession.** For access, this spec supersedes:
   - spec 001's 2026-04-20 clarification, which removed the shared-password gate in favor of the unlisted URL, rate limits and the hard stop (`specs/001-max-height-ai-character/spec.md:42`)
   - spec 001's guest-identified Visitor entity (`:289`) and its guest-identity privacy disclosure (`:302`)
@@ -625,3 +628,11 @@ These are not updated:
 - Source-Initial-Plan and Source-Infra-Plan, which summarize point-in-time documents.
 
 Pages that use "guest" only as a word for the person talking to Max (Component-Agent-Runtime:137, Gotchas:124, Source-Strands-Harness-Docs, Concept-Budget-Ceiling:190) need at most a terminology refresh.
+
+**Governance sync 2026-10-11:** Wiki `6a0407f` (Log 59) updated the
+constitution and its P2/P7/P11 concept pages. The infrastructure and transport
+pages still describe the as-built guest code, with the new access requirement
+marked separately; the WebSocket contract labels spec 001's guest auth as
+superseded. The table records the original 2026-10-03 discovery, not a claim
+that every implementation follow-up is complete. The access Decision page and
+remaining as-built updates wait for implementation and FR-056 close-out.
