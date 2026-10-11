@@ -126,16 +126,20 @@ tells the story, with dates and worked examples.
   Use an `overrides:` entry in `pnpm-workspace.yaml` (pnpm 11 reads them nowhere
   else). Two vulnerable major lines need a selector override per line; a
   convergence override (`"pkg@": <exact version>`) takes one exact version.
-- **An override is a one-time nudge.** Once the lockfile holds the patch, remove
-  it in the same PR or the next one, and verify no resolved version changes and
-  `pnpm audit` stays clean. Keep one only while a parent pins an exact vulnerable
-  version.
+- **An override is normally a one-time nudge.** Once the lockfile holds the
+  patch, remove it in the same PR or the next one, and verify no resolved
+  version changes and `pnpm audit` stays clean. Keep one only while a parent
+  still requires the vulnerable line (an exact pin or an unpatched major).
+  A cross-major override must be scoped to that parent and its API
+  compatibility verified with affected behavior tests.
 - **No patch? Ask whether a fresh install would even have the package.** A
   lockfile can keep an optional peer that fresh resolution never adds. Probe
   with `pnpm add <parent>@<version> --lockfile-only` in an empty directory. A
   `-` override does not remove such a peer, and remove/re-add re-resolves the
   parent's whole subtree. Prune the unreachable entries instead, and prove the
-  result with `pnpm install --frozen-lockfile` in a clean `git worktree`.
+  result with `pnpm install --frozen-lockfile` in a clean `git worktree`. If
+  the dependency is required, check whether its parent uses only APIs that
+  remain compatible with a maintained major before overriding that edge.
 - **Dependabot PRs arriving do not prove security updates are on** — that half
   is a repo setting, not `dependabot.yml`. Check it rather than inferring it:
 
