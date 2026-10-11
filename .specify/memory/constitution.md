@@ -1,46 +1,43 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.3.0 → 1.4.0
-  Bump rationale : MINOR — P11 materially expanded: the
-                   mandated *mechanism* for local temporary
-                   credentials (IAM Identity Center / SSO) is
-                   relaxed to a preference-ordered list. The
-                   underlying requirement — temporary,
-                   least-privilege credentials with no
-                   long-lived AKIA keys on disk — is unchanged
-                   and now applies explicitly to build-time
-                   generation identities.
+  Version change : 1.4.0 → 1.5.0
+  Bump rationale : MINOR — P7 replaces guest access with
+                   invite-only federated sign-in and a verified
+                   email allowlist. P11 ties spend-bearing
+                   runtime access to the signed-in identity;
+                   the Auth technology row adds a Cognito
+                   User Pool. P2's guest-role example is
+                   updated without changing its $10 rule.
 
-  Modified principles : P11 Credential & Secret Hygiene.
+  Modified principles : P2 Budget Ceiling (example only),
+                        P7 Friends-and-Family Audience Only,
+                        P11 Credential & Secret Hygiene.
 
   Added : None.
 
   Modified sections:
-    - Core Principles (P11 expanded).
-    - Quality Gates (gate #7 wording aligned with P11).
+    - Core Principles (P2, P7 and P11).
+    - Technology Stack (Auth row).
+    - Quality Gates (gate #7 aligned with P11).
 
-  Rationale for the P11 change:
-    IAM Identity Center can only issue AWS-account access
-    (permission sets) from an *organization* instance; an
-    account instance supports neither permission sets nor
-    account assignment. Creating an AWS Organization on the
-    free plan expires all remaining free-tier credits
-    immediately and forfeits eligibility for future credits.
-    Mandating SSO therefore carried a real, immediate cost in
-    direct conflict with P2 (Budget Ceiling), so the mechanism
-    is now chosen per-account rather than fixed.
+  Dependent artifacts reviewed:
+    - specs/003-architecture-review/spec.md FR-041–FR-056
+      defines the sign-in behavior and requires this amendment
+      before planning. It remains on its feature branch.
+    - specs/001-max-height-ai-character/ and its guest-auth
+      contracts are frozen, point-in-time artifacts; spec 003
+      FR-056 supersedes them for access.
+    - docs/infra-plan.md and docs/audio-plan.md describe the
+      old guest path and remain historical until the new
+      deployment design replaces it.
+    - The wiki describes current guest code until implementation
+      and must ingest this amendment after it merges.
 
-  Templates requiring updates:
-    ✅ quickstart.md — local credential guidance updated to
-       the org-free CloudShell path.
-    ✅ docs/audio-plan.md — Phase 3 credential setup rewritten.
-    ✅ contracts/polly-tts.md — runtime IAM scoped by
-       aws:RequestedRegion (unchanged, still compliant).
-
-  Follow-up TODOs : Review remaining IAM statements (Cognito
-    guest role in cognito-stack.ts) for region scoping.
-    Revisit SSO if this account ever joins an organization.
+  Follow-up TODOs : Decide signed-in credentials, revocation,
+    spend-stop mechanism and sign-in cost in spec 003 planning;
+    remove the unauthenticated infrastructure during
+    implementation, not in this governance-only amendment.
 -->
 
 # Max Height Constitution
@@ -64,8 +61,8 @@ The $10/month figure is a **rule**, not a target. Enforcement
 is automated and mandatory:
 
 - AWS Budgets email alarm MUST fire at $5 and $8.
-- Hard-stop mechanism MUST activate at $10 (e.g., Lambda
-  disables Cognito guest role).
+- Hard-stop mechanism MUST activate at $10 (e.g., revoking
+  access to all spend-bearing paths).
 - Per-session token cap MUST be enforced.
 - No feature ships without a documented cost model.
 
@@ -122,14 +119,19 @@ dependency hygiene is the substitute.
 
 Max Height is not a public product. Downstream implications:
 
-- Auth posture: Cognito guest identity + per-session caps, not
-  full user accounts.
+- Auth posture: invite-only federated sign-in with a
+  provider-verified email allowlist. Only signed-in, allowlisted
+  friends may reach spend-bearing actions. Session caps and
+  rate limits are bound to a server-verified identity.
 - Moderation posture: minimal, because the audience is trusted.
-- No public registration, no marketing pages, no analytics
-  beyond operational metrics.
+- Invited-provider sign-in is not public registration: no
+  self-service invitations or signed-out access to spend-bearing
+  actions. No marketing pages or analytics beyond operational
+  metrics.
 
-**Rationale**: Scoping the audience keeps auth simple,
-moderation light, and privacy obligations minimal.
+**Rationale**: Scoping access to invited friends bounds spend
+and keeps moderation light. Sign-in stores personal data, so
+privacy disclosures, retention and deletion are required.
 
 ### P8. Graceful Degradation Required
 
@@ -200,8 +202,12 @@ regressions that traces alone cannot catch.
   environment variables only. They MUST NOT be written to
   `~/.aws`, committed, or pasted into chat, issue, or PR
   transcripts.
-- Runtime access MUST use scoped temporary credentials
-  (Cognito guest), consistent with P7.
+- Spend-bearing runtime access MUST be tied to a verified,
+  allowlisted sign-in identity, consistent with P7. If a
+  browser needs AWS credentials, they MUST be temporary and
+  scoped to that identity's permitted actions; server-side
+  callers MUST use least-privilege IAM roles. Unauthenticated
+  guest credentials MUST NOT grant spend-bearing access.
 - IAM permissions MUST follow least privilege — scoped by
   action and, where supported, by `aws:RequestedRegion` and
   service conditions (e.g., `polly:Engine`, `polly:VoiceId`).
@@ -226,7 +232,7 @@ pinning it to one product would have cost real money here.
 | LLM | Amazon Bedrock — Anthropic Haiku-class (specific model version in plan) |
 | TTS | Amazon Polly Neural (direct SDK, streaming) |
 | STT | Web Speech API (browser built-in) |
-| Auth | Amazon Cognito Identity Pool (guest/unauthenticated) |
+| Auth | Amazon Cognito User Pool (invite-only federated sign-in); Identity Pool if authenticated AWS credentials are needed |
 | Memory | AgentCore Memory (30-day rolling window) |
 | Observability | AgentCore Observability (traces, metrics, logs) |
 | Hosting | S3 + CloudFront |
@@ -270,8 +276,10 @@ The following gates MUST pass before work proceeds past them:
    (`ASIA…`) credentials supplied via environment variables;
    no long-lived AWS keys committed or stored on disk. IAM
    statements MUST be least-privilege and region-scoped where
-   supported — including build-time generation identities —
-   per P11.
+   supported — including build-time generation identities.
+   Runtime access is tied to a verified, allowlisted sign-in
+   identity; no unauthenticated guest access to spend-bearing
+   actions, per P7 and P11.
 
 ## Governance
 
@@ -306,4 +314,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.4.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-08-15
+**Version**: 1.5.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-10-11
