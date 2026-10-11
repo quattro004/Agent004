@@ -159,3 +159,4 @@
   - W1–W38 and D1–D12 are sequential.
   - The banned-name scan finds no hits.
   - The wiki was edited only for D12, under FR-040 (Log 54). It is pushed only with builder approval.
+- **Iteration 8: pre-plan wiki corrections (2026-10-11).** D3, D8 and D9 were checked against code, corrected in wiki `78d29ac` (Log 56) with builder approval, and marked resolved in this spec. The underlying code gaps remain deployment work under FR-018, FR-022 and FR-036. Constitution PR #68 must still merge before planning under FR-055. No scope, acceptance criterion or hard number changed; all 16 items remain checked.
