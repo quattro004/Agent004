@@ -158,7 +158,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 ### Q8 — Platform, IaC, memory, harness, Guardrails, observability
 
 - **IaC**: CDK owns everything, including the runtime (`CfnRuntime`) and Memory (`CfnMemory`) as L1 constructs in 2.272.0 (`bedrockagentcore.generated.d.ts:6640` for CfnMemory, `:11006-11007` and `:11773` for runtime `platformVersion`). The AgentCore CLI is not used, which needs amendment A1 (W18). Because `platformVersion` is now typed, FR-035's override is replaced by the typed property and a test assertion pins it (P-04; **W17 refuted** for 2.272.0).
-- **Harness**: Strands `Agent` 1.20.0. Each counted session gets one `Agent` in the runtime microVM with the default `SlidingWindowConversationManager` (window 40; `agent.d.ts:113`, `agent.js:58`). Today a fresh `Agent` is built per request (`index.ts:90-108,179`), so there is no in-session history (**new finding N2**).
+- **Harness**: Strands `Agent` 1.20.0. Each counted session gets one `Agent` in the runtime microVM with the default `SlidingWindowConversationManager` (window 40; `agent.d.ts:113`, `agent.js:58`). Today a fresh `Agent` is built per request (`index.ts:90-108,182`), so there is no in-session history (**new finding N2**).
 - **In-session history**: runtime session state ("context is preserved between invocations to the same session", AgentCore Runtime sessions documentation). The idle timeout stays at 1800 s, against a service default of 15 minutes (**W25 verified**), and the maximum lifetime is 8 hours.
   - **Risk**: the Runtime V2 pricing page says "Idle memory is reclaimed automatically in Runtime v2 after 120 seconds", which may drop in-process state. Spike S4 tests it at first deploy.
   - **Fallback**: write turns as AgentCore Memory short-term events and rehydrate from them, at about $0.001 per 50-turn session.
@@ -386,7 +386,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | ID | Finding | Evidence | Covered by |
 | --- | --- | --- | --- |
 | N1 | `extractUsage` reads a nonexistent `result.usage`, so token caps and any breaker are blind to real usage | `index.ts:44-52`; `agent.d.ts:353-410`; `meter.d.ts:141,149` | Q5 and Q6 tasks |
-| N2 | The agent keeps no in-session history: a fresh `Agent` is built per request | `index.ts:90-108,179` | Q8 |
+| N2 | The agent keeps no in-session history: a fresh `Agent` is built per request | `index.ts:90-108,182` | Q8 |
 | N3 | `handleDeleteMemory` has no ownership check | `memory/memoryHandlers.ts` | Q8, FR-013 |
 | N4 | The Google Custom Search JSON API ends on 2027-01-01, so `webSearchTool` will break after the month of operation | `tools/webSearchTool.ts:40`; Google's deprecation notice | Not in scope; AgentCore Web Search ($7 per 1,000) is the candidate |
 | N5 | AgentCore Memory long-term records have no TTL, so the constitution's 30-day window needs a pruner | AgentCore Memory API documentation | Q8 |
