@@ -202,8 +202,9 @@ vi.mock('../src/stores/visitorStore', () => ({
 }));
 
 // Mock audio chain — hoist init mock so individual tests can assert on it
-const { mockAudioInit, mockAudioDispose } = vi.hoisted(() => ({
+const { mockAudioInit, mockAudioSetVolume, mockAudioDispose } = vi.hoisted(() => ({
   mockAudioInit: vi.fn().mockResolvedValue(undefined),
+  mockAudioSetVolume: vi.fn(),
   mockAudioDispose: vi.fn(),
 }));
 vi.mock('../src/audio/audioChain', () => ({
@@ -214,7 +215,7 @@ vi.mock('../src/audio/audioChain', () => ({
     getIsMouthOpen: vi.fn().mockReturnValue(false),
     triggerStutter: vi.fn(),
     triggerStaticBurst: vi.fn(),
-    setVolume: vi.fn(),
+    setVolume: mockAudioSetVolume,
     playStatic: vi.fn(),
     stopStatic: vi.fn(),
     dispose: mockAudioDispose,
@@ -254,6 +255,22 @@ describe('App — TV Power Lifecycle', () => {
     const { App } = await import('../src/App');
     render(<App />);
     expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
+  });
+
+  it('passes directional volume changes through to the audio chain', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).toHaveAttribute('data-is-on', 'true');
+    });
+
+    mockAudioSetVolume.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Volume down' }));
+    await vi.waitFor(() => {
+      expect(mockAudioSetVolume).toHaveBeenLastCalledWith(5 / 11);
+    });
   });
 
   it('should not render session state overlays when TV is off', async () => {

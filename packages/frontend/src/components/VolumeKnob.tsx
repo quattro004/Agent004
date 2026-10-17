@@ -1,3 +1,13 @@
+import type { CSSProperties, KeyboardEvent, WheelEvent } from 'react';
+import {
+  clampStep,
+  gainToStep,
+  stepToAngle,
+  stepToGain,
+  VOLUME_LED_COUNT,
+  VOLUME_MAX_STEP,
+} from '../config/volume';
+
 /**
  * VolumeKnob — vintage LED segment volume meter for the TV console panel.
  *
@@ -8,12 +18,9 @@
  * LED bar beneath as the actual volume readout.
  *
  * Internally the volume is a discrete integer step 0..11 (12 positions).
- * Click cycles 0 → 1 → … → 11 → 0. Gain emitted to the audio chain is
- * `step / 11`, so the external 0..1 contract is preserved.
+ * Gain emitted to the audio chain is `step / 11`, preserving the external
+ * 0..1 contract.
  */
-
-const MAX_STEP = 11;
-const LED_COUNT = 11;
 
 interface VolumeKnobProps {
   volume: number;
@@ -21,48 +28,91 @@ interface VolumeKnobProps {
   disabled: boolean;
 }
 
-function gainToStep(volume: number): number {
-  // Round to nearest integer step, clamped to [0, MAX_STEP].
-  const step = Math.round(volume * MAX_STEP);
-  if (step < 0) return 0;
-  if (step > MAX_STEP) return MAX_STEP;
-  return step;
-}
-
-function stepToGain(step: number): number {
-  return step === 0 ? 0 : step / MAX_STEP;
-}
-
 export function VolumeKnob({ volume, onVolumeChange, disabled }: VolumeKnobProps) {
   const step = gainToStep(volume);
 
-  function handleClick() {
+  function changeStep(nextStep: number) {
     if (disabled) return;
-    const nextStep = (step + 1) % (MAX_STEP + 1);
-    onVolumeChange(stepToGain(nextStep));
+    const clampedStep = clampStep(nextStep);
+    if (clampedStep === step) return;
+    onVolumeChange(stepToGain(clampedStep));
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (disabled) return;
+
+    switch (event.key) {
+      case 'ArrowUp':
+      case 'ArrowRight':
+        event.preventDefault();
+        changeStep(step + 1);
+        break;
+      case 'ArrowDown':
+      case 'ArrowLeft':
+        event.preventDefault();
+        changeStep(step - 1);
+        break;
+      case 'Home':
+        event.preventDefault();
+        changeStep(0);
+        break;
+      case 'End':
+        event.preventDefault();
+        changeStep(VOLUME_MAX_STEP);
+        break;
+    }
+  }
+
+  function handleWheel(event: WheelEvent<HTMLDivElement>) {
+    if (disabled || event.deltaY === 0) return;
+    // This fixed console does not need to cancel the browser's passive wheel event.
+    changeStep(step + (event.deltaY < 0 ? 1 : -1));
   }
 
   const valueText =
-    step === MAX_STEP ? `${MAX_STEP} of ${MAX_STEP} — one louder` : `${step} of ${MAX_STEP}`;
+    step === VOLUME_MAX_STEP
+      ? `${VOLUME_MAX_STEP} of ${VOLUME_MAX_STEP} — one louder`
+      : `${step} of ${VOLUME_MAX_STEP}`;
 
   return (
     <div className="volume-knob-wrapper">
-      <button
-        type="button"
+      <div
+        role="group"
         aria-label="Volume"
         aria-valuemin={0}
-        aria-valuemax={MAX_STEP}
+        aria-valuemax={VOLUME_MAX_STEP}
         aria-valuenow={step}
         aria-valuetext={valueText}
-        className="volume-knob"
-        onClick={handleClick}
-        disabled={disabled}
-      />
+        className={`volume-knob${disabled ? ' volume-knob--disabled' : ''}`}
+        tabIndex={disabled ? -1 : 0}
+        onKeyDown={handleKeyDown}
+        onWheel={handleWheel}
+      >
+        <div
+          className="volume-knob-indicator"
+          aria-hidden="true"
+          style={{ '--knob-angle': `${stepToAngle(step)}deg` } as CSSProperties}
+        />
+        <button
+          type="button"
+          aria-label="Volume down"
+          className="volume-knob-half volume-knob-half--down"
+          onClick={() => changeStep(step - 1)}
+          disabled={disabled}
+        />
+        <button
+          type="button"
+          aria-label="Volume up"
+          className="volume-knob-half volume-knob-half--up"
+          onClick={() => changeStep(step + 1)}
+          disabled={disabled}
+        />
+      </div>
       <div className="volume-led-bar" data-testid="volume-led-bar" aria-hidden="true">
-        {Array.from({ length: LED_COUNT }, (_, i) => {
+        {Array.from({ length: VOLUME_LED_COUNT }, (_, i) => {
           const ledStep = i + 1;
           const isLit = !disabled && ledStep <= step;
-          const isMax = ledStep === MAX_STEP;
+          const isMax = ledStep === VOLUME_MAX_STEP;
           const classes = ['volume-led'];
           if (isLit) classes.push('volume-led--lit');
           else classes.push('volume-led--dim');
