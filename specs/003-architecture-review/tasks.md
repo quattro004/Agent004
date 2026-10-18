@@ -33,13 +33,16 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Approvals and dependency changes that every later phase relies on.
+**Purpose**: Approvals, the cost gate, the lens assessment, the spec patches, and dependency changes that every later phase relies on.
 
 - [ ] T001 Record the gate-3 supply-chain review (constitution) for `@aws-sdk/client-bedrock-agentcore`, `@aws-sdk/client-polly`, `@aws-sdk/client-dynamodb` and `@aws-sdk/client-ssm` in research.md § Dependencies: latest stable version, publish date, maintainer, transitive count and `pnpm audit` result. Prefer latest stable over bleeding edge. Then add them with `pnpm --filter @max-height/agent add <pkg>` in `packages/agent/package.json` and commit `pnpm-lock.yaml`
 - [ ] T002 [P] Open amendment PR **A1** (IaC is CDK-only, MINOR bump) against `.specify/memory/constitution.md`, in its own PR per research § Amendments. Builder approval required
-- [ ] T003 [P] Open amendment PR **A4** (gate 2 golden set 50 → 65 cases, PATCH bump) against `.specify/memory/constitution.md`, in its own PR. It must merge **before** S1 runs (T100)
+- [ ] T003 [P] Open amendment PR **A4** (gate 2 golden set 50 → 65 cases, MINOR bump per P-14) against `.specify/memory/constitution.md`, in its own PR. It must merge **before** S1 runs (T100)
 - [ ] T004 [P] Write the cost estimate for spikes S0, S1, S2 and S4 (research § Spikes; FR-003) into research.md § Spikes, and record the builder's approval of each with a date before it runs. S3 is not run
 - [ ] T005 Confirm with the builder two open decisions, and record each answer in research.md: (a) the Google client secret lives in SSM `/max-height/google-client-secret` applied by `handlers/idp-secret.ts` rather than in Secrets Manager; (b) the `cdk bootstrap` `AdministratorAccess` default under P11 (research § R-deploy)
+- [ ] T005a Complete research.md § R-cost to satisfy the constitution's **gate 1**, which requires a cost estimate *before implementation begins*. The builder reads and dates every human-read price, and the Memory built-in extraction row (research § R-cost) is resolved to a figure rather than left "unknown". The projection must come out at or below $8 gross of credits, or carry a documented mitigation (FR-024, SC-002). The projection uses the most expensive S0-eligible candidate, so adopting a cheaper model in T096 can only improve it. The breaker values (F, `BREAKER_DEGRADE_MICRO_USD` and `BREAKER_TRIP_MICRO_USD`) are **not** set here; T117 computes them once the model is adopted. **This task blocks Phase 2**
+- [ ] T005b Assess the codebase and architecture against the Well-Architected Agentic AI Lens and Generative AI Lens, and the AgentCore Runtime, Memory, Identity and Observability guidance (FR-005), and record the result in research.md § R-lens. Cite each source as AWS documentation, and link every finding to the Q0–Q9 decision it bears on. If a finding would change a recorded decision, stop and raise it with the builder, then reconcile the artifacts with `/speckit.converge` rather than editing tasks in place
+- [ ] T103 [US6] Apply spec patches **P-01 to P-15** from research.md to `specs/003-architecture-review/spec.md`, one commit per patch, after builder approval. **This task blocks Phase 2**: Phases 2–9 build the patched behavior (memory un-deferred, Google-only sign-in, the SSE transport, strict session continuity, text-only soft-degrade), and spec.md is authoritative while the feature is being implemented (`AGENTS.md` § Source of truth)
 
 ---
 
@@ -64,7 +67,7 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 ### Data stack (data-model.md; memory-api.md § Resource)
 
-- [ ] T013 RED: create `packages/infra/test/data-stack.test.ts`. The DynamoDB control table has partition key `pk` (string), on-demand billing, TTL attribute `ttl`, and `RemovalPolicy.RETAIN`. A `CfnMemory` has semantic, summary and user-preference strategies whose namespaces are `/max-height/{sub}/facts`, `/max-height/{sub}/preferences` and `/max-height/{sub}/summaries/{sessionId}/`, and `eventExpiryDuration` of 7 days. Assert the outputs consumed by later stacks (table name and ARN, memory ID and ARN)
+- [ ] T013 RED: create `packages/infra/test/data-stack.test.ts`. The DynamoDB control table has partition key `pk` (string), **provisioned** billing with the read and write capacity recorded in research § R-cost (plan § Storage; data-model.md § Control table: provisioned capacity within the Always Free offer), TTL attribute `ttl`, and `RemovalPolicy.RETAIN`. Assert the capacity values, so a silent change to on-demand billing fails the test and the Always Free assumption cannot drift. A `CfnMemory` has semantic, summary and user-preference strategies whose namespaces are `/max-height/{sub}/facts`, `/max-height/{sub}/preferences` and `/max-height/{sub}/summaries/{sessionId}/`, and `eventExpiryDuration` of 7 days. Assert the outputs consumed by later stacks (table name and ARN, memory ID and ARN)
 - [ ] T014 Create `packages/infra/lib/data-stack.ts` (control table and `CfnMemory` only; the pruner is added in T089) and add it to `packages/infra/bin/app.ts` until T013 passes
 
 ### Agent: configuration, identity, control table, usage
@@ -224,7 +227,8 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 - [ ] T079 [P] [US3] Change `packages/frontend/src/components/SessionStateOverlay.tsx` until T072 passes
 - [ ] T080 [P] [US3] Change `packages/frontend/src/hooks/useGreeting.ts` until T073 passes
 - [ ] T081 [US3] Delete `packages/frontend/src/services/pollyTts.ts`, `src/services/browserTts.ts`, `tests/services/pollyTts.test.ts` and `tests/services/browserTts.test.ts`, and move `@aws-sdk/client-polly` from `dependencies` to `devDependencies` in `packages/frontend/package.json`, because `scripts/generate-greetings.ts` still uses it (deviation C4). The check is that the suite, typecheck and `typecheck:scripts` stay green
-- [ ] T082 [US3] Fill in the `BREAKER_DEGRADE_MICRO_USD`, `BREAKER_TRIP_MICRO_USD` and `PRICE_*` values in `packages/infra/lib/agent-stack.ts` from research § R-cost, after the builder has read and dated every human-read price (T117). Do not invent a number; if a price is unread, leave the deploy blocked
+
+> **T082 moved to Phase 10.** It sets the `BREAKER_*` and `PRICE_*` values, which depend on T117's model-specific figures, so it cannot complete in this phase. The breaker code (T077) is written and tested against configuration, not against hardcoded numbers.
 
 **Checkpoint**: Spend is capped in path (breaker), out of band (hard stop) and alerted (budget and alarms).
 
@@ -269,11 +273,11 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 **Independent Test**: S0 is recorded probe by probe, the S1 judge run passes (mean ≥ 2.0, 0 auto-fails), and `MODEL_ID` in the runtime configuration is the adopted model, pinned by `agent-stack.test.ts`.
 
 - [ ] T095 [US5] Run S0 probes S0-1 to S0-7 per s0-probe-matrix.md against `anthropic.claude-haiku-5-5` and `amazon.nova-lite-v1:0` in `us-west-2`, after the T004 approval. Record each probe's outcome, date and evidence in research.md § Spikes
-- [ ] T096 [US5] Decide Q2 from S0, and record the decision in research.md § Q2 with the evidence
-- [ ] T097 [US5] If Q2 adopts a non-Haiku model, open amendment PR **A2** (the LLM row) against `.specify/memory/constitution.md`; otherwise record "A2 not triggered" in research.md § Amendments
+- [ ] T096 [US5] From S0's results, **provisionally** adopt the cheapest eligible candidate at the T005a prices, and record the shortlist in research.md § Q2. Q2 does not close here: FR-026 makes S1 character fidelity an input to the choice, so the decision closes in T100 when the provisional candidate passes S1. If it fails, the next-cheapest eligible candidate becomes provisional and S1 runs again
+- [ ] T097 [US5] Once Q2 has closed (T100), if the adopted model is not Haiku-class, open amendment PR **A2** (the LLM row, MINOR) against `.specify/memory/constitution.md`; otherwise record "A2 not triggered" in research.md § Amendments. A2 must merge before T102 sets `MODEL_ID`
 - [ ] T098 [P] [US5] RED: create `packages/agent/tests/evaluations/s1-golden-set.test.ts`. The golden set has exactly 65 cases with the categories and counts in s1-golden-set.md. The judge script scores 0–3, flags auto-fails, and computes pass as mean ≥ 2.0 with 0 auto-fails
 - [ ] T099 [US5] Create the 65-case set in `packages/agent/src/evaluations/s1-golden-set.json` and the judge in `packages/agent/src/evaluations/s1-judge.ts`, updating `packages/agent/src/evaluations/personality-gate.ts` to use them, until T098 passes. A4 (T003) must be merged
-- [ ] T100 [US5] Run S1 against the adopted model after approval, and record the per-case scores, the mean, the auto-fail count and the date in research.md § Spikes. If it fails, return to T096 with the next candidate
+- [ ] T100 [US5] Run S1 against the provisional candidate after approval, and record the per-case scores, the mean, the auto-fail count and the date in research.md § Spikes. A pass **closes Q2**: record the decision and its evidence in research.md § Q2, then run T097. A failure returns to T096 with the next candidate
 - [ ] T101 [US5] Run S2 after approval: measure the system prompt and tool-schema token counts and whether the model's prompt-cache minimum is met. Record the result in research.md § Spikes and feed it to R-cost
 - [ ] T102 [US5] RED then GREEN: pin `MODEL_ID` to the adopted model in `packages/infra/test/agent-stack.test.ts`, then set it in `packages/infra/lib/agent-stack.ts`
 
@@ -287,7 +291,6 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 **Independent Test**: Every row in research.md § Decision register has a wiki `Decision-*` page or a recorded reason for not having one. Every in-scope issue has a resolution comment, and `pnpm run wiki:lint` passes.
 
-- [ ] T103 [US6] Apply spec patches P-01 to P-13 from research.md to `specs/003-architecture-review/spec.md`, one commit per patch, after builder approval
 - [ ] T104 [P] [US6] Add dated annotations to `specs/001-max-height-ai-character/research.md` § R0 and § R4 pointing at this spec's superseding decisions (FR-009). Do not rewrite the frozen text
 - [ ] T105 [P] [US6] Add a `C9` row to the deviations table of `specs/001-max-height-ai-character/tasks.md` recording that spec 003 supersedes the WebSocket transport, the Identity Pool, browser TTS and the budget-stack hard stop
 - [ ] T106 [US6] `pnpm run wiki:pull`, then write or refresh the wiki `Decision-*` pages for Q0–Q9 in `wiki/`, update the `Component-*` and `Contract-*` pages the decisions change, and update `Index`. Append to `Log`
@@ -321,7 +324,8 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 **Purpose**: Run [quickstart.md](./quickstart.md) end to end. Record every outcome in quickstart.md § Results, with no personal data.
 
 - [ ] T116 Run `pnpm run validate` on the commit to deploy; every RED test in quickstart § RED tests is green (prerequisite 11)
-- [ ] T117 Complete research.md § R-cost: the builder reads and dates every human-read price, including Memory extraction, and computes F and the breaker limits. The projection must be at or below $8 gross of credits (SC-002, gate 1). Then complete T082
+- [ ] T117 Re-run research.md § R-cost with the model Q2 adopted (T096, T100) and S2's measured token counts (T101), on the prices the builder dated in T005a. Re-read any price older than 30 days. Confirm the projection is still at or below $8 gross of credits (SC-002, gate 1), then compute F and the breaker limits `BREAKER_DEGRADE_MICRO_USD` ($8 − F) and `BREAKER_TRIP_MICRO_USD` ($10 − F)
+- [ ] T082 Fill in the `BREAKER_DEGRADE_MICRO_USD`, `BREAKER_TRIP_MICRO_USD` and `PRICE_*` values in `packages/infra/lib/agent-stack.ts` from research § R-cost, using T117's computed figures. Do not invent a number; if a price is unread, leave the deploy blocked (moved here from Phase 5, because it depends on T117)
 - [ ] T118 Record quickstart prerequisites 1–10 in quickstart.md § Results: the Free plan end date, model quotas, one-time admin setup, ARM64 build path, SSM parameters, Cognito prefix, Google OAuth client and the second account
 - [ ] T119 Deploy steps 1–2: `MaxHeight-Budget`, then activate the `project` cost-allocation tag (prerequisite 12)
 - [ ] T120 Deploy steps 3–5: `MaxHeight-Certificate` (add ACM's validation CNAME at GoDaddy), `MaxHeight-Data` and `MaxHeight-Cognito`
@@ -351,13 +355,18 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies. T003 (A4) must merge before T099–T100. T004 must be approved before any spike.
-- **Foundational (Phase 2)**: Depends on T001 (dependencies installed). It blocks every story.
+- **Setup (Phase 1)**: No dependencies. T003 (A4) must merge before T099–T100. T004 must be approved before any spike. **T005a (the gate 1 cost projection) and T103 (spec patches P-01 to P-15) both block Phase 2**: the constitution requires the cost estimate before implementation begins, and spec.md must agree with what Phases 2–9 build. T005b is recorded before Phase 2 so a lens finding can be raised before code depends on the decision it touches.
+- **Amendment gates (FR-002)**: an amendment merges before the tasks that depend on it.
+  - **A1** (IaC becomes CDK-only, T002) merges before **T024** and **T025**, which build the agent runtime with CDK alone. Until it does, the tech table still reads "AWS CDK + AgentCore CLI" (`constitution.md:237`) and those tasks would deviate from it.
+  - **A4** (T003) merges before **T099** and **T100**.
+  - **A2** (T097) is resolved, either merged or recorded as "not triggered", before **T102** pins `MODEL_ID`.
+  - **A3** (T110) waits on D10 and gates nothing.
+- **Foundational (Phase 2)**: Depends on T001 (dependencies installed), T005a and T103. It blocks every story.
 - **US1, US2, US3, US4 (Phases 3–6)**: Each depends on Phase 2. They touch shared files (`packages/agent/src/index.ts`, `packages/infra/lib/frontend-stack.ts`, `packages/frontend/src/App.tsx`), so run them in order when working alone: US1 → US2 → US3 → US4.
-- **US5 (Phase 7)**: Depends on T004 and T003 only. Its spike runs can proceed in parallel with Phases 2–6; T102 needs T025.
-- **US6 (Phase 8)**: T103–T105 and T109 can start at any time. T106–T108 should follow Phase 10 so the wiki records the as-built and verified state. T110 waits on D10.
+- **US5 (Phase 7)**: Depends on T004, T003 and T005a (the price baseline its candidate comparison uses). Its spike runs can proceed in parallel with Phases 2–6; T102 needs T025 and T097.
+- **US6 (Phase 8)**: T104–T105 and T109 can start at any time; T103 has moved to Phase 1. T106–T108 should follow Phase 10 so the wiki records the as-built and verified state. T110 waits on D10.
 - **US7 (Phase 9)**: Depends on US1 (T037, T039).
-- **Deploy (Phase 10)**: Depends on US1–US5 and T005. US7 is recommended but not required.
+- **Deploy (Phase 10)**: Depends on US1–US5 and T005. T117 precedes T082, and both precede the first spend-bearing deploy. US7 is recommended but not required.
 - **Polish (Phase 11)**: Depends on all desired stories.
 
 ### Within Each User Story

@@ -267,6 +267,16 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
   - Whether model-invocation costs carry the tag is **unverified** and not relied on. SC-019 groups spend by service, which needs no tag, and the account hosts only this project.
 - **Quotas (FR-033)**: before the first deploy, the builder reads the adopted model's Bedrock on-demand quotas for `us-west-2` in Service Quotas. The requests-per-minute and tokens-per-minute quotas are compared with spec 001's peak (60 messages per friend per hour × invited friends), and the result is recorded here.
 
+## R-lens — Well-Architected assessment (FR-005)
+
+FR-005 requires the codebase and architecture to be assessed against current AWS guidance: the Well-Architected Agentic AI Lens and Generative AI Lens, and the AgentCore Runtime, Memory, Identity and Observability guidance. Task T005b fills this table before Phase 2, citing each source the way the rest of this document does.
+
+A finding that only confirms a decision already recorded above is noted here and needs no further action. A finding that would **change** a Q0–Q9 decision stops the work: it goes to the builder, and the artifacts are reconciled with `/speckit.converge` rather than edited task by task.
+
+| Lens / guidance | Best practice | Current state (`file:line` or decision) | Bears on | Finding |
+| --- | --- | --- | --- | --- |
+| _(to be completed by T005b)_ | | | | |
+
 ## Spikes (FR-003): each needs a cost estimate and builder approval before it runs
 
 | Spike | Objective | Cost estimate | Approval |
@@ -372,6 +382,8 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | P-11 | FR-032 | The WebSocket gap bullets are superseded by the Q4 SSE transport |
 | P-12 | FR-018 | The hard-stop targets are the runtime execution role and the halt flag; there is no authenticated role, because the Identity Pool is removed |
 | P-13 | FR-026 | The text-model comparison adds Claude Haiku 5.5 (launched 2026-10-07) and Nova Lite v1 as candidates, alongside Haiku 4.5 and Nova 2 Lite |
+| P-14 | FR-002 | An amendment that changes a principle, a quality gate or a technology-table row is MINOR; correcting a factual claim in a rationale is PATCH. FR-002's blanket "MINOR version bump" is narrowed accordingly (A3 stays PATCH, A4 becomes MINOR) |
+| P-15 | US3 scenario 6 | Soft-degrade is text-only. Spec 001 FR-016's browser-TTS fallback is recorded as unmet rather than amended, because browser TTS would itself breach P1 (Q1) |
 
 ## Constitution amendments (FR-002): each in its own PR before the tasks that depend on it
 
@@ -380,7 +392,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | A1 | Tech table IaC row: "AWS CDK (infrastructure) + AgentCore CLI (agent deployment)" becomes CDK-only | MINOR | Builder decision (Q8) |
 | A2 | LLM row: "Anthropic Haiku-class" becomes the adopted class | MINOR | Only if Q2 adopts a non-Haiku model |
 | A3 | P11 rationale: an Organization "expires all remaining free-tier credits" is corrected to the verified mechanism (D10) | PATCH | Only once D10 is verified |
-| A4 | Gate 2: "The golden-set rubric (50 cases)" becomes 65 cases, the set the bible §9 grew to on 2026-04-19 (`3c8a5cb`) and `personality-gate.ts` encodes | PATCH | Before S1 is approved |
+| A4 | Gate 2: "The golden-set rubric (50 cases)" becomes 65 cases, the set the bible §9 grew to on 2026-04-19 (`3c8a5cb`) and `personality-gate.ts` encodes | MINOR | Before S1 is approved. MINOR, not PATCH: the case count changes what gate 2 checks, so the gate is materially expanded (P-14) |
 
 ## New findings (proposed issues; filed only with the builder's permission)
 
