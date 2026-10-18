@@ -24,7 +24,7 @@ Record each one in [§ Results](#results) before the first spend-bearing stack d
 | # | Prerequisite | How | Source |
 | --- | --- | --- | --- |
 | 1 | Free plan end date and remaining credits | Read them in the Billing console. V-17's month must end before the plan does. | FR-028, SC-019 |
-| 2 | Spikes run and the model adopted | S0 → Q2 decision → S1 pass → S2 measurement, each approved before it runs | research § Spikes, Q2; [s0-probe-matrix.md](./contracts/s0-probe-matrix.md) |
+| 2 | Spikes run and the model adopted | S0 → Q2 decision → S1 pass → S2 measurement, each approved before it runs | research § Spikes, Q2; [s0-probe-matrix.md](./contracts/s0-probe-matrix.md); [s1-golden-set.md](./contracts/s1-golden-set.md) |
 | 3 | Cost projection at or below $8, gross of credits | Every human-read price is read and dated, including the Memory extraction cost | research § R-cost; SC-002, gate 1 |
 | 4 | Model access and quotas | The adopted model's Service Quotas in `us-west-2`, compared with spec 001's peak | research § R-deploy, Quotas |
 | 5 | One-time administrator setup | In CloudShell, as an administrator, once: `cdk bootstrap` for `us-west-2` and `us-east-1`. Create the deploy user, its deploy policy and the operator policy ([§ Operator permissions](#operator-permissions)), and the SSM parameters (row 7). | research § R-deploy (the `AdministratorAccess` default awaits builder confirmation) |

@@ -89,14 +89,14 @@ Checked against constitution v1.5.0 (`.specify/memory/constitution.md`).
 | **P11** Credentials (`:179-224`) | Pass | Pass, pending builder confirmation of the bootstrap policy | The deploy identity uses CloudShell session export (P11 preference 1) and may only assume the CDK bootstrap roles (research R-deploy). CDK bootstrap's default `AdministratorAccess` execution role is proposed as a recorded P11 note. Runtime roles are least-privilege, scoped by Region, and conditioned on `polly:Engine` and `polly:VoiceId`. The browser holds no AWS credentials. Secrets live in SSM SecureString. |
 | Tech table (`:226-246`) | Conflicts recorded | Amendments A1–A3 | **A1**: the IaC row becomes CDK-only (builder decision). **A2**: the LLM row is amended only if Q2 leaves the Haiku class. **A3**: P11's claim that an Organization expires credits is corrected to the verified fact (D10). The Memory row (`:236`) now conforms. |
 | Gate 1 Cost model | Pending | Pending S0 and the human price read | R-cost projection, gross of credits and including Memory. Above $8, a mitigation is required (FR-024). |
-| Gate 2 Personality | Pass | Pending S1 | S1 runs for the adopted model; every eligible candidate is a model change. |
+| Gate 2 Personality | Pass | Pending S1 | S1 runs for every S0-eligible candidate against the 65-case set ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)); every eligible candidate is a model change. Amendment A4 corrects the gate's "50 cases" to 65. |
 | Gate 3 Dependency | Pending | Pending | Review of the four SDK clients, recorded in their PR. |
 | Gate 4 Degradation | Pass | Pass | Quickstart scenarios V-08 to V-10. |
 | Gate 5 Observability | Pass | Pass | Spans are listed in contract `transport-sse.md`. |
 | Gate 6 Test coverage | Pass | Pass | TDD throughout. |
 | Gate 7 Credentials | Pass | Pass | As P11. |
 
-**Result**: no unjustified violation. The amendments A1–A3 each land in their own PR before the tasks that depend on them (FR-002). The deviations accepted for this design are listed under [Complexity Tracking](#complexity-tracking).
+**Result**: no unjustified violation. The amendments A1–A4 each land in their own PR before the tasks that depend on them (FR-002). The deviations accepted for this design are listed under [Complexity Tracking](#complexity-tracking).
 
 ## Project Structure
 
@@ -115,7 +115,8 @@ specs/003-architecture-review/
 │   ├── memory-api.md
 │   ├── spend-control.md
 │   ├── csp-and-hosting.md
-│   └── s0-probe-matrix.md
+│   ├── s0-probe-matrix.md
+│   └── s1-golden-set.md
 ├── checklists/requirements.md
 └── tasks.md             # Phase 2 (/speckit.tasks), not created here
 ```

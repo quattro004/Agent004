@@ -272,7 +272,7 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 | Spike | Objective | Cost estimate | Approval |
 | --- | --- | --- | --- |
 | **S0** | Probe matrix: which candidate model IDs, and Polly, this Free-plan account can invoke in `us-west-2` ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)) | 7 calls of under 100 tokens or 40 characters each; well under $0.01 | **Pending** |
-| **S1** | Golden-set character comparison (spec 001's 50-case rubric) of the S0-eligible candidate against Haiku 4.5's baseline transcripts | 50 cases × about 3K input and 250 output tokens; costed at the human-read price before approval | Pending; runs for whichever model Q2 adopts, since Haiku 4.5 cannot ship (D1) and every eligible candidate is a model change |
+| **S1** | Golden-set character check: each S0-eligible candidate against the absolute rubric bar on the 65-case set, scored offline by a judge script with builder spot-checks ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)). No Haiku 4.5 baseline: it cannot be invoked in-Region (D1) | Per candidate: about 230K input and 16K output tokens for replies, plus about 165K input and 26K output for the judge; costed at human-read prices before approval | Pending; runs for every S0-eligible candidate, since Haiku 4.5 cannot ship (D1) and every eligible candidate is a model change |
 | **S2** | Real system-prompt and tool-definition tokens from reported usage (`metrics.accumulatedUsage`); the cache checkpoint minimum for the adopted model | A few calls; under $0.05 at any candidate's price | Pending |
 | **S3** | Nova Sonic audio tokens per second and whether silence is billed | n/a | **Not run**: Q1 did not adopt Nova Sonic |
 | **S4** (new) | Whether in-process runtime state (the session `Agent`) survives more than 120 s idle on Runtime V2 | A few invocations at first deploy; under $0.01 | Pending |
@@ -380,6 +380,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | A1 | Tech table IaC row: "AWS CDK (infrastructure) + AgentCore CLI (agent deployment)" becomes CDK-only | MINOR | Builder decision (Q8) |
 | A2 | LLM row: "Anthropic Haiku-class" becomes the adopted class | MINOR | Only if Q2 adopts a non-Haiku model |
 | A3 | P11 rationale: an Organization "expires all remaining free-tier credits" is corrected to the verified mechanism (D10) | PATCH | Only once D10 is verified |
+| A4 | Gate 2: "The golden-set rubric (50 cases)" becomes 65 cases, the set the bible §9 grew to on 2026-04-19 (`3c8a5cb`) and `personality-gate.ts` encodes | PATCH | Before S1 is approved |
 
 ## New findings (proposed issues; filed only with the builder's permission)
 
