@@ -151,14 +151,14 @@ describe('VolumeKnob', () => {
     expect(btn.getAttribute('aria-valuetext')).toMatch(/one louder/i);
   });
 
-  it('positions the indicator from -135 to 135 degrees across the range', () => {
+  it('positions the indicator from the bottom-left off marker to the right-side max marker', () => {
     const { container, rerender } = render(
       <VolumeKnob volume={0} onVolumeChange={vi.fn()} disabled={false} />,
     );
     const indicator = container.querySelector('.volume-knob-indicator');
-    expect(indicator).toHaveStyle({ '--knob-angle': '-135deg' });
+    expect(indicator).toHaveStyle({ '--knob-angle': '-235deg' });
     rerender(<VolumeKnob volume={1} onVolumeChange={vi.fn()} disabled={false} />);
-    expect(indicator).toHaveStyle({ '--knob-angle': '135deg' });
+    expect(indicator).toHaveStyle({ '--knob-angle': '45deg' });
   });
 
   it('is wrapped in .volume-knob-wrapper containing the hit-area .volume-knob', () => {

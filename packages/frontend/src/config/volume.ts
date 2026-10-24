@@ -1,7 +1,7 @@
 export const VOLUME_MAX_STEP = 11;
 export const VOLUME_LED_COUNT = 11;
-export const KNOB_MIN_ANGLE_DEG = -135;
-export const KNOB_MAX_ANGLE_DEG = 135;
+export const KNOB_MIN_ANGLE_DEG = -235;
+export const KNOB_MAX_ANGLE_DEG = 45;
 
 export function clampStep(step: number): number {
   return Math.min(VOLUME_MAX_STEP, Math.max(0, Math.round(step)));

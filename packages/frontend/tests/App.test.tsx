@@ -251,6 +251,17 @@ describe('App — TV Power Lifecycle', () => {
     expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
   });
 
+  it('starts at audible volume step 2 with its indicator at 18% of the arc', async () => {
+    const { App } = await import('../src/App');
+    const { container } = render(<App />);
+    const volume = screen.getByRole('group', { name: 'Volume' });
+    const indicator = container.querySelector<HTMLElement>('.volume-knob-indicator');
+    const initialAngle = Number.parseFloat(indicator?.style.getPropertyValue('--knob-angle') ?? '');
+
+    expect(volume).toHaveAttribute('aria-valuenow', '2');
+    expect(initialAngle).toBeCloseTo(-235 + (2 / 11) * 280);
+  });
+
   it('should render TvKnob in the control panel when TV is off', async () => {
     const { App } = await import('../src/App');
     render(<App />);
@@ -267,9 +278,9 @@ describe('App — TV Power Lifecycle', () => {
     });
 
     mockAudioSetVolume.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Volume down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Volume up' }));
     await vi.waitFor(() => {
-      expect(mockAudioSetVolume).toHaveBeenLastCalledWith(5 / 11);
+      expect(mockAudioSetVolume).toHaveBeenLastCalledWith(3 / 11);
     });
   });
 

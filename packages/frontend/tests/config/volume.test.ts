@@ -12,9 +12,10 @@ describe('volume helpers', () => {
     expect(stepToGain(11)).toBe(1);
   });
 
-  it('maps the minimum, midpoint, and maximum to the indicator arc', () => {
-    expect(stepToAngle(0)).toBeCloseTo(-135);
-    expect(stepToAngle(5.5)).toBeCloseTo(0);
-    expect(stepToAngle(11)).toBeCloseTo(135);
+  it('maps each volume step proportionally across the full indicator arc', () => {
+    expect(stepToAngle(0)).toBe(-235);
+    expect(stepToAngle(2)).toBeCloseTo(-235 + (2 / 11) * 280);
+    expect(stepToAngle(5.5)).toBeCloseTo(-95);
+    expect(stepToAngle(11)).toBe(45);
   });
 });

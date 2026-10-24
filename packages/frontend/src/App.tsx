@@ -89,7 +89,7 @@ export function App() {
   // Avatar + backdrop appear from settling onward so the tune-in glitch
   // flashes have an avatar to overlay.
   const showSceneContent = isSettling || isTvOn;
-  const [volume, setVolume] = useState(0.5);
+  const [volume, setVolume] = useState(2 / 11);
   const [themeIndex, setThemeIndex] = useState<number>(() => readStoredThemeIndex());
   const [greetingText, setGreetingText] = useState<string | null>(null);
   const [greetingNonce, setGreetingNonce] = useState(0);
