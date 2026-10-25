@@ -138,6 +138,8 @@ const PROBES: Probe[] = [
   },
 ];
 
+const IAM_DENIAL = /no (identity|resource)-based policy allows|explicit deny in a|not authorized to perform/i;
+
 const firstLine = (message: string): string => message.split(/\r?\n/)[0].slice(0, 300);
 
 async function runProbe(probe: Probe, clients: Clients): Promise<ProbeResult> {
@@ -159,6 +161,14 @@ async function runProbe(probe: Probe, clients: Clients): Promise<ProbeResult> {
       return { ...base, outcome: `HTTP ${err.status}`, detail: firstLine(err.message) };
     }
     const error = err instanceof Error ? err : new Error(String(err));
+    // An IAM denial happens before the plan check, so it proves nothing about the Free plan.
+    if (IAM_DENIAL.test(error.message)) {
+      return {
+        ...base,
+        outcome: 'INCONCLUSIVE: IAM denial, not plan evidence',
+        detail: firstLine(error.message),
+      };
+    }
     return { ...base, outcome: error.name, detail: firstLine(error.message) };
   }
 }
@@ -209,6 +219,11 @@ async function main(): Promise<void> {
   console.log(
     '\nPaste the table into research.md Q0 evidence. A probe that was not run is "not run", never a pass.',
   );
+  if (results.some((r) => r.outcome.startsWith('INCONCLUSIVE'))) {
+    console.log(
+      'INCONCLUSIVE rows were blocked by IAM before the Free-plan check. Grant bedrock:InvokeModel and rerun those probes; do not record them as denied-as-expected.',
+    );
+  }
 }
 
 await main();
