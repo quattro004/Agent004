@@ -141,11 +141,15 @@ tells the story, with dates and worked examples.
   the dependency is required, check whether its parent uses only APIs that
   remain compatible with a maintained major before overriding that edge.
 - **Dependabot PRs arriving do not prove security updates are on** — that half
-  is a repo setting, not `dependabot.yml`. Check it rather than inferring it:
+  is a repo setting, not `dependabot.yml`, and even when enabled, GitHub's
+  static Dependency Graph currently drops our pnpm 11 `pnpm-lock.yaml`
+  (`node@runtime:`), leaving the `Audit` CI job (`pnpm audit`) as the only
+  transitive advisory check. Verify settings and indexed manifests directly:
 
 ```sh
 gh api /repos/quattro004/Agent004/vulnerability-alerts          # 204 = on, 404 = off
 gh api /repos/quattro004/Agent004 --jq '.security_and_analysis.dependabot_security_updates'
+gh api /repos/quattro004/Agent004/dependabot/alerts             # [] while lockfile is unindexed
 ```
 
 ## When a guard test earns its keep
