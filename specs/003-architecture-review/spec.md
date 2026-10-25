@@ -162,8 +162,8 @@ Max stays recognizably himself (stuttering, editorial, evasive, ironic, per spec
 
 **Acceptance Scenarios**:
 
-1. **Given** S0's results and re-verified prices, **When** Q2 is decided, **Then** the decision record compares Haiku 4.5 and Nova 2 Lite on price, availability on the account's plan and Region, Guardrails support, and S1 character fidelity, and states which is adopted and why.
-2. **Given** Nova 2 Lite is verified not to support Guardrails, **When** Q2 is decided, **Then** the record says so, and #50 is resolved as not adopted unless the builder accepts an alternative enforcement point under Q8.
+1. **Given** S0's results and re-verified prices, **When** Q2 is decided, **Then** the decision record compares the S0-eligible candidates (Claude Haiku 5.5 and Nova Lite v1 are the candidates; Haiku 4.5 and Nova 2 Lite cannot be invoked in-Region on the Free plan, D1 and D2) on price, availability on the account's plan and Region, Guardrails support, and S1 character fidelity, and states which is adopted and why.
+2. **Given** a candidate (or Nova 2 Lite, if S0-5 surprises) is verified not to support Guardrails, **When** Q2 is decided, **Then** the record says so, and #50 is resolved as not adopted unless the builder accepts an alternative enforcement point under Q8.
 3. **Given** the adopted model, **When** the golden set runs, **Then** replies stay in character, respect spec 001 FR-009's reply-length bound, and resist the prompt-injection cases of spec 001 FR-013.
 
 ---
@@ -236,8 +236,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - **Satisfied 2026-10-03:** Plan 1 merged as #62 (`fb9a6e2`), which closed #56.
 - **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7). The sign-in amendment (FR-055) goes further and merges before `/speckit.plan` (clarified 2026-10-04).
 - **FR-003**: Each spike (S0–S3) MUST have a written cost estimate and explicit builder approval before it runs.
-  - **S0**: Free-plan model-access smoke test. Invoke the Haiku 4.5 global cross-Region profile (expected denial) and Nova 2 Lite's in-Region model ID (expected success).
-  - **S1**: Golden-set character comparison of Haiku 4.5 and Nova 2 Lite. Runs only if the Guardrails gate passes.
+  - **S0**: Free-plan probe matrix ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)): seven calls in `us-west-2` covering the Haiku 4.5 global and geo profiles (expected denial), Haiku 4.5 on the mantle endpoint, Haiku 5.5, Nova 2 Lite's bare ID (expected denial: cross-Region only, D2 refuted), Nova Lite v1 and Polly. It establishes which in-Region candidates are eligible (P-01).
+  - **S1**: Golden-set character check ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)): each S0-eligible candidate against an absolute rubric bar, not a comparison, because Haiku 4.5 cannot be invoked in-Region (D1).
   - **S2**: Measure real system-prompt plus tool-definition token usage from an invocation's reported usage, and verify the per-checkpoint cache minimum.
   - **S3**: Measure audio tokens per second and whether silence is billed, for the Nova Sonic generation Q1 would adopt. The current per-second figure is derived for Nova 2 Sonic, not published, and unchecked for Nova 2.5 Sonic (W31, W37).
 
@@ -498,7 +498,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - Once the infrastructure choices are implemented, the builder prices the as-built stack in the AWS Pricing Calculator (<https://calculator.aws/#/>). That estimate is compared with the month's measured spend (SC-019).
   - The estimate comes after implementation, so it does not replace the FR-024 projection, which gates deployment.
   - The calculator renders in the browser, like the pricing pages, so a human builds the estimate and cites it.
-- **Region** defaults to `us-west-2`, the Region `docs/infra-plan.md:58-60` names. That document's claim that it is one of five AgentCore Runtime V2 Regions is unverified (W24), and so is Nova 2 Lite's in-Region availability there (Q0).
+- **Region** defaults to `us-west-2`, the Region `docs/infra-plan.md:58-60` names. That document's claim that it is one of five AgentCore Runtime V2 Regions is unverified (W24), Nova 2 Lite's in-Region availability there is refuted: it is cross-Region only (D2; S0-5 confirms in the account).
 - **Message length** is not assumed. FR-036 makes the shared limit a planning decision, because the contract (2,000 characters) and the server (500) disagree (W7).
 - **Session expiry**: the runtime idle timeout is the 1800 seconds decided on Decision-AgentCore-Runtime-V2 and Guide-Deployment, which matches spec 001's 30-minute session cap. The wiki's claim that the service default is shorter is unverified (W25). Because the idle timeout equals the cap, going idle cannot end a session early. A session cut off by a fault recovers as FR-037 states (clarified 2026-10-04).
 - **Text-in first deployment**: speech input exists but is not wired into the app; only `TextInput` renders (`App.tsx:8,357`; W19). Wiring it is UI work beyond FR-036, so the first deployment takes typed input only, and voice output stays in scope.

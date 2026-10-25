@@ -2,7 +2,7 @@
 
 Decision it feeds: research Q0 (inference path) and Q2 (text model), plus Q1's voice path. Requirements: FR-003 (P-01), FR-025, FR-026 (P-13) and FR-028 (Free plan).
 
-**Status: needs the builder's approval before any probe runs** (FR-003). The total cost is well under $0.01.
+**Status: approved by the builder on 2026-10-25** (FR-003; recorded in research § Spikes). The total cost is well under $0.01. The runner is [scripts/s0-probe.ts](../scripts/s0-probe.ts).
 
 ## Rules
 
