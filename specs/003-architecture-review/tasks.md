@@ -272,7 +272,7 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 **Independent Test**: S0 is recorded probe by probe, the S1 judge run passes (mean ≥ 2.0, 0 auto-fails), and `MODEL_ID` in the runtime configuration is the adopted model, pinned by `agent-stack.test.ts`.
 
-- [ ] T095 [US5] Run S0 probes S0-1 to S0-7 per s0-probe-matrix.md against `anthropic.claude-haiku-5-5` and `amazon.nova-lite-v1:0` in `us-west-2`, after the T004 approval. Record each probe's outcome, date and evidence in research.md § Spikes
+- [x] T095 [US5] Run S0 probes S0-1 to S0-7 per s0-probe-matrix.md against `anthropic.claude-haiku-5-5` and `amazon.nova-lite-v1:0` in `us-west-2`, after the T004 approval. Record each probe's outcome, date and evidence in research.md § Spikes
 - [ ] T096 [US5] From S0's results, **provisionally** adopt the cheapest eligible candidate at the T005a prices, and record the shortlist in research.md § Q2. Q2 does not close here: FR-026 makes S1 character fidelity an input to the choice, so the decision closes in T100 when the provisional candidate passes S1. If it fails, the next-cheapest eligible candidate becomes provisional and S1 runs again
 - [ ] T097 [US5] Once Q2 has closed (T100), if the adopted model is not Haiku-class, open amendment PR **A2** (the LLM row, MINOR) against `.specify/memory/constitution.md`; otherwise record "A2 not triggered" in research.md § Amendments. A2 must merge before T102 sets `MODEL_ID`
 - [ ] T098 [P] [US5] RED: create `packages/agent/tests/evaluations/s1-golden-set.test.ts`. The golden set has exactly 65 cases with the categories and counts in s1-golden-set.md. The judge script scores 0–3, flags auto-fails, and computes pass as mean ≥ 2.0 with 0 auto-fails

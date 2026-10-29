@@ -95,14 +95,14 @@ const PROBES: Probe[] = [
       if (!token) {
         throw new NotRunError('AWS_BEARER_TOKEN_BEDROCK is not set');
       }
-      // Auth is unverified: the card's sample uses a Bedrock API key, so send it both ways.
+      // Mantle rejects a request carrying both `authorization` and `x-api-key` (HTTP 401, 2026-10-29 run). AWS's
+      // API-key docs (api-keys.html) send the key only as a bearer token.
       const res = await fetch(MANTLE_URL, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           'anthropic-version': '2023-06-01',
           authorization: `Bearer ${token}`,
-          'x-api-key': token,
         },
         body: JSON.stringify({
           model: 'anthropic.claude-haiku-4-5',
@@ -221,7 +221,7 @@ async function main(): Promise<void> {
   );
   if (results.some((r) => r.outcome.startsWith('INCONCLUSIVE'))) {
     console.log(
-      'INCONCLUSIVE rows were blocked by IAM before the Free-plan check. Grant bedrock:InvokeModel and rerun those probes; do not record them as denied-as-expected.',
+      'INCONCLUSIVE rows were blocked by IAM before the Free-plan check. Grant the action named in the error (bedrock:InvokeModel, or bedrock:CallWithBearerToken when AWS_BEARER_TOKEN_BEDROCK is set) and rerun; do not record them as denied-as-expected.',
     );
   }
 }

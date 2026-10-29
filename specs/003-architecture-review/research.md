@@ -36,6 +36,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-10-11 | The session token cap counts conversational tokens (the friend's message plus Max's reply); billed spend is bounded separately by the in-path breaker | Q5, Q6, spec 001 FR-010 (P-09) |
 | 2026-10-11 | In-session history lives in runtime session state (one Strands `Agent` per counted session) | Q8 |
 | 2026-10-11 | **Long-term memory is un-deferred** into the first deployment: "seems like long term memory is within budget and I wanted it initially anyway" | Q8, FR-014, FR-030, FR-037, SC-019 (P-03, P-10) |
+| 2026-10-29 | S0-1/S0-2's cross-Region success is **recorded only, not adopted**; Nova Lite v1 stays the sole Q2 candidate. The builder confirmed the account is on the Free plan, and noted Haiku 4.5's lifecycle risk: its card (read 2026-10-29) shows Active with no EOL date, but its "EOL no sooner than" floor, 2026-10-16, has passed | Q0, Q2, D1 |
 
 ## Decision register (FR-004)
 
@@ -49,6 +50,21 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
   - Nova Lite (v1) `amazon.nova-lite-v1:0` is invocable in-Region on `bedrock-runtime` (Nova Lite model card, read 2026-10-11).
   - Nova 2 Sonic is in-Region, with no Guardrails (Nova 2 Sonic model card, read 2026-10-11; W31).
   - **Every other service this design uses is in the Free Tier list**: Bedrock, Bedrock AgentCore, Polly, Cognito, DynamoDB, ECR, EventBridge, Lambda, SNS, S3, CloudFront, ACM, Systems Manager, Budgets, CloudWatch and X-Ray. Two exceptions matter here: **Lambda@Edge is not supported** (so SPA routing uses a CloudFront Function, [contracts/csp-and-hosting.md](./contracts/csp-and-hosting.md)), and AWS Organizations is not supported at all. Source: "Supported AWS services for Sign up for AWS (new)", `docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html`, re-read 2026-10-11. A listing is not proof that a given API call succeeds, so S0 probes the calls that carry spend.
+- **S0 results** (run by the builder 2026-10-29, `us-west-2`, IAM user `max-height-gen` with a temporary least-privilege policy and a short-term Bedrock API key; runner `scripts/s0-probe.ts`). Earlier runs on 2026-10-25 and 2026-10-29 were blocked by IAM (`bedrock:InvokeModel`, then `bedrock:CallWithBearerToken`) before any plan check, so only their S0-7 result is evidence. Because `AWS_BEARER_TOKEN_BEDROCK` was set, the SDK sent the Converse probes with bearer auth rather than SigV4.
+
+  | # | Model or voice | Expected | Outcome | First line of error |
+  | --- | --- | --- | --- | --- |
+  | S0-1 | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | denied | **success** (contradicts D1) | |
+  | S0-2 | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | denied | **success** (contradicts D1) | |
+  | S0-3 | `anthropic.claude-haiku-4-5` (mantle Messages) | unknown (W28) | HTTP 403 `permission_error` | `anthropic.claude-haiku-4-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales` |
+  | S0-4 | `anthropic.claude-haiku-5-5` (thinking off) | unknown (Q2) | `AccessDeniedException` | `anthropic.claude-haiku-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/` |
+  | S0-5 | `amazon.nova-2-lite-v1:0` | denied or `ValidationException` | `ValidationException` (as expected) | `Invocation of model ID amazon.nova-2-lite-v1:0 with on-demand throughput isn't supported. Retry your request with the ID or ARN of an inference profile that contains this model.` |
+  | S0-6 | `amazon.nova-lite-v1:0` | success | success (as expected) | |
+  | S0-7 | Polly `Matthew` / neural / mp3 / 24000 | success | success (as expected; also on 2026-10-25) | |
+
+  - **S0-1 and S0-2 contradict D1.** Per the probe contract they are recorded and **not adopted**: the documented plan rule could start being enforced at any time. The builder confirmed the Free plan and chose record-only (2026-10-29; see Builder decisions).
+  - S0-5 also settles Nova 2 Lite ("Nova Lite v2"): it has no on-demand in-Region path on this account, as its card says.
+  - S0-4 failing and S0-6 succeeding selects the contract's first outcome: **Nova Lite v1 is the only eligible Q2 candidate**, subject to S1 and amendment A2 (T096).
 - **Alternatives**:
   - Upgrade to the Paid plan to use cross-Region profiles: rejected, because FR-028 keeps the Free plan.
   - Move Region: rejected; nothing found makes another Region better for the in-Region candidates, and `us-west-2` hosts Runtime V2.
@@ -281,7 +297,7 @@ A finding that only confirms a decision already recorded above is noted here and
 
 | Spike | Objective | Cost estimate | Approval |
 | --- | --- | --- | --- |
-| **S0** | Probe matrix: which candidate model IDs, and Polly, this Free-plan account can invoke in `us-west-2` ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)) | 7 calls of under 100 tokens or 40 characters each; well under $0.01 | **Approved by the builder, 2026-10-25** (runner: `scripts/s0-probe.ts`; results not yet recorded) |
+| **S0** | Probe matrix: which candidate model IDs, and Polly, this Free-plan account can invoke in `us-west-2` ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)) | 7 calls of under 100 tokens or 40 characters each; well under $0.01 | **Approved by the builder, 2026-10-25** (runner: `scripts/s0-probe.ts`). **Run 2026-10-29**; results in Q0 § S0 results |
 | **S1** | Golden-set character check: each S0-eligible candidate against the absolute rubric bar on the 65-case set, scored offline by a judge script with builder spot-checks ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)). No Haiku 4.5 baseline: it cannot be invoked in-Region (D1) | Per candidate: about 230K input and 16K output tokens for replies, plus about 165K input and 26K output for the judge; costed at human-read prices before approval | Pending; runs for every S0-eligible candidate, since Haiku 4.5 cannot ship (D1) and every eligible candidate is a model change |
 | **S2** | Real system-prompt and tool-definition tokens from reported usage (`metrics.accumulatedUsage`); the cache checkpoint minimum for the adopted model | A few calls; under $0.05 at any candidate's price | Pending |
 | **S3** | Nova Sonic audio tokens per second and whether silence is billed | n/a | **Not run**: Q1 did not adopt Nova Sonic |
@@ -317,7 +333,7 @@ Checked 2026-10-11 unless noted. "Not relied on" means no decision rests on the 
 | W25 | Verified | The default idle timeout is 15 minutes, shorter than the decided 1800 s; the maximum lifetime is 8 hours |
 | W26 | Code verified; IAM and deploy behavior unverified | The warm-up error stops initialization (`warmup.ts`; `index.ts:282-312`), so the design grants `bedrock:ListAsyncInvokes` ([runtime-config.md](./contracts/runtime-config.md) § Execution role). Readiness and `platformVersion` are confirmed at first deploy (quickstart V-01). |
 | W27 | Unverified | The lifecycle status of the adopted model is read from its model card before Q2 closes |
-| W28 | Unverified | S0's mantle probe shows whether Claude is invocable on this Free plan |
+| W28 | Verified (S0-3, 2026-10-29) | Not invocable: mantle returns HTTP 403 "`anthropic.claude-haiku-4-5` is not available for this account" |
 | W29 | Partly verified | AgentCore Runtime, Memory and Web Search prices are verified (R-cost); model and Polly prices are human-read required |
 | W30 / D5 | Conflict stands | The projection assumes no Polly free tier (conservative); no decision depends on resolving it |
 | W31 | Verified (in-Region; no Guardrails) | Nova 2 Sonic model card; the other parts are not relied on |
@@ -335,7 +351,7 @@ Each push needs builder approval. The research batch below is staged, **not push
 
 | # | Verdict | Wiki action (pending approval) |
 | --- | --- | --- |
-| D1 | **Verified**: the Free plan supports no cross-Region features | Gap: add to Decision-LLM-Model-Selection, Component-Agent-Runtime and Gotchas |
+| D1 | **Verified** against the documentation: the Free plan supports no cross-Region features. **Contradicted in this account** by S0-1 and S0-2 (2026-10-29): both cross-Region profiles succeeded. Not adopted; the builder chose record-only (2026-10-29) | Gap: add to Decision-LLM-Model-Selection, Component-Agent-Runtime and Gotchas |
 | D2 | **Refuted in part**: Nova 2 Lite is cross-Region only; Haiku 4.5 is in-Region only via mantle, with no Guardrails | Gap and correction: Source-Amazon-Nova-Lite, Decision-LLM-Model-Selection, plus a Gotchas row |
 | D3, D4, D8, D9, D12 | Resolved earlier | None |
 | D5 | Conflict stands; resolved conservatively | Source-Amazon-Polly: add the Free-plan caveat |
