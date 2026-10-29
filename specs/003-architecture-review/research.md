@@ -94,6 +94,16 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
   - **Nova Lite v1** passes the documented gates. Its card lists Guardrails on `bedrock-runtime`, an in-Region endpoint, and lifecycle Active (Nova Lite model card, read 2026-10-11). Adopting it requires amendment A2 and passing S1.
   - **Claude Haiku 5.5** (launched 2026-10-07; found during planning) is a **new candidate**. Its card lists Guardrails on `bedrock-runtime` and a bare `bedrock-runtime` model ID, `anthropic.claude-haiku-5-5`, whereas Haiku 4.5's is N/A. The card's in-Region column renders as images and its in-Region URL reads N/A, so **in-Region availability is unverified**. Probe S0-4 settles it. If eligible, it is Haiku-class, so A2 is not triggered. Adaptive thinking is on by default and its tokens bill as output, so it would be turned off. Its price is human-read (billed through AWS Marketplace). It is added to FR-026's comparison by P-13.
 - **Escalation**: if no candidate passes, the builder chooses between waiting for the Paid plan and relaxing the Guardrails rule. That choice is recorded here, and nothing is assumed meanwhile.
+- **Shortlist and provisional adoption (T096, 2026-10-29)**:
+
+  | Candidate | S0 | Price, `us-west-2` on-demand, per 1M tokens (R-cost) | Status |
+  | --- | --- | --- | --- |
+  | Nova Lite v1 `amazon.nova-lite-v1:0` | S0-6 succeeded | $0.06 input, $0.24 output (human-read 2026-10-29) | **Provisionally adopted** |
+  | Claude Haiku 5.5 | S0-4 "not available for this account" | not read | Ineligible |
+  | Haiku 4.5 | S0-1/S0-2 cross-Region only (record-only, D1); S0-3 mantle 403 | not read | Ineligible |
+  | Nova 2 Lite | S0-5 needs an inference profile | not read | Ineligible |
+
+  Nova Lite v1 is the only S0-eligible candidate, so it is the cheapest by default. **Q2 stays open**: it closes in T100 if Nova Lite v1 passes S1, and its adoption still needs amendment A2. If it fails S1, no eligible candidate remains and the escalation above applies.
 - **Kept**: the 250-token reply cap (`index.ts:97`).
 - **Issue**: #50 is resolved by this record. Nova 2 Lite is ineligible on the Free plan, and the evaluation moves to Nova Lite v1 under S1.
 
@@ -224,8 +234,8 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 
 | Line item | Unit price | Status | Per-session estimate (method) |
 | --- | --- | --- | --- |
-| Text model input, output and cache | depends on Q2 | Human-read required | spec 001 R0 method, with S2 measuring real prompt and tool tokens |
-| Polly Neural | $16 per 1M characters (spec 001 R0) | Human-read required | at most 1,000 characters per reply × turns |
+| Text model input, output and cache: Nova Lite v1 (`amazon.nova-lite-v1:0`, the only S0-eligible candidate), `us-west-2` on-demand | $0.06 per 1M input, $0.24 per 1M output tokens; cache read $0.015 per 1M, cache write $0 | **Human-read 2026-10-29 by the builder** (`aws.amazon.com/bedrock/pricing`, "On Demand Inference" table, listed as "Amazon Nova Lite"). It matches the AWS Price List offer file for AmazonBedrock `us-west-2`, published 2026-10-29. Whether Nova Lite v1 supports prompt caching on our path is **Unverified**, so the projection uses no cache discount | spec 001 R0 method, with S2 measuring real prompt and tool tokens |
+| Polly Neural | $16 per 1M characters | **Human-read 2026-10-29 by the builder** (`aws.amazon.com/polly/pricing`). The free tier of 1M Neural characters a month for the first 12 months is not subtracted, because the projection is gross of credits | at most 1,000 characters per reply × turns |
 | Runtime V2 CPU | $0.1276 per vCPU-hour | Verified | active seconds only |
 | Runtime V2 memory | $0.0169 per GB-hour | Verified | session lifetime, or until reclaimed (S4) |
 | Memory short-term ingestion | $1.00 per GB, each event billed at 12 KB minimum and 64 KB maximum | Verified (price changed 2026-10-06) | about $0.0006 per 50-turn session |
@@ -334,7 +344,7 @@ Checked 2026-10-11 unless noted. "Not relied on" means no decision rests on the 
 | W26 | Code verified; IAM and deploy behavior unverified | The warm-up error stops initialization (`warmup.ts`; `index.ts:282-312`), so the design grants `bedrock:ListAsyncInvokes` ([runtime-config.md](./contracts/runtime-config.md) § Execution role). Readiness and `platformVersion` are confirmed at first deploy (quickstart V-01). |
 | W27 | Unverified | The lifecycle status of the adopted model is read from its model card before Q2 closes |
 | W28 | Verified (S0-3, 2026-10-29) | Not invocable: mantle returns HTTP 403 "`anthropic.claude-haiku-4-5` is not available for this account" |
-| W29 | Partly verified | AgentCore Runtime, Memory and Web Search prices are verified (R-cost); model and Polly prices are human-read required |
+| W29 | Partly verified | AgentCore Runtime, Memory and Web Search prices are verified (R-cost). The Nova Lite v1 and Polly Neural prices were human-read 2026-10-29 |
 | W30 / D5 | Conflict stands | The projection assumes no Polly free tier (conservative); no decision depends on resolving it |
 | W31 | Verified (in-Region; no Guardrails) | Nova 2 Sonic model card; the other parts are not relied on |
 | W32 | Not relied on | Nova 2 Lite is ineligible (Q0) |
