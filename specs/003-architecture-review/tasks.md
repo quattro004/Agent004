@@ -457,3 +457,19 @@ T083 index.session-id.test.ts   T086 memoryHandlers.test.ts   T087 memory-pruner
 - Wiki pushes and issue comments are public; get approval before each.
 - Use "Max Height", never "Max Headroom", in any user-visible string.
 - Commit after each task or logical group, using Conventional Commits.
+
+---
+
+## Phase 12: Convergence
+
+Scoped to the 2026-10-30 clarification session (spec.md § Clarifications): cross-Region inference profiles are eligible when S0 proves them, S0 gains S0-8 and S0-9, and the cost-measurement month may straddle the Paid upgrade. Existing tasks are not edited; T096 stays checked and T139 supersedes its shortlist.
+
+- [ ] T135 Add S0-8 (`us.amazon.nova-2-lite-v1:0`) and S0-9 (`us.anthropic.claude-haiku-5-5`, thinking off as in S0-4) to `specs/003-architecture-review/contracts/s0-probe-matrix.md` and to `specs/003-architecture-review/scripts/s0-probe.ts`, each one Converse call with `maxTokens: 16`. Correct S0-1, S0-2 and S0-5's "Denied … cannot ship" wording to the recorded results per FR-003 and spec.md § Clarifications 2026-10-30 (missing)
+- [ ] T136 Record the builder's 2026-10-30 approval of S0-8 and S0-9 in research.md § Spikes (T004), run both probes in `us-west-2` with the builder's temporary credentials, and record each outcome, date and evidence in research.md § Spikes per FR-003 (missing)
+- [ ] T137 Reconcile research.md with the clarification: Q0 (`:47`, `:49`) records the Free plan's documented lack of cross-Region support as recorded, not as a rejection; the Q2 table (`:102-104`) and `:108` re-rate Haiku 4.5 as eligible via S0-1 and S0-2, and Nova 2 Lite and Haiku 5.5 by T136's results; S1 (`:311`), W32 (`:350`), D1 (`:364`) and #50 (`:384`) drop "cannot ship" and "ineligible on the Free plan". Hand-edit plan.md `:26`, `:63` and `:81` to match, and do not run `/speckit.plan` (it regenerates destructively) per FR-025 and FR-028 (contradicts)
+- [ ] T138 Re-run research.md § R-cost's gate 1 projection (T005a) on the clarified candidate set, which now includes Haiku 4.5 and any of Nova 2 Lite or Haiku 5.5 that T136 proves. If the most expensive candidate's projection exceeds $8 gross of credits, record it and raise it with the builder (mitigation under FR-024, or bounding the candidate set) rather than inventing a figure per FR-024, SC-002 and constitution gate 1 (partial)
+- [ ] T139 After T136 and T138, redo T096's provisional adoption over every S0-eligible candidate at the T005a prices, record the new shortlist in research.md § Q2, and continue to S1 (T100) with the cheapest per FR-026 (partial)
+- [ ] T140 Make `specs/003-architecture-review/contracts/runtime-config.md` `:18` (`MODEL_ID`) and `:72` (execution-role Bedrock resources) allow the route Q2 adopts. If that route is an inference profile, verify AWS's documented IAM pattern for it at the point of use, keep the statements region-scoped where supported (constitution P11), and pin the resources RED then GREEN in `packages/infra/test/agent-stack.test.ts` with T024 and T102 per FR-028 (contradicts)
+- [ ] T141 Replace "in-Region" with "S0-proven route" in `specs/003-architecture-review/contracts/s1-golden-set.md` `:9`, `:22` and `:34`, and drop the claim that Haiku 4.5 cannot be invoked per FR-028 (contradicts)
+- [ ] T142 Change V-17's **When** in quickstart.md (`:268`) and plan.md `:69` to "after the first full month of friends' use", which may straddle the Paid upgrade. T131 runs on that timing, not "before the Free plan ends", per SC-019 and FR-028 (contradicts)
+- [ ] T143 If S0-9 was refused as "not available for this account", re-probe Haiku 5.5 after the Paid upgrade with a fresh dated approval, and record the result for a later model review. This gates nothing in this feature per FR-026 and spec.md § Spikes S0 (missing)
