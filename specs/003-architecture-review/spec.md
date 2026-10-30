@@ -66,6 +66,12 @@ Wiki pages read as inputs:
 - Q: When should the wiki corrections D1–D11 be pushed? → A: Split them. D3 (what remains), D8 and D9 were checked against code, so they're pushed now, before planning, once the builder approves the diff. D1, D2, D5, D6, D7, D10 and D11 are builder-cited AWS facts, pushed as one approved batch during plan research once each is verified against AWS documentation (FR-007). Wiki commit `c6c193c` already resolved D4 (FR-040).
 - Q: If a friend's conversation is cut off before spec 001's cap, for example because the runtime restarts or is redeployed, what happens when they send their next message? → A: It continues in a fresh session. After spec 001 FR-028's signal-lost state, the friend's next message opens a new server-counted session with a fresh cap and the same rate limits. Max acknowledges the dropout in character. The earlier transcript stays on screen, but Max no longer remembers it (FR-037, FR-014).
 
+### Session 2026-10-30
+
+- Q: While the account is still on the Free plan in November, may the deployment invoke its model through a cross-Region inference profile that spike S0 proved works, such as the global Haiku 4.5 profile? → A: Yes. Any path S0 (or a later approved probe) proves the account can invoke is eligible; cost and S1 character fidelity decide the model. The Free plan is temporary, and its documented restrictions are not grounds for rejection (builder, 2026-10-30). No automatic in-Region fallback is required (FR-025, FR-028, Q0).
+- Q: Should S0 get more probes, through cross-Region profiles, so that Nova 2 Lite and Claude Haiku 5.5 can compete under Q2? → A: Yes. S0-8 probes Nova 2 Lite's US profile (`us.amazon.nova-2-lite-v1:0`) and S0-9 probes Haiku 5.5's US profile (`us.anthropic.claude-haiku-5-5`). Each is one call under 100 tokens, well under $0.01, approved 2026-10-30. S0-4 tried only the bare ID, which Haiku 5.5's model card lists with no in-Region `bedrock-runtime` endpoint (read 2026-10-30). If S0-9 is also refused as "not available for this account", the Free plan is the suspected cause, and Haiku 5.5 is probed again after the Paid upgrade for a later model review (FR-003, FR-026).
+- Q: If the deployment cannot serve friends for a full month before the Free plan ends, may the cost-measurement month continue after the account moves to the Paid plan? → A: Yes. The month of operation may straddle the upgrade. Spend is measured gross of credits throughout, and remaining credits carry over. The builder still upgrades before the Free plan expires, so the account is not closed (FR-028, SC-019).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An invited friend holds a conversation on the first real deployment (Priority: P1)
@@ -162,8 +168,8 @@ Max stays recognizably himself (stuttering, editorial, evasive, ironic, per spec
 
 **Acceptance Scenarios**:
 
-1. **Given** S0's results and re-verified prices, **When** Q2 is decided, **Then** the decision record compares the S0-eligible candidates (Claude Haiku 5.5 and Nova Lite v1 are the candidates; Haiku 4.5 and Nova 2 Lite cannot be invoked in-Region on the Free plan, D1 and D2) on price, availability on the account's plan and Region, Guardrails support, and S1 character fidelity, and states which is adopted and why.
-2. **Given** a candidate (or Nova 2 Lite, if S0-5 surprises) is verified not to support Guardrails, **When** Q2 is decided, **Then** the record says so, and #50 is resolved as not adopted unless the builder accepts an alternative enforcement point under Q8.
+1. **Given** S0's results and re-verified prices, **When** Q2 is decided, **Then** the decision record compares the S0-eligible candidates (every model S0 proves invocable, in-Region or cross-Region, per FR-028 as clarified 2026-10-30) on price, availability on the account's plan and Region, Guardrails support, and S1 character fidelity, and states which is adopted and why.
+2. **Given** a candidate (or Nova 2 Lite or Haiku 5.5, if S0-8 or S0-9 succeeds) is verified not to support Guardrails, **When** Q2 is decided, **Then** the record says so, and #50 is resolved as not adopted unless the builder accepts an alternative enforcement point under Q8.
 3. **Given** the adopted model, **When** the golden set runs, **Then** replies stay in character, respect spec 001 FR-009's reply-length bound, and resist the prompt-injection cases of spec 001 FR-013.
 
 ---
@@ -204,8 +210,9 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 - **Hard stop mid-conversation**: no new spend-bearing work starts, and the friend sees the in-character break state rather than a raw error (spec 001 FR-014 and spec 001 FR-015).
 - **Budgets never fires because credits absorb spend**: prevented by gross-spend measurement (FR-017).
-- **Free plan ends** (6 months or credit exhaustion, then account closure without upgrade, per AWS documentation the builder cited): the builder upgrades to Paid when the plan ends in December 2026, which is out of scope (FR-028). Until then the deployment must not be stranded without warning. The plan's end date and remaining credits are recorded before deploy (FR-033), and the hard stop and breaker keep spend from exhausting the credits early.
+- **Free plan ends** (6 months or credit exhaustion, then account closure without upgrade, per AWS documentation the builder cited): the builder upgrades to Paid before the plan ends in December 2026; the upgrade is out of scope, and the month of operation may continue across it (FR-028). Until then the deployment must not be stranded without warning. The plan's end date and remaining credits are recorded before deploy (FR-033), and the hard stop and breaker keep spend from exhausting the credits early.
 - **Model access denied at deploy time** (for example, a cross-Region profile on the Free plan): deployment is blocked by S0's evidence before shipping, never discovered by a friend.
+- **Model access denied after deploy** (for example, AWS starts enforcing the Free plan's documented cross-Region restriction during November): friends see spec 001's signal-lost state, and the builder switches the model. No automatic fallback is required (clarified 2026-10-30).
 - **New-account Bedrock quotas fall below what spec 001 FR-020's rate limits could demand**: recorded as a deploy prerequisite, and requests above quota surface as in-character refusals, not system errors.
 - **Hard-stop target name differs from the synthesized name** (#61): the hard stop fails loudly (FR-019).
 - **Budget notification cannot publish to its topic** (#56): delivery is verified as part of the demonstration (SC-003).
@@ -236,8 +243,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - **Satisfied 2026-10-03:** Plan 1 merged as #62 (`fb9a6e2`), which closed #56.
 - **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7). The sign-in amendment (FR-055) goes further and merges before `/speckit.plan` (clarified 2026-10-04).
 - **FR-003**: Each spike (S0–S3) MUST have a written cost estimate and explicit builder approval before it runs.
-  - **S0**: Free-plan probe matrix ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)): seven calls in `us-west-2` covering the Haiku 4.5 global and geo profiles (expected denial), Haiku 4.5 on the mantle endpoint, Haiku 5.5, Nova 2 Lite's bare ID (expected denial: cross-Region only, D2 refuted), Nova Lite v1 and Polly. It establishes which in-Region candidates are eligible (P-01).
-  - **S1**: Golden-set character check ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)): each S0-eligible candidate against an absolute rubric bar, not a comparison, because Haiku 4.5 cannot be invoked in-Region (D1).
+  - **S0**: Free-plan probe matrix ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)): seven calls in `us-west-2` covering the Haiku 4.5 global and geo profiles (expected denial), Haiku 4.5 on the mantle endpoint, Haiku 5.5, Nova 2 Lite's bare ID (expected denial: cross-Region only, D2 refuted), Nova Lite v1 and Polly. It establishes which candidates the account can invoke (P-01). Two probes were added on 2026-10-30, each one call under 100 tokens, well under $0.01, approved: **S0-8**, Nova 2 Lite's US cross-Region profile (`us.amazon.nova-2-lite-v1:0`), and **S0-9**, Haiku 5.5's US cross-Region profile (`us.anthropic.claude-haiku-5-5`). If S0-9 is refused, Haiku 5.5 is probed again after the Paid upgrade, which does not gate the first deployment.
+  - **S1**: Golden-set character check ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)): each S0-eligible candidate against an absolute rubric bar, not a comparison.
   - **S2**: Measure real system-prompt plus tool-definition token usage from an invocation's reported usage, and verify the per-checkpoint cache minimum.
   - **S3**: Measure audio tokens per second and whether silence is billed, for the Nova Sonic generation Q1 would adopt. The current per-second figure is derived for Nova 2 Sonic, not published, and unchecked for Nova 2.5 Sonic (W31, W37).
 
@@ -247,7 +254,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
   | Q  | Question | Issues / outcomes |
   | -- | -------- | ----------------- |
-  | Q0 | Inference path. The plan is decided: the account stays on the Free plan (FR-028). Open: which models the Free plan can invoke in-Region in the pinned Region; this gates Q2 | O9 |
+  | Q0 | Inference path. The plan is decided: the account stays on the Free plan (FR-028). Open: which models the account can invoke from the pinned Region, in-Region or cross-Region (clarified 2026-10-30); this gates Q2 | O9 |
   | Q1 | Voice: Polly Neural, Nova Sonic (Nova 2 Sonic or Nova 2.5 Sonic), browser TTS, and conformance with P1 | #47, #48, O5 |
   | Q2 | Text model: Haiku 4.5 or Nova 2 Lite | #50, O4 |
   | Q3 | Personality placement: Strands hooks or post-processing (may be recorded as deferred with #42) | #42 |
@@ -309,15 +316,15 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 #### Model, voice and inference path
 
-- **FR-025**: Q0 MUST be decided first, using spike S0's evidence. The model inference path used by the deployment MUST be one the account's plan supports.
-- **FR-026**: The text model (Q2) MUST be chosen by comparing Haiku 4.5 and Nova 2 Lite on re-verified price, availability on the account's plan and pinned Region, Guardrails support, and S1 character fidelity. Following the builder's rule, the Nova model is adopted if it is cheaper and passes those gates.
+- **FR-025**: Q0 MUST be decided first, using spike S0's evidence. The model inference path used by the deployment MUST be one S0 shows the account can invoke; Free-plan documentation alone does not exclude a path (FR-028).
+- **FR-026**: The text model (Q2) MUST be chosen by comparing every S0-eligible candidate (Nova Lite v1 and Haiku 4.5 from S0, plus Nova 2 Lite and Haiku 5.5 if S0-8 and S0-9 succeed) on re-verified price, availability on the account's plan and pinned Region, Guardrails support, and S1 character fidelity. Following the builder's rule, the Nova model is adopted if it is cheaper and passes those gates. A post-upgrade Haiku 5.5 re-probe, if S0-9 is refused, feeds a later model review, not this choice.
 - **FR-027**: The voice path (Q1) MUST be chosen by comparing Polly Neural, Nova Sonic and browser TTS at spec 001's usage assumptions. Nova Sonic means Nova 2 Sonic or its successor Nova 2.5 Sonic, and Nova 2.5 Sonic is compared only once its W37 facts are verified. A Nova Sonic generation is adopted only if cheaper. Strands `BidiAgent` is Python-only (W38), so a Strands-based Nova Sonic path would need a Python service beside the TypeScript agent; the comparison records that cost. Any departure from P1 (cloud-only TTS) requires an amendment under FR-002.
-- **FR-028**: **The account stays on the AWS Free plan** through the first deployment and its month of operation (builder, 2026-10-03). Upgrading to the Paid plan is out of scope; the builder expects to do it when the Free plan ends in December 2026. Consequences:
-  - **Inference path.** The deployment MUST invoke its models through a path the Free plan supports. That means in-Region only, with no global or geographic cross-Region inference profile. The code's global Haiku 4.5 profile (`index.ts:96`, W12) therefore cannot ship as is. Q0 and spike S0 establish which models qualify in the pinned Region (FR-025, FR-031).
+- **FR-028**: **The account stays on the AWS Free plan** until the builder upgrades it to the Paid plan before the Free plan ends in December 2026 (builder, 2026-10-03). The first deployment's month of operation may continue past that upgrade (clarified 2026-10-30). The upgrade itself is out of scope. Consequences:
+  - **Inference path.** The deployment MUST invoke its models through a path spike S0 (or a later approved probe) proves the account can invoke from the pinned Region. In-Region and cross-Region inference profiles are both eligible: the Free plan is temporary, so its documented lack of cross-Region support is recorded but is not grounds for rejection (clarified 2026-10-30). Q0 and S0 establish which models qualify (FR-025, FR-031).
   - **No Organization.** Nothing in this feature may create or join an AWS Organization, including the deploy identity (FR-034), because joining one upgrades the account to Paid automatically (builder-cited; re-verified under FR-007; D10).
   - **Always Free offers only.** Any free usage the cost projection (FR-024) counts MUST be an "Always Free" offer, because Free-plan accounts receive no 12-month trials (D5, FR-051).
   - **Spend is credit-funded.** Credits absorb the month's charges, so the gross-spend measurement (FR-017, SC-010) is what makes the month's real cost visible. The hard stop and in-path breaker are still required (P2). They protect the credits, whose exhaustion ends the Free plan and closes the account. And they must be proven working before the Paid upgrade turns spend into real money.
-  - **Timeline.** The Free plan's end date and remaining credits MUST be recorded as a deploy prerequisite (FR-033). The first deployment MUST go live early enough to finish its month of operation (SC-019) before that date.
+  - **Timeline.** The Free plan's end date and remaining credits MUST be recorded as a deploy prerequisite (FR-033). The month of operation (SC-019) may straddle the Paid upgrade; the upgrade MUST happen before the Free plan's end date, or the account closes.
 - **FR-029**: Prompt caching MUST be either shown reachable for the adopted model or struck from the cost model (#49, S2).
 
 #### First deployment
@@ -328,7 +335,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - T152/T153: CDK deployment of AgentCore Runtime V2
   - T111/T113: alarms
   - Phase 6
-- **FR-031**: The deployment Region MUST be pinned explicitly in infrastructure code, which today sets none. It defaults to infra-plan's Region, provided the adopted model is invocable in-Region there under Q0.
+- **FR-031**: The deployment Region MUST be pinned explicitly in infrastructure code, which today sets none. It defaults to infra-plan's Region, provided the adopted model is invocable from there under Q0.
 - **FR-032**: The path from the signed-in friend to the agent runtime MUST be implemented end to end via the transport decided in Q4. Every invoking principal MUST be granted invoke permission on the specific deployed runtime only, not a wildcard. Verified gaps the path must close (see W4–W6 and W1):
   - the WebSocket handler's agent call is a stub (`websocket-handler.ts:109`)
   - the browser opens an unsigned socket (`useWebSocket.ts:75`), while the API's connect route requires IAM authorization (`agent-stack.ts:62`). The presigning helper exists but nothing calls it (`cognitoAuth.ts:76`).
@@ -478,15 +485,15 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **SC-016**: After the builder removes an email from the allowlist, that person opens zero new sessions, and makes zero spend-bearing actions once any session open at the time of removal has ended (at most spec 001's 30-minute session cap later).
 - **SC-017**: An audit of the deployment finds no signed-out path to any spend-bearing action.
 - **SC-018**: Every site, sign-in and callback URL in the deployment is served over HTTPS, and a plain-HTTP request is redirected or refused.
-- **SC-019**: The first deployment serves invited friends for one month before the Free plan ends (builder, 2026-10-03: "operationalize it ideally for a month so I can see the cost"). That month's gross spend before credits is recorded by service and compared with the FR-024 projection and with an AWS Pricing Calculator estimate of the as-built infrastructure (see Assumptions). The comparison is recorded with the Q7 cost-model decision.
+- **SC-019**: The first deployment serves invited friends for one month (builder, 2026-10-03: "operationalize it ideally for a month so I can see the cost"). The month may start on the Free plan and continue after the Paid upgrade (clarified 2026-10-30). That month's gross spend before credits is recorded by service and compared with the FR-024 projection and with an AWS Pricing Calculator estimate of the as-built infrastructure (see Assumptions). The comparison is recorded with the Q7 cost-model decision.
 
 ## Assumptions
 
 - **Methodology.** The review produces decisions, not behavior, so it has no RED test. Its checks are `speckit.analyze` and `wiki:lint`. Every implementation task that comes out of the review follows RED → GREEN → REFACTOR.
 - **Usage assumptions** are spec 001's: the session-cost and sessions-per-month figures in `specs/001-max-height-ai-character/plan.md` and `research.md`. They are corrected under Q7 where #47 and #49 found errors, and are not re-invented here.
 - **Account plan facts** come from AWS documentation the builder cited, and are re-verified under FR-007. The wiki records none of them (D1, D10, D11):
-  - the account is on the Free plan (created after 2025-07-15). It stays there through the first deployment, and the builder expects the plan to end in December 2026 (FR-028).
-  - the Free plan does not support global or geographic cross-Region inference
+  - the account is on the Free plan (created after 2025-07-15). It stays there until the builder upgrades it before the plan ends in December 2026; the first deployment's month of operation may continue past the upgrade (FR-028).
+  - the Free plan does not support global or geographic cross-Region inference (documented; S0-1 and S0-2 found it works in the account, and FR-028 does not treat it as a gate)
   - it excludes certain Marketplace offers that can incur charges (whether this blocks Claude models is unverified)
   - it ends after 6 months or when credits run out, with 90 days to upgrade before closure
   - joining AWS Organizations upgrades the account to Paid automatically
@@ -517,7 +524,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - spec 002 and issues #10–#14 (volume knob)
   - #42 personality hooks (deferred until after the first deployment)
   - #58 semantic wiki maintenance workflow
-  - upgrading the account to the Paid plan (the builder does this when the Free plan ends, FR-028)
+  - upgrading the account to the Paid plan (the builder does this before the Free plan ends, FR-028)
   - long-term memory (deferred to spec 001's V1, FR-014)
   - spec 001 V1 features not needed for the first deployment
   - public or self-service registration, and any audience beyond invited friends (the builder will consider scaling later if friends like it)
