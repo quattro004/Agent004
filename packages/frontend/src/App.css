@@ -256,25 +256,76 @@
   width: 55%;
   aspect-ratio: 1 / 1;
   border-radius: 50%;
+  overflow: hidden;
   background: transparent;
   border: none;
   box-shadow: none;
-  cursor: pointer;
-  appearance: none;
-  padding: 0;
   position: relative;
   flex-shrink: 0;
 }
 
-.volume-knob:hover:not(:disabled) {
+.volume-knob:not(.volume-knob--disabled):hover {
   box-shadow:
     0 0 16px rgba(0, 255, 255, 0.5),
     0 0 32px rgba(0, 255, 255, 0.2);
 }
 
-.volume-knob:disabled {
+.volume-knob--disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.volume-knob-half {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.volume-knob-half--down {
+  left: 0;
+}
+
+.volume-knob-half--up {
+  right: 0;
+}
+
+.volume-knob-half:focus-visible {
+  outline: 2px solid #00ffff;
+  outline-offset: -4px;
+}
+
+.volume-knob-half:disabled {
+  cursor: not-allowed;
+}
+
+.volume-knob-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44%;
+  height: 2px;
+  border-radius: 1px;
+  background: #00ffff;
+  box-shadow: 0 0 5px rgba(0, 255, 255, 0.9);
+  pointer-events: none;
+  transform-origin: left center;
+  transform: rotate(var(--knob-angle));
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .volume-knob-indicator {
+    transition: none;
+  }
 }
 
 .channel-knob {
