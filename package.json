@@ -13,8 +13,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --build",
-    "wiki:pull": "pnpm --filter @max-height/repo-tools run wiki:pull",
-    "wiki:push": "pnpm --filter @max-height/repo-tools run wiki:push",
     "wiki:lint": "pnpm --filter @max-height/repo-tools run wiki:lint",
     "validate": "eslint . && prettier --check . && tsc --build && pnpm -r --if-present build && pnpm -r --if-present test"
   },

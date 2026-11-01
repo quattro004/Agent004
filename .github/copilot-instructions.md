@@ -36,7 +36,7 @@ Source-of-truth order (highest authority first):
 3. `specs/` — feature specifications. Authoritative for a feature _while it is being implemented_; frozen and point-in-time afterwards.
 4. `docs/` — supporting design documents. Useful background only.
 
-Session start ritual: `pnpm run wiki:pull`, then read the wiki's `Index`. Check
+Session start ritual: `git -C wiki pull`, then read the wiki's `Index`. Check
 the wiki's `Gotchas` page before rediscovering a known trap. The `wiki` skill
 carries this ritual and the ingest, query and record-a-trap workflows.
 
@@ -140,14 +140,21 @@ Individual scripts (for targeted fixes):
 | `pnpm run build`        | Workspace builds       |
 | `pnpm run test`         | Unit/integration tests |
 
-Wiki scripts are separate and deliberately **not** part of `validate` — the
-`wiki/` clone is optional and gitignored:
+The wiki is an ordinary git repo cloned to `./wiki`, so it needs no tooling of
+its own — only the linter, which enforces conventions git knows nothing about:
 
-| Command              | Purpose                                 |
-| -------------------- | --------------------------------------- |
-| `pnpm run wiki:pull` | Clone or update the local `wiki/` clone |
-| `pnpm run wiki:lint` | Lint the wiki against its conventions   |
-| `pnpm run wiki:push` | Push wiki changes (live, no PR)         |
+| Command              | Purpose                                                   |
+| -------------------- | --------------------------------------------------------- |
+| `pnpm run wiki:lint` | Lint the wiki against its conventions (not in `validate`) |
+
+```sh
+git clone https://github.com/quattro004/Agent004.wiki.git wiki   # first time
+git -C wiki pull                                                 # update
+git -C wiki add -A; git -C wiki commit -m "Message"; git -C wiki push
+```
+
+Separate those last three with `;`, not `&&`: `commit` exits non-zero on a
+clean tree, so `&&` silently skips the push.
 
 ---
 

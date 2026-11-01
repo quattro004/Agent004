@@ -44,14 +44,14 @@ Treat that the same as any other ingest: cite it, give it a `Source-*` page if
 it will be consulted again, and update whatever pages it affects. Research that
 only ever reaches a pull request description has evaporated.
 
-**Session start ritual:** `pnpm run wiki:pull`, then read the wiki's `Index`
+**Session start ritual:** `git -C wiki pull`, then read the wiki's `Index`
 page. Check `Gotchas` before rediscovering a known trap.
 
 The three workflows, documented in full on the wiki's `Wiki-Conventions` page
 and available as the **`wiki` skill** (`.github/skills/wiki/`, or the `/wiki`
 prompt):
 
-- **Ingest** — read the new source → write or refresh its `Source-*` page → update every affected `Concept-`, `Component-`, `Contract-`, `Decision-` and `Feature-` page → update `Index` → append to `Log` → `pnpm run wiki:lint` → `pnpm run wiki:push`.
+- **Ingest** — read the new source → write or refresh its `Source-*` page → update every affected `Concept-`, `Component-`, `Contract-`, `Decision-` and `Feature-` page → update `Index` → append to `Log` → `pnpm run wiki:lint` → push with plain `git`.
 - **Query** — read `Index` first, drill in, answer **with citations**. If the answer is durable, file it back as a new page.
 - **Record a trap** — write it on the page that owns it and link it from `Gotchas`, in the same change.
 
@@ -69,21 +69,32 @@ wiki separately via its own git history.
 
 ## Setup and core commands
 
-| Task                     | Command                           |
-| ------------------------ | --------------------------------- |
-| Install dependencies     | `pnpm install`                    |
-| Run full validation gate | `pnpm run validate`               |
-| Lint                     | `pnpm run lint`                   |
-| Format check             | `pnpm run format:check`           |
-| Type-check               | `pnpm run typecheck`              |
-| Build all workspaces     | `pnpm run build`                  |
-| Test all workspaces      | `pnpm run test`                   |
-| Pull the wiki clone      | `pnpm run wiki:pull`              |
-| Lint the wiki            | `pnpm run wiki:lint`              |
-| Push the wiki (live)     | `pnpm run wiki:push -- "Message"` |
+| Task                     | Command                 |
+| ------------------------ | ----------------------- |
+| Install dependencies     | `pnpm install`          |
+| Run full validation gate | `pnpm run validate`     |
+| Lint                     | `pnpm run lint`         |
+| Format check             | `pnpm run format:check` |
+| Type-check               | `pnpm run typecheck`    |
+| Build all workspaces     | `pnpm run build`        |
+| Test all workspaces      | `pnpm run test`         |
+| Lint the wiki            | `pnpm run wiki:lint`    |
 
 `wiki:lint` is deliberately **not** part of `validate`: the `wiki/` clone is
 optional and gitignored, so `validate` must pass without it.
+
+The wiki is an ordinary git repo cloned to `./wiki`, so it needs no tooling of
+its own — use `git -C wiki` and you cannot mistake it for the main repo:
+
+```sh
+git clone https://github.com/quattro004/Agent004.wiki.git wiki   # first time
+git -C wiki pull                                                 # update
+git -C wiki add -A; git -C wiki commit -m "Message"; git -C wiki push
+```
+
+Separate those last three with `;`, not `&&`: `commit` exits non-zero on a
+clean tree, so `&&` silently skips the push and the wiki looks published when
+it is not.
 
 Package-level commands:
 
@@ -209,7 +220,7 @@ wiki's research rather than redoing it. Just confirm the facts a decision depend
 
 - When the wiki is wrong, correct the owning page **and** append the
   disagreement to `Log`. When it is silent, that is an ingest. Either way, get
-  approval before `wiki:push`.
+  approval before pushing the wiki.
 - Unverified wiki claims may inform a spec only when labelled as unverified.
   Verification then becomes plan or research work.
 - Verification happens at the point of use. Issue #58 proposes a periodic
@@ -346,7 +357,7 @@ what broke — belongs on the wiki, linked rather than restated.
 A repository memory may cache a fact recorded in the schema or on the wiki, and
 should cite where it lives. When something reaches the wiki, follow the ingest
 workflow — update `Index`, append to `Log`, run `pnpm run wiki:lint` — and get
-approval before `wiki:push`, because wiki pushes are live and public.
+approval before pushing, because wiki pushes are live and public.
 
 ## Root scripts are invisible to the toolchain
 
@@ -356,20 +367,20 @@ is neither linted nor tested. A root script may **chain** commands; the moment
 it encodes a **decision**, it belongs in a workspace package —
 `packages/repo-tools` exists for exactly this.
 
-**Mind the entry point, too.** Keep bins thin: anything a bin decides for itself,
-argument parsing included, is code no test is looking at. `wiki:push --message
-"text"` once committed the literal `--message` to the live wiki, because the bin
-read `process.argv[2]` directly. Parsing now lives in `src/wiki/push-args.ts`
-under test. The `wiki:push` short-circuit story is on the wiki's
-`Guide-Validation-Gate`.
+**Do not build tooling a tool already provides.** Prefer the underlying command,
+and add a script only when it encodes a decision, enforces a convention, or
+fixes something the tool genuinely gets wrong. `wiki:pull` and `wiki:push`
+existed to run git against the `./wiki` clone. Between them they produced three
+bugs — an `&&` chain that skipped the push on a clean tree, a bin that read
+`process.argv[2]` and committed the literal `--message` to the live public
+wiki, and a `|| git clone` fallback that replaced git's real error with
+`destination path 'wiki' already exists`. Every one was created by the wrapper;
+plain `git` had none of them. Both were deleted on 2026-11-01 in favour of
+`git -C wiki ...`.
 
-**A shell `||` fallback is a decision, and it hides the failure it follows.**
-`wiki:pull` was
-`git -C wiki pull --ff-only origin master || git clone <url> wiki`, so every
-pull failure — unreachable remote, diverged history, dirty tree — cloned into
-a directory that already existed, replacing git's real message with
-`destination path 'wiki' already exists` and reporting the clone's exit code.
-All three wiki scripts now delegate to `packages/repo-tools`; keep it that way.
+`wiki:lint` stays, and shows the other side of the line: it enforces `Index`,
+`Log`, frontmatter and link conventions that git knows nothing about. That is
+a decision worth testing. Wrapping `git push` was not.
 
 ## Product and legal guardrails
 

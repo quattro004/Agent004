@@ -17,14 +17,15 @@ copy is the one human contributors editing in the browser will see.
 ## Before anything else
 
 ```sh
-pnpm run wiki:pull
+git -C wiki pull
 ```
 
 Then read `wiki/Index.md`. It lists every page. Check `wiki/Gotchas.md` before
 rediscovering a known trap.
 
-If `./wiki` does not exist, `wiki:pull` clones it. An **empty** wiki cannot be
-cloned at all — the first page must be created in the browser.
+If `./wiki` does not exist, clone it:
+`git clone https://github.com/quattro004/Agent004.wiki.git wiki`. An **empty**
+wiki cannot be cloned at all — the first page must be created in the browser.
 
 ## The four workflows
 
@@ -51,7 +52,7 @@ Run every step, in order. Steps 4 and 5 are the ones that get skipped:
    and everything below renders as literal pipe-prefixed prose. The `table`
    lint rule catches this, and a row with no closing `|`.
 6. Run `pnpm run wiki:lint` and fix every finding.
-7. Ask for approval, then `pnpm run wiki:push`.
+7. Ask for approval, then push with `git -C wiki ...` (see below).
 
 ### 2. Query — answer a question from the wiki
 
@@ -111,18 +112,18 @@ Browser edits on github.com bypass the linter entirely.
 ## Pushing — live, public, and gated on approval
 
 ```sh
-pnpm run wiki:push                             # uses the default "Update wiki" message
-pnpm run wiki:push -- "Record the CRLF trap"   # or supply your own
-pnpm run wiki:push -- -m "Record the CRLF trap"
+git -C wiki add -A
+git -C wiki commit -m "Record the CRLF trap"
+git -C wiki push
 ```
 
-**Quote the whole message.** Anything the argument parser cannot explain — an
-unknown flag, a message split across several unquoted words, an empty one — is
-rejected with a usage error and a non-zero exit *before* git runs. A wiki push
-is live, public and un-reviewed, so a misunderstood argument has to fail loudly
-rather than be guessed at: `--message "text"` once committed the literal string
-`--message` as the wiki commit message, because the bin read `argv[2]`
-positionally.
+Run those as three separate commands, or chain them with `;` — **never `&&`**.
+`git commit` exits non-zero when the tree is clean, so `&&` skips the push and
+the wiki looks published when it is not.
+
+`git -C wiki` rather than `cd wiki` keeps the target unambiguous: the wiki is a
+separate repo nested inside the main repo's working tree, so a bare `git push`
+at the root pushes Agent004 instead.
 
 It stages and commits **only when the working tree is dirty**, then pushes
 whether or not this run committed anything — so committing by hand first with a
