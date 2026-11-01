@@ -37,16 +37,17 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-10-11 | In-session history lives in runtime session state (one Strands `Agent` per counted session) | Q8 |
 | 2026-10-11 | **Long-term memory is un-deferred** into the first deployment: "seems like long term memory is within budget and I wanted it initially anyway" | Q8, FR-014, FR-030, FR-037, SC-019 (P-03, P-10) |
 | 2026-10-29 | S0-1/S0-2's cross-Region success is **recorded only, not adopted**; Nova Lite v1 stays the sole Q2 candidate. The builder confirmed the account is on the Free plan, and noted Haiku 4.5's lifecycle risk: its card (read 2026-10-29) shows Active with no EOL date, but its "EOL no sooner than" floor, 2026-10-16, has passed | Q0, Q2, D1 |
+| 2026-10-30 | Any route S0 (or a later approved probe) proves is eligible, in-Region or cross-Region; the Free plan is temporary, so its documented restrictions are not grounds for rejection. S0-8 and S0-9 approved. Supersedes the 2026-10-29 record-only decision (spec.md § Clarifications) | Q0, Q2, D1, FR-028 |
 
 ## Decision register (FR-004)
 
 ### Q0 — Inference path on the Free plan
 
-- **Decision**: invoke models only through in-Region paths in `us-west-2`. Spike S0 (a probe matrix, [contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)) establishes which candidate IDs the account can call. The text model is then chosen under Q2.
+- **Decision**: invoke models only through routes in `us-west-2` that S0 (or a later approved probe) proves this account can invoke, in-Region or cross-Region inference profile (clarified 2026-10-30, spec.md § Clarifications; FR-028). Spike S0 (a probe matrix, [contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)) establishes which routes qualify. The text model is then chosen under Q2.
 - **Evidence**:
-  - The Free plan does not support multi-Region or cross-Region features for any service (AWS "Supported AWS services for Sign up for AWS (new)", read 2026-10-11). The code's `global.anthropic.claude-haiku-4-5-20251001-v1:0` (`index.ts:96`) therefore cannot ship. **D1 verified.**
-  - **Nova 2 Lite is cross-Region-inference only** on `bedrock-runtime`, so it is not invocable on the Free plan. This **refutes D2** and the repository memory that it has an in-Region ID. Source: Nova 2 Lite model card, `docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html`, read 2026-10-11.
-  - Haiku 4.5 is in-Region only through the `bedrock-mantle` endpoint, which offers no Guardrails (Haiku 4.5 model card, read 2026-10-11).
+  - The Free plan does not support multi-Region or cross-Region features for any service (AWS "Supported AWS services for Sign up for AWS (new)", read 2026-10-11). **D1 verified** against the documentation. This is recorded, not grounds for rejection: the Free plan is temporary, and S0-1, S0-2 and S0-8 show cross-Region profiles working in this account (clarified 2026-10-30).
+  - **Nova 2 Lite is cross-Region-inference only** on `bedrock-runtime`: its bare ID has no on-demand path (S0-5). This **refutes D2** and the repository memory that it has an in-Region ID. Its US profile `us.amazon.nova-2-lite-v1:0` works (S0-8) and, from `us-west-2`, routes to `us-east-1`, `us-east-2` and `us-west-2`. Source: Nova 2 Lite model card, `docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html`, read 2026-10-11 and re-read 2026-11-01.
+  - Haiku 4.5's only in-Region path is the `bedrock-mantle` endpoint, which offers no Guardrails. On `bedrock-runtime` it needs a geo or global profile, where the card lists Guardrails (Haiku 4.5 model card, read 2026-10-11 and re-read 2026-11-01).
   - Nova Lite (v1) `amazon.nova-lite-v1:0` is invocable in-Region on `bedrock-runtime` (Nova Lite model card, read 2026-10-11).
   - Nova 2 Sonic is in-Region, with no Guardrails (Nova 2 Sonic model card, read 2026-10-11; W31).
   - **Every other service this design uses is in the Free Tier list**: Bedrock, Bedrock AgentCore, Polly, Cognito, DynamoDB, ECR, EventBridge, Lambda, SNS, S3, CloudFront, ACM, Systems Manager, Budgets, CloudWatch and X-Ray. Two exceptions matter here: **Lambda@Edge is not supported** (so SPA routing uses a CloudFront Function, [contracts/csp-and-hosting.md](./contracts/csp-and-hosting.md)), and AWS Organizations is not supported at all. Source: "Supported AWS services for Sign up for AWS (new)", `docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html`, re-read 2026-10-11. A listing is not proof that a given API call succeeds, so S0 probes the calls that carry spend.
@@ -62,12 +63,21 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
   | S0-6 | `amazon.nova-lite-v1:0` | success | success (as expected) | |
   | S0-7 | Polly `Matthew` / neural / mp3 / 24000 | success | success (as expected; also on 2026-10-25) | |
 
-  - **S0-1 and S0-2 contradict D1.** Per the probe contract they are recorded and **not adopted**: the documented plan rule could start being enforced at any time. The builder confirmed the Free plan and chose record-only (2026-10-29; see Builder decisions).
-  - S0-5 also settles Nova 2 Lite ("Nova Lite v2"): it has no on-demand in-Region path on this account, as its card says.
-  - S0-4 failing and S0-6 succeeding selects the contract's first outcome: **Nova Lite v1 is the only eligible Q2 candidate**, subject to S1 and amendment A2 (T096).
+  - **S0-1 and S0-2 contradict D1.** On 2026-10-29 they were recorded and not adopted (record-only). The 2026-10-30 clarification (spec.md § Clarifications) supersedes that: any route S0 proves is eligible, so **Haiku 4.5 is eligible through its global and US profiles**.
+  - S0-5 also settles Nova 2 Lite ("Nova Lite v2"): it has no on-demand in-Region path on this account, as its card says. S0-8 probes its US profile instead.
+  - On 2026-10-29, S0-4 failing and S0-6 succeeding left Nova Lite v1 as the only eligible candidate (T096). T139 supersedes that shortlist.
+- **S0-8 and S0-9 results** (T136; run by the builder 2026-11-01, `us-west-2`, IAM user `max-height-gen` with a temporary inline policy granting `bedrock:InvokeModel` on the two US profiles and on their foundation models in `us-*` conditioned on `bedrock:InferenceProfileArn`, plus `bedrock:CallWithBearerToken`; short-term Bedrock API key, so bearer auth as on 2026-10-29; runner `scripts/s0-probe.ts S0-8 S0-9`; thinking-off field `{"thinking":{"type":"disabled"}}`):
+
+  | # | Model or voice | Expected | Outcome | First line of error |
+  | --- | --- | --- | --- | --- |
+  | S0-8 | `us.amazon.nova-2-lite-v1:0` | unknown (Q2) | **success** | |
+  | S0-9 | `us.anthropic.claude-haiku-5-5` (thinking off) | unknown (Q2) | `AccessDeniedException` | `anthropic.claude-haiku-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/` |
+
+  - **S0-8 makes Nova 2 Lite an eligible Q2 candidate** through its US profile.
+  - **S0-9 is refused with the same message as S0-4**, so Haiku 5.5 is not available to this account through either route. The refusal comes before Bedrock validates the request, so the thinking-off field is still untested. The Free plan is the suspected cause; T143 probes again after the Paid upgrade, and that gates nothing in this feature.
 - **Alternatives**:
-  - Upgrade to the Paid plan to use cross-Region profiles: rejected, because FR-028 keeps the Free plan.
-  - Move Region: rejected; nothing found makes another Region better for the in-Region candidates, and `us-west-2` hosts Runtime V2.
+  - Upgrade to the Paid plan before the first deployment: not needed, because S0 proved cross-Region profiles work on this account (clarified 2026-10-30). The Free plan ends in December 2026 regardless (FR-028).
+  - Move Region: rejected; nothing found makes another Region better for the candidates, and `us-west-2` hosts Runtime V2.
 - **Constitution**: may trigger amendment A2 (LLM row) through Q2.
 
 ### Q1 — Voice
@@ -86,11 +96,11 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 ### Q2 — Text model
 
 - **Decision rule**:
-  - **Eligible**: the candidate is invocable in-Region on the Free plan (S0), supports Guardrails on its invocation path (builder rule), and passes the S1 golden set if it is not Haiku 4.5 (P3, gate 2).
+  - **Eligible**: S0 (or a later approved probe) proves the account can invoke the candidate from `us-west-2`, in-Region or through a cross-Region profile (clarified 2026-10-30); it supports Guardrails on that route (builder rule); and it passes the S1 golden set if it is not Haiku 4.5 (P3, gate 2).
   - **Choice**: among eligible candidates, the cheapest at re-verified prices wins (builder rule, FR-026).
-- **Expected outcome**:
-  - **Haiku 4.5** fails the Guardrails gate on the Free plan, because its only in-Region path is mantle.
-  - **Nova 2 Lite** fails S0, because it is cross-Region only.
+- **Expected outcome** (written 2026-10-11, before S0; see the eligibility table below for the results):
+  - **Haiku 4.5** was expected to fail the Guardrails gate on the Free plan, because its only in-Region path is mantle. S0-1 and S0-2 then proved its cross-Region profiles, where its card lists Guardrails on `bedrock-runtime`.
+  - **Nova 2 Lite** was expected to fail S0, because it is cross-Region only. S0-8 proved its US profile.
   - **Nova Lite v1** passes the documented gates. Its card lists Guardrails on `bedrock-runtime`, an in-Region endpoint, and lifecycle Active (Nova Lite model card, read 2026-10-11). Adopting it requires amendment A2 and passing S1.
   - **Claude Haiku 5.5** (launched 2026-10-07; found during planning) is a **new candidate**. Its card lists Guardrails on `bedrock-runtime` and a bare `bedrock-runtime` model ID, `anthropic.claude-haiku-5-5`, whereas Haiku 4.5's is N/A. The card's in-Region column renders as images and its in-Region URL reads N/A, so **in-Region availability is unverified**. Probe S0-4 settles it. If eligible, it is Haiku-class, so A2 is not triggered. Adaptive thinking is on by default and its tokens bill as output, so it would be turned off. Its price is human-read (billed through AWS Marketplace). It is added to FR-026's comparison by P-13.
 - **Escalation**: if no candidate passes, the builder chooses between waiting for the Paid plan and relaxing the Guardrails rule. That choice is recorded here, and nothing is assumed meanwhile.
@@ -103,9 +113,20 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
   | Haiku 4.5 | S0-1/S0-2 cross-Region only (record-only, D1); S0-3 mantle 403 | not read | Ineligible |
   | Nova 2 Lite | S0-5 needs an inference profile | not read | Ineligible |
 
-  Nova Lite v1 is the only S0-eligible candidate, so it is the cheapest by default. **Q2 stays open**: it closes in T100 if Nova Lite v1 passes S1, and its adoption still needs amendment A2. If it fails S1, no eligible candidate remains and the escalation above applies.
+  Nova Lite v1 was then the only S0-eligible candidate, so it was the cheapest by default. **Superseded** by the 2026-10-30 clarification and S0-8/S0-9; T139 records the new shortlist.
+- **Eligibility after the clarification and S0-8/S0-9 (T137, 2026-11-01)**:
+
+  | Candidate and route | S0 | Guardrails on the route | Lifecycle (model card) | Status |
+  | --- | --- | --- | --- | --- |
+  | Nova Lite v1 `amazon.nova-lite-v1:0` (in-Region) | S0-6 succeeded | Yes (card) | Active (read 2026-10-11) | **Eligible**; needs S1 and A2 |
+  | Haiku 4.5 `global.anthropic.claude-haiku-4-5-20251001-v1:0` | S0-1 succeeded | Yes, `bedrock-runtime` (card) | Active, no EOL date; "EOL no sooner than" 2026-10-16 has passed (read 2026-11-01) | **Eligible**; today's model, so no S1 or A2 |
+  | Haiku 4.5 `us.anthropic.claude-haiku-4-5-20251001-v1:0` | S0-2 succeeded | Yes, `bedrock-runtime` (card) | as above | **Eligible**; as above |
+  | Nova 2 Lite `us.amazon.nova-2-lite-v1:0` | S0-8 succeeded | Yes, `bedrock-runtime` (card) | Active, no EOL date; "EOL no sooner than" 2026-12-02 (read 2026-11-01) | **Eligible**; needs S1 and A2 |
+  | Claude Haiku 5.5 (bare ID and `us.` profile) | S0-4 and S0-9 "not available for this account" | Yes (card) | not re-read | Not available to this account; re-probed after the Paid upgrade (T143) |
+
+  Prices for the three newly eligible routes are human-read before T138's projection and T139's choice. Both Haiku 4.5 and Nova 2 Lite have passed or near "EOL no sooner than" floors, which FR-007's lifecycle check weighs at T139.
 - **Kept**: the 250-token reply cap (`index.ts:97`).
-- **Issue**: #50 is resolved by this record. Nova 2 Lite is ineligible on the Free plan, and the evaluation moves to Nova Lite v1 under S1.
+- **Issue**: #50 is resolved by this record. Nova 2 Lite is eligible through its US profile (S0-8) and is compared with the other eligible candidates under Q2 and S1.
 
 ### Q3 — Personality placement
 
@@ -307,8 +328,8 @@ A finding that only confirms a decision already recorded above is noted here and
 
 | Spike | Objective | Cost estimate | Approval |
 | --- | --- | --- | --- |
-| **S0** | Probe matrix: which candidate model IDs, and Polly, this Free-plan account can invoke in `us-west-2` ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)) | 7 calls of under 100 tokens or 40 characters each; well under $0.01. S0-8 and S0-9: one Converse call each, `maxTokens: 16`, under 100 tokens; well under $0.01 | S0-1 to S0-7: **Approved by the builder, 2026-10-25** (runner: `scripts/s0-probe.ts`). **Run 2026-10-29**; results in Q0 § S0 results. S0-8 (`us.amazon.nova-2-lite-v1:0`) and S0-9 (`us.anthropic.claude-haiku-5-5`): **Approved by the builder, 2026-10-30** (spec.md § Clarifications); run alone with `s0-probe.ts S0-8 S0-9`. Not yet run |
-| **S1** | Golden-set character check: each S0-eligible candidate against the absolute rubric bar on the 65-case set, scored offline by a judge script with builder spot-checks ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)). No Haiku 4.5 baseline: it cannot be invoked in-Region (D1) | Per candidate: about 230K input and 16K output tokens for replies, plus about 165K input and 26K output for the judge; costed at human-read prices before approval | Pending; runs for every S0-eligible candidate, since Haiku 4.5 cannot ship (D1) and every eligible candidate is a model change |
+| **S0** | Probe matrix: which candidate model IDs, and Polly, this Free-plan account can invoke in `us-west-2` ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)) | 7 calls of under 100 tokens or 40 characters each; well under $0.01. S0-8 and S0-9: one Converse call each, `maxTokens: 16`, under 100 tokens; well under $0.01 | S0-1 to S0-7: **Approved by the builder, 2026-10-25** (runner: `scripts/s0-probe.ts`). **Run 2026-10-29**; results in Q0 § S0 results. S0-8 (`us.amazon.nova-2-lite-v1:0`) and S0-9 (`us.anthropic.claude-haiku-5-5`): **Approved by the builder, 2026-10-30** (spec.md § Clarifications); run alone with `s0-probe.ts S0-8 S0-9`. **Run 2026-11-01**; results in Q0 § S0-8 and S0-9 results |
+| **S1** | Golden-set character check: each S0-eligible candidate against the absolute rubric bar on the 65-case set, scored offline by a judge script with builder spot-checks ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)). Haiku 4.5 is today's model, so it needs no S1 run; a baseline is optional and is costed and approved separately if wanted | Per candidate: about 230K input and 16K output tokens for replies, plus about 165K input and 26K output for the judge; costed at human-read prices before approval | Pending; runs for every S0-eligible candidate other than Haiku 4.5, since each is a model change |
 | **S2** | Real system-prompt and tool-definition tokens from reported usage (`metrics.accumulatedUsage`); the cache checkpoint minimum for the adopted model | A few calls; under $0.05 at any candidate's price | Pending |
 | **S3** | Nova Sonic audio tokens per second and whether silence is billed | n/a | **Not run**: Q1 did not adopt Nova Sonic |
 | **S4** (new) | Whether in-process runtime state (the session `Agent`) survives more than 120 s idle on Runtime V2 | A few invocations at first deploy; under $0.01 | Pending |
@@ -347,7 +368,7 @@ Checked 2026-10-11 unless noted. "Not relied on" means no decision rests on the 
 | W29 | Partly verified | AgentCore Runtime, Memory and Web Search prices are verified (R-cost). The Nova Lite v1 and Polly Neural prices were human-read 2026-10-29 |
 | W30 / D5 | Conflict stands | The projection assumes no Polly free tier (conservative); no decision depends on resolving it |
 | W31 | Verified (in-Region; no Guardrails) | Nova 2 Sonic model card; the other parts are not relied on |
-| W32 | Not relied on | Nova 2 Lite is ineligible (Q0) |
+| W32 | Not relied on | Nova 2 Lite is eligible only through its US profile (S0-8, Q0) |
 | W33 | **Refuted** | The Haiku 4.5 model card (read 2026-10-11) contradicts the Gotchas claim; S2 relies on reported usage regardless |
 | W34 | Unverified, not relied on | Caching is decided by S2 against the 1.20.0 `.d.ts` |
 | W35 | Resolved | AgentCore Memory for long-term; runtime state for in-session history; Strands S3 session storage not chosen (Q8) |
@@ -361,8 +382,8 @@ Each push needs builder approval. The research batch below is staged, **not push
 
 | # | Verdict | Wiki action (pending approval) |
 | --- | --- | --- |
-| D1 | **Verified** against the documentation: the Free plan supports no cross-Region features. **Contradicted in this account** by S0-1 and S0-2 (2026-10-29): both cross-Region profiles succeeded. Not adopted; the builder chose record-only (2026-10-29) | Gap: add to Decision-LLM-Model-Selection, Component-Agent-Runtime and Gotchas |
-| D2 | **Refuted in part**: Nova 2 Lite is cross-Region only; Haiku 4.5 is in-Region only via mantle, with no Guardrails | Gap and correction: Source-Amazon-Nova-Lite, Decision-LLM-Model-Selection, plus a Gotchas row |
+| D1 | **Verified** against the documentation: the Free plan supports no cross-Region features. **Contradicted in this account** by S0-1, S0-2 (2026-10-29) and S0-8 (2026-11-01): cross-Region profiles succeeded. Recorded only on 2026-10-29; since the 2026-10-30 clarification, S0-proven cross-Region routes are eligible | Gap: add to Decision-LLM-Model-Selection, Component-Agent-Runtime and Gotchas |
+| D2 | **Refuted in part**: Nova 2 Lite has no in-Region on-demand path, but its US profile works (S0-8); Haiku 4.5 is in-Region only via mantle, with no Guardrails, and works through its cross-Region profiles (S0-1, S0-2) | Gap and correction: Source-Amazon-Nova-Lite, Decision-LLM-Model-Selection, plus a Gotchas row |
 | D3, D4, D8, D9, D12 | Resolved earlier | None |
 | D5 | Conflict stands; resolved conservatively | Source-Amazon-Polly: add the Free-plan caveat |
 | D6 | **Verified**: `IncludeCredit` defaults to true | Concept-Budget-Ceiling |
@@ -381,7 +402,7 @@ Each push needs builder approval. The research batch below is staged, **not push
 | #47 | In scope | Q1 and Q7: speech marks dropped; Polly free tier not counted |
 | #48 | In scope; idea deferred | Q1: Polly adopted; a Nova Sonic hybrid is revisited after the first deployment (BidiAgent is Python-only) |
 | #49 | In scope | Q7 and S2: caching stays in the model only if reachable |
-| #50 | In scope | Q0 and Q2: Nova 2 Lite ineligible on the Free plan; evaluation moves to Nova Lite v1 (S1) |
+| #50 | In scope | Q0 and Q2: Nova 2 Lite is eligible through its US profile (S0-8) and competes under Q2 and S1 |
 | #55 | In scope | Q5: identity from the verified `sub` |
 | #61 | In scope | Q6: fail-loud hard-stop redesign; closes when it ships with its test |
 | #42 | Deferred | Q3 |

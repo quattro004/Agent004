@@ -23,7 +23,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
   - **In-session history.** One Strands `Agent` lives per counted session inside the runtime session's microVM, using the SDK's default 40-message sliding window.
   - **Long-term memory is un-deferred.** AgentCore Memory, with a 30-day rolling window that a scheduled pruner enforces, ships in the first deployment. This reverses the 2026-10-03 clarification and FR-014 (spec patch P-03).
 - **IaC (Q8).** CDK owns everything, which needs a constitution amendment to the IaC row.
-- **Text model (Q0, Q2).** The model is chosen after spike S0, a probe matrix of in-Region inference paths ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)). The Free plan forbids cross-Region inference, so the code's global Haiku 4.5 profile cannot ship. The eligible candidates are Claude Haiku 5.5, whose in-Region availability S0 must confirm, and Nova Lite v1, which needs amendment A2.
+- **Text model (Q0, Q2).** The model is chosen after spike S0, a probe matrix of inference routes ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)). Any route S0 proves the account can invoke is eligible, in-Region or cross-Region (clarified 2026-10-30): the Free plan's documented lack of cross-Region support is recorded, not a rejection. The eligible candidates are Haiku 4.5 through its global or US profile (today's model), Nova 2 Lite through its US profile, and Nova Lite v1 in-Region; the two Nova models need amendment A2. Claude Haiku 5.5 is not available to this account (S0-4, S0-9).
 
 ## Technical Context
 
@@ -60,7 +60,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 **Constraints**:
 
 - P2 caps spend at $10 a month, with email alerts at $5 and $8. The cost gate is $8 projected.
-- Free plan: in-Region inference only, Always Free offers only, and no AWS Organization (FR-028).
+- Free plan: inference only through routes S0 proves (in-Region or cross-Region, clarified 2026-10-30), Always Free offers only, and no AWS Organization (FR-028).
 - Spec 001's per-session caps: 20,000 conversational tokens, 50 turns, 30 minutes.
 - Messages are limited to 2,000 characters on the client, the server and in the contract (spec patch P-08).
 - No signed-out path to any spend-bearing action (SC-017).
@@ -78,7 +78,7 @@ Checked against constitution v1.5.0 (`.specify/memory/constitution.md`).
 | --- | --- | --- | --- |
 | **P1** Cloud-only (`:47-56`) | Pass | Pass | Polly runs in the runtime; there is no browser inference or browser TTS on the deployed path. Spec 001 FR-016's browser-TTS SHOULD is recorded as unmet rather than amended, because browser TTS would itself break P1 (research Q1). |
 | **P2** Budget ceiling (`:58-71`) | Pass, with conditions | Pass, pending S0 and a human price read | Alerts at $5 and $8 go by email (Plan 1, #62). The $10 hard stop is redesigned (Q6). The session cap is enforced server-side on the verified `sub`. The cost model is research R-cost, and its pass depends on the model chosen after S0 and on human-read prices (FR-007). |
-| **P3** Personality first (`:73-82`) | Pass | Pass, pending S1 | No visual or audio polish is in scope. Haiku 4.5 cannot ship (D1), so the S1 golden set must pass for whichever model Q2 adopts before it serves friends. |
+| **P3** Personality first (`:73-82`) | Pass | Pass, pending S1 | No visual or audio polish is in scope. If Q2 adopts any model other than Haiku 4.5, the S1 golden set must pass for it before it serves friends. |
 | **P4** IP and legal (`:84-94`) | Pass | Pass | The product is named Max Height everywhere, the fan framing stays in the footer and About, and the privacy page is new (FR-053). |
 | **P5** No LLM-as-judge (`:96-104`) | Pass | Pass | Built-in Memory extraction runs asynchronously and never scores live outputs. |
 | **P6** Supply chain (`:106-116`) | Pass, with conditions | Pass, pending gate 3 | Four AWS SDK v3 clients are added to the agent, from the same publisher as the existing `client-bedrock-runtime`; no auth library is added. Each is reviewed before it is added. |
