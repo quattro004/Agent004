@@ -1,12 +1,7 @@
-import { execFile } from 'node:child_process';
+import { createGitRunner, describeFailure, type GitResult, type GitRunner } from './git.js';
 
-export interface GitResult {
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
-export type GitRunner = (args: readonly string[]) => Promise<GitResult>;
+export { createGitRunner };
+export type { GitResult, GitRunner };
 
 export interface PushOptions {
   git: GitRunner;
@@ -23,27 +18,9 @@ export const DEFAULT_MESSAGE = 'Update wiki';
 const REMOTE = 'origin';
 const BRANCH = 'master';
 
-/**
- * Runs git against a working directory, reporting the exit code instead of
- * throwing so the caller can name the step that failed.
- */
-export function createGitRunner(dir: string): GitRunner {
-  return (args) =>
-    new Promise((resolve) => {
-      execFile('git', ['-C', dir, ...args], (error, stdout, stderr) => {
-        const code = typeof error?.code === 'number' ? error.code : error ? 1 : 0;
-        resolve({ code, stdout, stderr });
-      });
-    });
-}
-
+/** Wraps a failed git step as a push outcome. */
 function failed(step: string, result: GitResult): PushOutcome {
-  return {
-    kind: 'failed',
-    step,
-    code: result.code,
-    detail: (result.stderr || result.stdout).trim(),
-  };
+  return { kind: 'failed', ...describeFailure(step, result) };
 }
 
 /**

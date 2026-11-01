@@ -363,6 +363,14 @@ read `process.argv[2]` directly. Parsing now lives in `src/wiki/push-args.ts`
 under test. The `wiki:push` short-circuit story is on the wiki's
 `Guide-Validation-Gate`.
 
+**A shell `||` fallback is a decision, and it hides the failure it follows.**
+`wiki:pull` was
+`git -C wiki pull --ff-only origin master || git clone <url> wiki`, so every
+pull failure — unreachable remote, diverged history, dirty tree — cloned into
+a directory that already existed, replacing git's real message with
+`destination path 'wiki' already exists` and reporting the clone's exit code.
+All three wiki scripts now delegate to `packages/repo-tools`; keep it that way.
+
 ## Product and legal guardrails
 
 - User-facing/project-facing name is **Max Height**.
