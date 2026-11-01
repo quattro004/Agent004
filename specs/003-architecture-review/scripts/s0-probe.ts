@@ -1,7 +1,9 @@
 // Spike S0 probe runner. See ../contracts/s0-probe-matrix.md for the rules and the expected results.
 // Run by the builder, with temporary credentials (P11), in the Free-plan account that will host the deployment:
 //   node specs/003-architecture-review/scripts/s0-probe.ts --dry-run   # prints the plan, calls nothing
-//   node specs/003-architecture-review/scripts/s0-probe.ts             # runs all seven probes
+//   node specs/003-architecture-review/scripts/s0-probe.ts             # runs every probe
+//   node specs/003-architecture-review/scripts/s0-probe.ts S0-8 S0-9   # runs only the named probes
+// A later approval covers only the probes it names, so pass their IDs rather than rerunning the matrix.
 // Node strips the types natively, so the file uses erasable syntax only. Needs `pnpm install` first. It resolves
 // the AWS SDK clients already pinned by packages/agent (Bedrock) and packages/frontend (Polly), so it adds no
 // dependency.
@@ -15,7 +17,7 @@ const POLLY_TEXT = 'Max Height probe.';
 const MANTLE_URL = `https://bedrock-mantle.${REGION}.api.aws/anthropic/v1/messages`;
 
 // The card says adaptive thinking "can be turned off" but its sample code names no field. This value is a
-// guess to verify against the model card when S0-4 runs; override it without editing the script.
+// guess to verify against the model card when S0-4 or S0-9 runs; override it without editing the script.
 const THINKING_OFF: Record<string, unknown> = process.env.S0_THINKING_OFF_JSON
   ? (JSON.parse(process.env.S0_THINKING_OFF_JSON) as Record<string, unknown>)
   : { thinking: { type: 'disabled' } };
@@ -136,6 +138,8 @@ const PROBES: Probe[] = [
         }),
       ),
   },
+  converse('S0-8', 'us.amazon.nova-2-lite-v1:0', 'unknown (Q2)'),
+  converse('S0-9', 'us.anthropic.claude-haiku-5-5', 'unknown (Q2)', THINKING_OFF),
 ];
 
 const IAM_DENIAL = /no (identity|resource)-based policy allows|explicit deny in a|not authorized to perform/i;
@@ -196,9 +200,20 @@ function loadClients(): Clients {
   };
 }
 
+function selectProbes(args: string[]): Probe[] {
+  const ids = args.filter((a) => !a.startsWith('--'));
+  if (ids.length === 0) return PROBES;
+  const unknown = ids.filter((id) => !PROBES.some((p) => p.id === id));
+  if (unknown.length > 0) {
+    throw new Error(`Unknown probe ID(s): ${unknown.join(', ')}. Known: ${PROBES.map((p) => p.id).join(', ')}`);
+  }
+  return PROBES.filter((p) => ids.includes(p.id));
+}
+
 async function main(): Promise<void> {
+  const probes = selectProbes(process.argv.slice(2));
   if (process.argv.includes('--dry-run')) {
-    for (const p of PROBES) console.log(`${p.id}  ${p.api}  ${p.modelId}  expected: ${p.expected}`);
+    for (const p of probes) console.log(`${p.id}  ${p.api}  ${p.modelId}  expected: ${p.expected}`);
     console.log(
       `\nDry run: no calls made. Region ${REGION}. Thinking-off field: ${JSON.stringify(THINKING_OFF)}`,
     );
@@ -207,7 +222,7 @@ async function main(): Promise<void> {
 
   const clients = loadClients();
   const results: ProbeResult[] = [];
-  for (const probe of PROBES) {
+  for (const probe of probes) {
     const result = await runProbe(probe, clients);
     results.push(result);
     console.log(`${result.id}: ${result.outcome}${result.detail ? ` - ${result.detail}` : ''}`);
