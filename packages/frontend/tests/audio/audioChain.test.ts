@@ -396,6 +396,21 @@ describe('audioChain — static noise (tune-in)', () => {
     expect(nonZero).toBe(true);
   });
 
+  it('attenuates static independently of the shared user volume', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(1);
+    const { gainNode, noiseSource, sampleData } = makeMockChainWithBuffers();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain();
+    await chain.init();
+    chain.setVolume(2 / 11);
+
+    chain.playStatic(3000);
+
+    expect(sampleData[0]).toBeCloseTo(0.11);
+    expect(noiseSource.connect).toHaveBeenCalledWith(gainNode);
+    expect(gainNode.gain.linearRampToValueAtTime).toHaveBeenCalledWith(2 / 11, expect.any(Number));
+  });
+
   it('routes the noise source through the gain node (so volume knob applies)', async () => {
     const { gainNode, noiseSource } = makeMockChainWithBuffers();
     const { createAudioChain } = await import('../../src/audio/audioChain');

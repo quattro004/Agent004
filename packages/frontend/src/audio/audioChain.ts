@@ -23,6 +23,7 @@ const MOUTH_THRESHOLD = 100;
 const LOW_FREQ_BIN_COUNT = 8; // ~0–500Hz at 44100Hz with FFT 256
 const VOLUME_RAMP_SECONDS = 0.02; // 20ms ramp avoids clicks
 const DEFAULT_VOLUME = 0.5;
+const STATIC_GAIN = 0.11;
 
 export function createAudioChain(): AudioChain {
   let ctx: AudioContext | null = null;
@@ -185,7 +186,7 @@ export function createAudioChain(): AudioChain {
       const buffer = ctx.createBuffer(1, sampleRate, sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < data.length; i++) {
-        data[i] = Math.random() * 2 - 1;
+        data[i] = (Math.random() * 2 - 1) * STATIC_GAIN;
       }
 
       const source = ctx.createBufferSource();

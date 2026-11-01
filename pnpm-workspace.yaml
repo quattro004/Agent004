@@ -34,3 +34,14 @@ overrides:
   # Jest's coverage loader only calls js-yaml.load, which remains supported
   # in v4. Its ^3 dependency pulls argparse 1 and unpatched sprintf-js.
   '@istanbuljs/load-nyc-config>js-yaml': 4.3.2
+  # Patched releases fix GHSA-g3hv-75wg-m249 and GHSA-3g3m-2fjr-6pw4.
+  # Keep cross-major overrides scoped to affected parent edges until their
+  # declared ranges accept the fixed versions.
+  '@eslint/config-array>minimatch': 11.0.1
+  eslint>minimatch: 11.0.1
+  '@typescript-eslint/typescript-estree>minimatch': 11.0.1
+  test-exclude>minimatch: 11.0.1
+  '@jest/reporters>glob': 14.0.2
+  jest-config>glob: 14.0.2
+  jest-runtime>glob: 14.0.2
+  test-exclude>glob: 14.0.2

@@ -202,8 +202,9 @@ vi.mock('../src/stores/visitorStore', () => ({
 }));
 
 // Mock audio chain — hoist init mock so individual tests can assert on it
-const { mockAudioInit, mockAudioDispose } = vi.hoisted(() => ({
+const { mockAudioInit, mockAudioSetVolume, mockAudioDispose } = vi.hoisted(() => ({
   mockAudioInit: vi.fn().mockResolvedValue(undefined),
+  mockAudioSetVolume: vi.fn(),
   mockAudioDispose: vi.fn(),
 }));
 vi.mock('../src/audio/audioChain', () => ({
@@ -214,7 +215,7 @@ vi.mock('../src/audio/audioChain', () => ({
     getIsMouthOpen: vi.fn().mockReturnValue(false),
     triggerStutter: vi.fn(),
     triggerStaticBurst: vi.fn(),
-    setVolume: vi.fn(),
+    setVolume: mockAudioSetVolume,
     playStatic: vi.fn(),
     stopStatic: vi.fn(),
     dispose: mockAudioDispose,
@@ -250,10 +251,37 @@ describe('App — TV Power Lifecycle', () => {
     expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
   });
 
+  it('starts at audible volume step 2 with its indicator at 18% of the arc', async () => {
+    const { App } = await import('../src/App');
+    const { container } = render(<App />);
+    const volume = screen.getByRole('group', { name: 'Volume' });
+    const indicator = container.querySelector<HTMLElement>('.volume-knob-indicator');
+    const initialAngle = Number.parseFloat(indicator?.style.getPropertyValue('--knob-angle') ?? '');
+
+    expect(volume).toHaveAttribute('aria-valuenow', '2');
+    expect(initialAngle).toBeCloseTo(-235 + (2 / 11) * 280);
+  });
+
   it('should render TvKnob in the control panel when TV is off', async () => {
     const { App } = await import('../src/App');
     render(<App />);
     expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
+  });
+
+  it('passes directional volume changes through to the audio chain', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).toHaveAttribute('data-is-on', 'true');
+    });
+
+    mockAudioSetVolume.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Volume up' }));
+    await vi.waitFor(() => {
+      expect(mockAudioSetVolume).toHaveBeenLastCalledWith(3 / 11);
+    });
   });
 
   it('should not render session state overlays when TV is off', async () => {
