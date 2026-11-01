@@ -141,16 +141,29 @@ tells the story, with dates and worked examples.
   the dependency is required, check whether its parent uses only APIs that
   remain compatible with a maintained major before overriding that edge.
 - **Dependabot PRs arriving do not prove security updates are on** — that half
-  is a repo setting, not `dependabot.yml`, and even when enabled, GitHub's
-  static Dependency Graph currently drops our pnpm 11 `pnpm-lock.yaml`
-  (`node@runtime:`), leaving the `Audit` CI job (`pnpm audit`) as the only
-  transitive advisory check. Verify settings and indexed manifests directly:
+  is a repo setting, not `dependabot.yml`. Verify settings and the alert list
+  directly rather than inferring either from the other:
 
 ```sh
 gh api /repos/quattro004/Agent004/vulnerability-alerts          # 204 = on, 404 = off
 gh api /repos/quattro004/Agent004 --jq '.security_and_analysis.dependabot_security_updates'
-gh api /repos/quattro004/Agent004/dependabot/alerts             # [] while lockfile is unindexed
+gh api /repos/quattro004/Agent004/dependabot/alerts             # [] only when nothing is open
 ```
+
+- **A green `Audit` job does not mean a clean alert list — read both.** GitHub
+  does index our pnpm 11 `pnpm-lock.yaml` (first alert 2026-10-31,
+  `manifest_path: pnpm-lock.yaml`), so Dependabot alerts and the `Audit` CI job
+  are two independent transitive-advisory checks that disagree by design: the
+  alert list reports every severity, while CI runs
+  `pnpm audit --audit-level=moderate` and exits 0 on a `low`.
+- **Do not trust an alert's `scope` on a lockfile-only manifest.** GitHub
+  labelled alert #1 `runtime` for a `packages/infra` jest devDependency.
+  Establish reach with `pnpm why <pkg> -r` before treating an alert as
+  shipping code.
+- **An unpatchable advisory is a decision to record, not a task to retry.**
+  When `first_patched_version` is `null` there is nothing to bump to; choose
+  between accepting it, dismissing it in the UI with a reason, and removing the
+  parent dependency — and write down which, with its reach and severity.
 
 ## When a guard test earns its keep
 
