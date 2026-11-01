@@ -232,9 +232,13 @@ Package names, versions, prices and service limits in `specs/` were true when
 written. When a spec drives an external action (install, deploy, API call),
 check the current reality first and update the spec in the same change.
 
-- **AWS pricing tables render client-side**, so a fetch returns no rates. Ask a
-  human to read them in a browser rather than reporting "unobtainable", and
-  prefer `aws___read_documentation` over a plain fetch for `docs.aws.amazon.com`.
+- **Some AWS pricing tables render client-side.** Research missing rates with
+  AWS's public regional Price List offer files; no account credentials are
+  needed. Check free-tier conditions on the official pricing page, and keep
+  spec-required human confirmation separate from automated verification. Ask
+  for a browser read only when the primary sources leave a gap. See wiki
+  `Source-AWS-Infrastructure-Pricing`. Prefer `aws___read_documentation` over
+  a plain fetch for `docs.aws.amazon.com`.
 - **A provider's own page is not a proxy for Bedrock's** — rates differ by
   Region, and Bedrock serves models the provider lists as retired.
 - **"EOL no sooner than" is a floor, not a schedule.** The clock that matters is
