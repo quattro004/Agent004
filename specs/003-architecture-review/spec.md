@@ -17,8 +17,10 @@ Plan 1 findings, cited below as F1–F7 (verified 2026-10-01 against `budget-sta
 - **F3** (fixed by #62): the topic had no policy granting `budgets.amazonaws.com` `SNS:Publish`, so no notification, including the hard stop, could arrive. F3 hid F1, so they had to change together.
 - **F4**: Budgets SNS message bodies are undocumented and probably plain text, so threshold filtering (SNS filter policy or parsing in the Lambda) was rejected.
 - **F5**: each budget notification allows one SNS subscriber and up to ten email subscribers.
-- **F6** (open, FR-023): the $8 soft-degrade has a frontend consumer and no producer.
+- **F6** (open, FR-023): the soft-degrade ($8 under constitution v1.5.0; $16 − F once amendment A5 merges) has a frontend consumer and no producer.
 - **F7** (handled by spec 001 deviation C8): T111 would have sent ops alarms to the hard-stop topic.
+
+The $5, $8 and $10 figures in F1 and F2 are the constitution v1.5.0 tiers as verified on 2026-10-01. They are historical findings and are left as written; the 2026-11-02 ceiling decision (Clarifications) changes the targets, not those findings.
 
 Wiki pages read as inputs:
 
@@ -42,7 +44,7 @@ Wiki pages read as inputs:
 >
 > **Builder decisions (builder, 2026-10-03).** These are recorded as decided, not as open questions. They add outcome **O14**: only invited friends reach a spend-bearing action, over HTTPS, on the project's own subdomain.
 >
-> 1. **Sign-in is required, and guest (signed-out) access is removed entirely.** An open public site would overrun the $10 budget (P2); the builder will consider scaling later if friends like it. The Cognito Identity Pool's unauthenticated access goes away. This resolved the access-gating clarification formerly at FR-015.
+> 1. **Sign-in is required, and guest (signed-out) access is removed entirely.** An open public site would overrun the monthly budget (P2; $10 when decided, $20 after the 2026-11-02 ceiling decision); the builder will consider scaling later if friends like it. The Cognito Identity Pool's unauthenticated access goes away. This resolved the access-gating clarification formerly at FR-015.
 > 2. **Invite-only allowlist by email.** Signing in alone admits anyone with a provider account, so access also requires the signed-in, provider-verified email to be on an allowlist the builder maintains.
 > 3. **Providers**: Google, Microsoft (personal accounts, through OIDC) and Login with Amazon. A provider is adopted only if registering and operating it carries no fee. Sign in with Apple was dropped later the same day for that reason: "we don't need to support Apple if it's not free" (FR-045).
 > 4. **HTTPS everywhere**: the site, the sign-in pages, and every redirect and callback URL.
@@ -79,6 +81,13 @@ Wiki pages read as inputs:
   2. S1 is a cost optimization, not a deploy blocker. As today's model, Haiku 4.5 already satisfies P3 and gate 2.
   3. Haiku 5.5 is unavailable until the Paid upgrade, so running S1 now would likely be repeated next month.
   4. The model is not the dominant variable cost. A rough illustrative per-turn estimate, not a spec number: Polly voice at about 1,000 characters × $16 per 1M characters ≈ $0.016, against about $0.005 for Haiku 4.5 (assuming about 3K input tokens and the 250-token reply cap).
+- **Monthly ceiling raised from $10 to $20 (builder @quattro004, 2026-11-02).** The Q/A bullets below record the decision. **F** is R-cost's projected fixed monthly cost (still unsized: T005a, T138). The constitution (v1.5.0) still reads $10, $5/$8 and an $8 gate, and it is supreme, so every $20, $10/$16 and $16 figure in this spec **takes effect only when amendment A5 merges** (FR-002, T153). Until then P2 and gate 1 as written govern, and no threshold above $10 may be set in code or infrastructure.
+- Q: What does "$20" mean in P2: a hard cap, or a target the spend should stay under? → A: **The hard cap.** The hard stop fires at 100% of a $20 budget, and the in-path breaker trips at $20 − F. P2's meaning ("a rule, not a target") is preserved; only the number changes (FR-016, FR-020, SC-003).
+- Q: Where do the email alarms and the soft-degrade move? → A: **Scale proportionally.** The owner is emailed at $10 and $16 (50% and 80% of $20), and soft-degrade (spec 001 FR-016, our FR-023) fires at $16 − F (FR-016, FR-023, SC-003).
+- Q: Where does gate 1's mitigation threshold move? → A: **$16 (80% of $20).** Current projection, conversation lines only and before F: $9.56 for the average case passes; $16.52 for the full case still needs a mitigation plan (research.md § R-cost, "Gate 1 projection on the adopted route"; FR-024, SC-002).
+- Q: Does the raised ceiling require cutting voice cost? → A: **No mandatory voice-cost cut**, but the unused viseme call question (#47) MUST be resolved before the first deployment (T154; US5, T081).
+- Q: Is $20 permanent? → A: **Provisional.** After the SC-019 measured month, the gross spend is recorded; if it fits under $10, the builder proposes lowering P2 back by amendment (SC-019, T156).
+- Q: Does the builder move to AWS's new account experience (enforced spend limits, minimum $20, pause at cap)? → A: **No (prior decision, confirmed 2026-11-02).** The builder stays on the existing **classic** AWS account in `us-west-2`. The new experience needs a new account pinned to `us-east-2`, cannot coexist with the Region choice, and cannot be converted to from an existing account (wiki `Source-AWS-New-Account-Experience`). The spend limit, hard stop and breaker remain this spec's own mechanisms (FR-018–FR-021); AWS's pause-at-cap is not relied on.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -106,7 +115,7 @@ An invited friend opens Max Height on the project's own subdomain over HTTPS in 
 
 An invited friend signs in with Google, Microsoft (personal account) or Login with Amazon, and talks to Max. Someone who is not on the builder's allowlist can still complete sign-in at their provider, but Max Height turns them away before any spend-bearing action, with a message that reveals nothing about who is invited. Removing a friend from the allowlist takes their access away.
 
-**Why this priority**: The builder decided on 2026-10-03 that an open public site would overrun the constitution's $10/month cap (P2), so sign-in plus an invite-only allowlist is the access control for the first deployment (O14). Without the allowlist, anyone with a provider account could spend the budget. Verified: today there is no sign-in at all. The identity pool admits unauthenticated identities (`packages/infra/lib/cognito-stack.ts:20`), and no user pool, OAuth flow, custom domain or certificate exists in infra or frontend code.
+**Why this priority**: The builder decided on 2026-10-03 that an open public site would overrun the constitution's monthly cap (P2; $10 when decided, $20 after the 2026-11-02 ceiling decision), so sign-in plus an invite-only allowlist is the access control for the first deployment (O14). Without the allowlist, anyone with a provider account could spend the budget. Verified: today there is no sign-in at all. The identity pool admits unauthenticated identities (`packages/infra/lib/cognito-stack.ts:20`), and no user pool, OAuth flow, custom domain or certificate exists in infra or frontend code.
 
 **Independent Test**: With a test allowlist, sign in with an allowlisted account through each adopted provider and hold a conversation. Then sign in with a provider account that is not allowlisted, and with one whose email the provider has not verified. Confirm both are turned away, and that telemetry and billing show no spend-bearing action for them. Remove an allowlisted email and confirm access ends no later than the next session start, with an already-open session ending within spec 001's 30-minute cap (FR-042).
 
@@ -123,9 +132,9 @@ An invited friend signs in with Google, Microsoft (personal account) or Login wi
 
 ### User Story 3 - Spend is bounded, measurable and recoverable (Priority: P1)
 
-The builder can trust that the deployed Max Height never spends more than the constitution's $10/month hard cap (P2). They get email warnings at the constitution's alert thresholds, see true gross spend even while promotional credits are absorbing it, and have a documented way to restore service after a hard stop.
+The builder can trust that the deployed Max Height never spends more than the monthly hard cap (P2): $20 per the 2026-11-02 ceiling decision, effective when amendment A5 merges ($10 in constitution v1.5.0 until then). They get email warnings at the alert thresholds ($10 and $16; $5 and $8 until A5 merges), see true gross spend even while promotional credits are absorbing it, and have a documented way to restore service after a hard stop.
 
-**Why this priority**: P2 is non-negotiable, and this feature exists to test whether an agent can run for $10/month. Verified gaps today:
+**Why this priority**: P2 is non-negotiable, and this feature exists to test whether an agent can run within the monthly cap (now $20, provisional; see Clarifications 2026-11-02). Verified gaps today:
 
 - The hard stop deletes a policy name that CDK never synthesizes (#61).
 - The hard stop treats a missing policy as success.
@@ -139,12 +148,12 @@ The builder can trust that the deployed Max Height never spends more than the co
 
 **Acceptance Scenarios**:
 
-1. **Given** measured spend crosses the constitution's first or second alert threshold (P2), **When** Budgets evaluates, **Then** the builder receives an email notification as Plan 1 specifies.
+1. **Given** measured spend crosses the first or second alert threshold (P2: $10 or $16), **When** Budgets evaluates, **Then** the builder receives an email notification as Plan 1 specifies.
 2. **Given** the account holds promotional credits, **When** spend is measured against the budget, **Then** the measurement reflects gross usage before credits, so alerts fire at the real spend level (O10).
-3. **Given** measured spend reaches the constitution's hard-stop threshold, **When** the hard stop fires, **Then** every path that can incur model, voice, runtime or tool spend is blocked, including the signed-in path (FR-018). Friends see spec 001 FR-015's in-character "Max is taking a break" state.
+3. **Given** measured spend reaches the hard-stop threshold (P2: $20, 100% of the budget), **When** the hard stop fires, **Then** every path that can incur model, voice, runtime or tool spend is blocked, including the signed-in path (FR-018). Friends see spec 001 FR-015's in-character "Max is taking a break" state.
 4. **Given** the hard stop's target does not exist or cannot be modified, **When** the hard stop runs, **Then** it fails loudly and alerts the builder instead of reporting success (#61).
 5. **Given** usage accrues faster than Budgets data refreshes, **When** in-path spend reaches the circuit-breaker limit decided in Q6, **Then** new spend-bearing requests are refused without waiting for the next Budgets refresh (O11).
-6. **Given** spend crosses spec 001 FR-016's soft-degrade threshold, **When** the soft-degrade signal is produced, **Then** the frontend's existing degrade consumer receives it and voice degrades as spec 001 FR-016 specifies (Plan 1 finding F6).
+6. **Given** the in-path tally crosses the soft-degrade threshold ($16 − F, FR-023; spec 001 FR-016's $8 is superseded, FR-056), **When** the soft-degrade signal is produced, **Then** the frontend's existing degrade consumer receives it and voice degrades as spec 001 FR-016 specifies (Plan 1 finding F6).
 7. **Given** a hard stop has fired, **When** the recovery procedure decided in Q6 is followed, **Then** service resumes and the procedure is documented where the builder will find it.
 8. **Given** the deployment is running, **When** the builder inspects observability settings, **Then** every log destination has an explicit retention period, and log levels are set deliberately. Billed observability features (such as Transaction Search) and model-invocation logging are on or off by recorded decision, and the P9 observability requirements are still met (O13).
 
@@ -249,7 +258,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - Its fail-loud half is FR-019, and the redesigned hard stop is decided under Q6 (FR-018).
   - #61 closes when that hard stop ships with a test that fails when the hard stop's target is missing.
   - **Satisfied 2026-10-03:** Plan 1 merged as #62 (`fb9a6e2`), which closed #56.
-- **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7). The sign-in amendment (FR-055) goes further and merges before `/speckit.plan` (clarified 2026-10-04).
+- **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7). The sign-in amendment (FR-055) goes further and merges before `/speckit.plan` (clarified 2026-10-04). The ceiling amendment **A5** (P2 $10 → $20, alert tiers $5/$8 → $10/$16, gate 1 $8 → $16; clarified 2026-11-02) also gets its own pull request and merges before any task that sets an alert amount, the hard stop, a breaker limit or the cost gate (T153). Its version bump is decided in that PR (the constitution's versioning policy makes a MAJOR bump arguable for redefining P2's number; this spec does not decide it).
 - **FR-003**: Each spike (S0–S3) MUST have a written cost estimate and explicit builder approval before it runs.
   - **S0**: Free-plan probe matrix ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)): seven calls in `us-west-2` covering the Haiku 4.5 global and geo profiles (expected denial), Haiku 4.5 on the mantle endpoint, Haiku 5.5, Nova 2 Lite's bare ID (expected denial: cross-Region only, D2 refuted), Nova Lite v1 and Polly. It establishes which candidates the account can invoke (P-01). Two probes were added on 2026-10-30, each one call under 100 tokens, well under $0.01, approved: **S0-8**, Nova 2 Lite's US cross-Region profile (`us.amazon.nova-2-lite-v1:0`), and **S0-9**, Haiku 5.5's US cross-Region profile (`us.anthropic.claude-haiku-5-5`). If S0-9 is refused, Haiku 5.5 is probed again after the Paid upgrade, which does not gate the first deployment.
   - **S1**: Golden-set character check ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)): each S0-eligible candidate against an absolute rubric bar, not a comparison. It runs at the post-upgrade model review, not before the first deployment, and only after amendment A4 grows gate 2's golden set from 50 to 65 cases (clarified 2026-11-02). Haiku 4.5, today's model, needs no S1 run (FR-026).
@@ -307,11 +316,11 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 #### Spend control and observability
 
-- **FR-016**: Budget alerts MUST route as Plan 1 decides: the constitution's alert tiers notify the builder by email, the hard-stop tier triggers the hard stop, and every notification target MUST permit the budgets service to publish to it.
-- **FR-017**: Spend measurement for alerts and the hard stop MUST reflect gross usage before credits, so the $10 experiment is measurable while promotional credits last (O10).
+- **FR-016**: Budget alerts MUST route as Plan 1 decides: the alert tiers (50% and 80% of the monthly budget: $10 and $16 at the $20 ceiling; amendment A5) notify the builder by email, the hard-stop tier (100%: $20) triggers the hard stop, and every notification target MUST permit the budgets service to publish to it. Until A5 merges, the constitution's $5, $8 and $10 apply.
+- **FR-017**: Spend measurement for alerts and the hard stop MUST reflect gross usage before credits, so the $20 ceiling experiment is measurable while promotional credits last (O10).
 - **FR-018**: The hard stop MUST block every path that can incur model, voice, runtime or tool spend (O2). That includes the WebSocket handler, the agent runtime, and the signed-in path that replaces the guest role: the authenticated role, token issuance, and the runtime authorizer. Today it touches only the unauthenticated guest role (`budget-stack.ts:68-69,78`, `cognito-stack.ts:71`), which FR-041 removes, so the existing hook is no longer enough.
 - **FR-019**: The hard stop MUST fail loudly and alert the builder when its target cannot be found or modified. A missing target MUST NOT count as success (#61).
-- **FR-020**: An in-path circuit breaker MUST bound spend between Budgets refreshes (O11). Its limit and the signal it reads are decided in Q6 and derived from P2; no limit is set in this spec.
+- **FR-020**: An in-path circuit breaker MUST bound spend between Budgets refreshes (O11). Its limit and the signal it reads are decided in Q6 and derived from P2: the breaker trips at $20 − F, where F is R-cost's projected fixed monthly cost (clarified 2026-11-02; the figures themselves are deploy-time configuration, not set in this spec).
 - **FR-021**: The hard stop MUST have a defined recovery procedure (automatic at the start of the budget period, or manual, decided in Q6). The procedure MUST be documented and demonstrated once.
 - **FR-022**: Observability MUST fit the budget while meeting P9:
   - every log destination has an explicit retention period (never the never-expire default)
@@ -319,8 +328,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - billed tracing features (such as Transaction Search) are enabled only by recorded decision
   - model-invocation logging is enabled only if a recorded decision accepts the privacy trade-off for friends' messages
   - operational alarms (infra-plan T111) use their own notification target, separate from budget alerts (Plan 1 F7, deviation C8) (O13)
-- **FR-023**: A producer MUST emit the soft-degrade signal at spec 001 FR-016's threshold, so the frontend's existing consumer acts on it (Plan 1 F6).
-- **FR-024**: Projected monthly spend at spec 001's usage assumptions, using re-verified prices, gross of credits, and including infrastructure, storage, observability, container-registry and sign-in costs (user-pool and federation MAUs, FR-051; secret storage, FR-052), MUST be at or below the constitution's cost gate. A projection above the gate MUST carry a documented mitigation. The fee-free provider rule (FR-045) keeps sign-in from adding non-AWS costs. The existing domain's renewal is covered under Assumptions.
+- **FR-023**: A producer MUST emit the soft-degrade signal, so the frontend's existing consumer acts on it (Plan 1 F6). The threshold is $16 − F (80% of the $20 ceiling less F; clarified 2026-11-02, amendment A5). Spec 001 FR-016's $8 is superseded (FR-056).
+- **FR-024**: Projected monthly spend at spec 001's usage assumptions, using re-verified prices, gross of credits, and including infrastructure, storage, observability, container-registry and sign-in costs (user-pool and federation MAUs, FR-051; secret storage, FR-052), MUST be at or below the constitution's cost gate (gate 1: $16, 80% of the $20 ceiling, once A5 merges; $8 until then). A projection above the gate MUST carry a documented mitigation. The fee-free provider rule (FR-045) keeps sign-in from adding non-AWS costs. The existing domain's renewal is covered under Assumptions.
 
 #### Model, voice and inference path
 
@@ -455,10 +464,11 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   This is a MINOR bump (v1.4.0 → v1.5.0), because the principle is materially expanded and the stack changes. It lands in its own pull request off `main` and merges **before `/speckit.plan`**, so the plan's constitution check runs against the amended text (clarified 2026-10-04). The review's other amendments (US6 scenario 4) each get their own pull request once their question is decided.
 
   **Satisfied 2026-10-11:** #68 merged (`1727039`). The old text above is the amendment rationale; the current constitution on this branch is v1.5.0. No sign-in infrastructure has shipped.
-- **FR-056**: **Spec 001 supersession.** For access, this spec supersedes:
+- **FR-056**: **Spec 001 supersession.** For access (and, for the last item, spend thresholds), this spec supersedes:
   - spec 001's 2026-04-20 clarification, which removed the shared-password gate in favor of the unlisted URL, rate limits and the hard stop (`specs/001-max-height-ai-character/spec.md:42`)
   - spec 001's guest-identified Visitor entity (`:289`) and its guest-identity privacy disclosure (`:302`)
   - the guest-credential auth in spec 001's WebSocket and Polly contracts (`contracts/websocket-api.md:14,22`; `contracts/polly-tts.md:15,191`)
+- spec 001's $5, $8 and $10 figures (FR-015, FR-016, SC-006 and its Assumptions) as to threshold values only, from the date A5 merges: alerts at $10 and $16, soft-degrade at $16 − F, hard stop at $20 (clarified 2026-11-02). Their behaviors (in-character break state, voice off at soft-degrade) are unchanged.
 
   Spec 001 is frozen and is not edited. At close-out, a wiki Decision page (for example `Decision-Access-And-Sign-In`) records the decision. The pages in [Wiki Pages to Update After the Access Decision](#wiki-pages-to-update-after-the-access-decision) are then updated under FR-040's approval rule. They are not discrepancies, because they were true when written.
 
@@ -479,8 +489,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 ### Measurable Outcomes
 
 - **SC-001**: On the live deployment, an invited friend signs in from a fresh browser and holds a multi-turn, in-character conversation from first message to the friend's chosen end, with no operator intervention and no stub path.
-- **SC-002**: The projected monthly spend at spec 001's usage assumptions is at or below the constitution's $8 cost gate. The projection uses re-verified prices and gross (pre-credit) costs, including infrastructure, storage, observability and sign-in.
-- **SC-003**: In a demonstration, each constitution alert tier ($5 and $8, P2) delivers an email to the builder. The $10 hard stop is followed by zero successful spend-bearing invocations on any path until recovery.
+- **SC-002**: The projected monthly spend at spec 001's usage assumptions is at or below the constitution's cost gate: $16 (80% of the $20 ceiling) once A5 merges, $8 until then. The projection uses re-verified prices and gross (pre-credit) costs, including infrastructure, storage, observability and sign-in.
+- **SC-003**: In a demonstration, each alert tier ($10 and $16, P2 as amended by A5; $5 and $8 until A5 merges) delivers an email to the builder. The $20 hard stop ($10 until A5 merges) is followed by zero successful spend-bearing invocations on any path until recovery.
 - **SC-004**: In a demonstration, the in-path circuit breaker refuses new spend-bearing requests once its limit is reached, without waiting for a Budgets refresh.
 - **SC-005**: After a demonstrated hard stop, the documented recovery procedure restores service on its first attempt.
 - **SC-006**: In forged-identifier tests, zero requests change the budget, rate-limit counter or memory namespace applied to the requester.
@@ -496,7 +506,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **SC-016**: After the builder removes an email from the allowlist, that person opens zero new sessions, and makes zero spend-bearing actions once any session open at the time of removal has ended (at most spec 001's 30-minute session cap later).
 - **SC-017**: An audit of the deployment finds no signed-out path to any spend-bearing action.
 - **SC-018**: Every site, sign-in and callback URL in the deployment is served over HTTPS, and a plain-HTTP request is redirected or refused.
-- **SC-019**: The first deployment serves invited friends for one month (builder, 2026-10-03: "operationalize it ideally for a month so I can see the cost"). The month may start on the Free plan and continue after the Paid upgrade (clarified 2026-10-30). That month's gross spend before credits is recorded by service and compared with the FR-024 projection and with an AWS Pricing Calculator estimate of the as-built infrastructure (see Assumptions). The comparison is recorded with the Q7 cost-model decision.
+- **SC-019**: The first deployment serves invited friends for one month (builder, 2026-10-03: "operationalize it ideally for a month so I can see the cost"). The month may start on the Free plan and continue after the Paid upgrade (clarified 2026-10-30). That month's gross spend before credits is recorded by service and compared with the FR-024 projection and with an AWS Pricing Calculator estimate of the as-built infrastructure (see Assumptions). The comparison is recorded with the Q7 cost-model decision. The $20 ceiling is provisional (clarified 2026-11-02): once the month's gross spend is recorded, if it fits under $10 the builder proposes lowering P2 back to $10 by amendment (T155).
 
 ## Assumptions
 

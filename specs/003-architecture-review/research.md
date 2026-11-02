@@ -38,6 +38,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-10-11 | **Long-term memory is un-deferred** into the first deployment: "seems like long term memory is within budget and I wanted it initially anyway" | Q8, FR-014, FR-030, FR-037, SC-019 (P-03, P-10) |
 | 2026-10-29 | S0-1/S0-2's cross-Region success is **recorded only, not adopted**; Nova Lite v1 stays the sole Q2 candidate. The builder confirmed the account is on the Free plan, and noted Haiku 4.5's lifecycle risk: its card (read 2026-10-29) shows Active with no EOL date, but its "EOL no sooner than" floor, 2026-10-16, has passed | Q0, Q2, D1 |
 | 2026-10-30 | Any route S0 (or a later approved probe) proves is eligible, in-Region or cross-Region; the Free plan is temporary, so its documented restrictions are not grounds for rejection. S0-8 and S0-9 approved. Supersedes the 2026-10-29 record-only decision (spec.md § Clarifications) | Q0, Q2, D1, FR-028 |
+| 2026-11-02 | The first deployment adopts Claude Haiku 4.5, today's model (`index.ts:96`), on the cheaper of its two S0-proven profiles, the global profile `global.anthropic.claude-haiku-4-5-20251001-v1:0`. The builder declined running S1 before deploy. S1, amendment A4 and FR-026's cheapest-model comparison move to a post-upgrade model review (T152); S2 runs after the first deployment; #50 is deferred. Recorded by T144 (spec.md § Clarifications 2026-11-02; deviation C5) | Q2, FR-003, FR-026, FR-038, US5, SC-019 |
 
 ## Decision register (FR-004)
 
@@ -127,6 +128,30 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
   Prices for the three newly eligible routes are human-read before T138's projection and T139's choice. Both Haiku 4.5 and Nova 2 Lite have passed or near "EOL no sooner than" floors, which FR-007's lifecycle check weighs at T139.
 
   Haiku 5.5, though unavailable to this account, lists at $0.10 per 1M input and $0.50 per 1M output (Global) and $0.11 and $0.55 (Geo) in `us-west-2` (human-read 2026-11-01 by the builder, same page as Haiku 4.5). That is a tenth of Haiku 4.5's price, so T143's post-upgrade re-probe feeds a later model review.
+- **First-deployment decision (T144, 2026-11-02; builder, spec.md § Clarifications 2026-11-02)**:
+  - **Decision**: the first deployment uses **Claude Haiku 4.5, today's model (`index.ts:96`)**, on the cheaper of its two S0-proven profiles: the **global** profile `global.anthropic.claude-haiku-4-5-20251001-v1:0` (S0-1). The US profile `us.anthropic.claude-haiku-4-5-20251001-v1:0` (S0-2) is the fallback, not adopted. This closes Q2 **for the first deployment**. It supersedes T096's provisional Nova Lite v1 adoption and T139's shortlist (FR-026; US5/AC1, partial). Whether a cheaper candidate replaces it is deferred to the post-upgrade model review (T152).
+  - **Prices** (`us-west-2` source, on-demand Standard, per 1M tokens; R-cost):
+
+    | Route | Input | Output | Verified against the AWS Price List (2026-11-02) |
+    | --- | --- | --- | --- |
+    | Global (adopted) | $1.00 | $5.00 | `USW2-MP:USW2_InputTokenCount_Global-Units` and `USW2-MP:USW2_OutputTokenCount_Global-Units` |
+    | US (fallback) | $1.10 | $5.50 | `USW2-MP:USW2_InputTokenCount-Units` and `USW2-MP:USW2_OutputTokenCount-Units` |
+
+    Source: AmazonBedrockFoundationModels offer, `us-west-2` version `20261012084008` (published 2026-10-12, rates effective 2026-09-01; fetched 2026-11-02 from `pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrockFoundationModels/current/region_index.json`). It matches the builder's 2026-11-01 human-read prices. The global route is 10% cheaper on both, as AWS documents ("Global cross-Region inference", read 2026-11-02). The same file lists cache read at $0.10 (global) and $0.11 (US), not the $0.20 the wiki records for `us-west-2` (Gotchas; Decision-LLM-Model-Selection, 2026-09-29). Cache read is not used (FR-029), so nothing here depends on it.
+  - **The builder's four reasons** (spec.md § Clarifications 2026-11-02):
+    1. Deploy and test for real before the Free plan's credits run out, in about a month.
+    2. S1 is a cost optimization, not a deploy blocker. As today's model, Haiku 4.5 already satisfies P3 and gate 2.
+    3. Haiku 5.5 is unavailable until the Paid upgrade, so running S1 now would likely be repeated next month.
+    4. The model is not the dominant variable cost. The builder's illustrative per-turn estimate: Polly at about 1,000 characters × $16 per 1M ≈ $0.016, against about $0.005 for Haiku 4.5 (about 3K input tokens and the 250-token reply cap). T145 shows Polly at about two thirds of the conversation cost.
+  - **Comparison deferred**: Nova Lite v1, Nova 2 Lite and Haiku 5.5 (once T143's re-probe makes it available) are compared at the post-upgrade model review (T152) on FR-026's four criteria, after A4 (T003) and S1 (T100). Haiku 4.5 needs no S1 run.
+  - **Lifecycle, re-read 2026-11-02** (W27, FR-007; Haiku 4.5 model card, `docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html`, and the legacy lifecycle policy page, `.../model-lifecycle-legacy.html`): model lifecycle **Active**; model EOL date **N/A**; launched 2025-10-16; "EOL no sooner than" Oct 16, 2026 (**passed**); legacy period at least 6 months; policy "Model lifecycle (for models launched prior to Sept 7 2026)". Haiku 4.5 is **absent** from the policy's "Models with a scheduled EOL date" table and its "reached EOL" table. **No EOL date is announced, so none falls in the month of operation (SC-019).** Because the floor is a floor, not a schedule (Gotchas), a Legacy announcement can still come at any time. The policy then sets at least 6 months to EOL (the earliest from 2026-11-02 is 2027-05-02) and at least 3 months to public extended access, where the provider may raise the price (earliest 2027-02-02). Neither lands in the first month, and either would go to the builder. `GetFoundationModel`'s `modelLifecycle` field was **not** read, because this session had no AWS credentials. Read it at first deploy (quickstart V-01) and at T152.
+  - **IAM for T140: can the adopted profile's documented pattern be region-scoped (constitution P11)?** Only partly (AWS, "Global cross-Region inference", IAM policy requirements, read 2026-11-02). The documented pattern has three statements, and AWS says to include all three:
+    1. The profile ARN, `arn:aws:bedrock:us-west-2:<account>:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0`: **can** carry `aws:RequestedRegion = us-west-2`.
+    2. The source-Region foundation model, `arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0`, with `bedrock:InferenceProfileArn` set to that profile: **can** carry `aws:RequestedRegion = us-west-2`.
+    3. The Region-less global foundation model, `arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0`: **cannot** be limited to a named Region. AWS evaluates it with `aws:RequestedRegion = "unspecified"` and says the ARN has "no AWS Region or account specified, which is intentional and required". It is narrowed by `bedrock:InferenceProfileArn` instead, and the profile can still route to any commercial Region.
+
+    So P11's "where supported" holds for statements 1 and 2 only. T140 should state that exception in `runtime-config.md` § Execution role (`:72`, which today says "`us-west-2` only. No inference-profile ARN"; that line is wrong for either profile) and pin all three RED then GREEN. The US profile is more scopable: AWS's geographic pattern lists the foundation-model ARNs of its destination Regions (us-east-1, us-east-2, us-west-2 from `us-west-2`) with the same `bedrock:InferenceProfileArn` condition, and has no `unspecified` leg. It still is not `us-west-2` only. It costs 10% more, about $0.32 across the 795-turn average case (T145). The builder's rule picks the cheaper route, so the global profile stands unless the builder says otherwise. The model card adds that geo and global profiles "don't provide single-Region data residency". T140 verifies the policy against the service authorization reference at the point of use, and includes `bedrock:InvokeModelWithResponseStream` for the streaming call.
+  - **Amendment**: A2 is **not triggered for the first deployment** (§ Constitution amendments). The constitution's LLM row pins the tier ("Haiku-class"), not the version.
 - **Kept**: the 250-token reply cap (`index.ts:97`).
 - **Issue**: #50 is resolved by this record. Nova 2 Lite is eligible through its US profile (S0-8) and is compared with the other eligible candidates under Q2 and S1.
 
@@ -258,8 +283,8 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 | Line item | Unit price | Status | Per-session estimate (method) |
 | --- | --- | --- | --- |
 | Text model input, output and cache: Nova Lite v1 (`amazon.nova-lite-v1:0`, in-Region), `us-west-2` on-demand | $0.06 per 1M input, $0.24 per 1M output tokens; cache read $0.015 per 1M, cache write $0 | **Human-read 2026-10-29 by the builder** (`aws.amazon.com/bedrock/pricing`, "On Demand Inference" table, listed as "Amazon Nova Lite"). It matches the AWS Price List offer file for AmazonBedrock `us-west-2`, published 2026-10-29. Whether Nova Lite v1 supports prompt caching on our path is **Unverified**, so the projection uses no cache discount | spec 001 R0 method, with S2 measuring real prompt and tool tokens |
-| Text model: Haiku 4.5 Global profile (`global.anthropic.claude-haiku-4-5-20251001-v1:0`), source `us-west-2`, on-demand Standard | $1.00 per 1M input, $5.00 per 1M output; cache write $1.25 (5 min) or $2.00 (1 h); cache read $0.10 | **Human-read 2026-11-01 by the builder** (`aws.amazon.com/bedrock/pricing`, "On-Demand and Batch pricing", "Global Cross-region Inference" table, Region US West (Oregon), listed as "Claude Haiku 4.5"). Billed through AWS Marketplace (card) | as above |
-| Text model: Haiku 4.5 US profile (`us.anthropic.claude-haiku-4-5-20251001-v1:0`), source `us-west-2`, on-demand Standard | $1.10 per 1M input, $5.50 per 1M output; cache write $1.375 (5 min) or $2.20 (1 h); cache read $0.11 | **Human-read 2026-11-01 by the builder** (same page, "Geo and In-region Cross-region Inference" table, Region US West (Oregon), listed as "Claude 4.5 Haiku"). 10% above Global. **The most expensive eligible route**, so gate 1's projection uses it (T005a, T138) | as above |
+| Text model: Haiku 4.5 Global profile (`global.anthropic.claude-haiku-4-5-20251001-v1:0`), source `us-west-2`, on-demand Standard | $1.00 per 1M input, $5.00 per 1M output; cache write $1.25 (5 min) or $2.00 (1 h); cache read $0.10 | **Human-read 2026-11-01 by the builder** (`aws.amazon.com/bedrock/pricing`, "On-Demand and Batch pricing", "Global Cross-region Inference" table, Region US West (Oregon), listed as "Claude Haiku 4.5"). Billed through AWS Marketplace (card). **Verified 2026-11-02 against the AWS Price List** (AmazonBedrockFoundationModels, `us-west-2`, version `20261012084008`, rates effective 2026-09-01; cache read $0.10 and write $1.25 and $2.00 match). **The adopted route** for the first deployment (T144) | as above, on estimated tokens (§ Gate 1 projection below) |
+| Text model: Haiku 4.5 US profile (`us.anthropic.claude-haiku-4-5-20251001-v1:0`), source `us-west-2`, on-demand Standard | $1.10 per 1M input, $5.50 per 1M output; cache write $1.375 (5 min) or $2.20 (1 h); cache read $0.11 | **Human-read 2026-11-01 by the builder** (same page, "Geo and In-region Cross-region Inference" table, Region US West (Oregon), listed as "Claude 4.5 Haiku"). 10% above Global. **The most expensive eligible route**, so gate 1's projection used it before T144 (T005a, T138). Verified against the AWS Price List file on 2026-11-02 (§ Q2). Now the fallback, not the adopted route | as above |
 | Text model: Nova 2 Lite US profile (`us.amazon.nova-2-lite-v1:0`), source `us-west-2`, on-demand Standard | $0.33 per 1M input, $2.75 per 1M output; cache read $0.0825 (75% below input), cache write $0. For reference, the **Global** profile (not S0-proven) is $0.30 and $2.50 | **Human-read 2026-11-01 by the builder** (`aws.amazon.com/bedrock/pricing`, "Amazon Nova", "Geo Cross-region inference and in-region", Standard Tier, Region US West (Oregon)). It matches the AWS Price List offer file for AmazonBedrock `us-west-2`, published 2026-10-30, where Geo and in-Region share one usage type (`USW2-Nova2.0Lite-input-tokens`). 10% above Global, about 5.5× Nova Lite v1 input and 11× its output | as above |
 | Polly Neural | $16 per 1M characters | **Human-read 2026-10-29 by the builder** (`aws.amazon.com/polly/pricing`). The free tier of 1M Neural characters a month for the first 12 months is not subtracted, because the projection is gross of credits | at most 1,000 characters per reply × turns |
 | Runtime V2 CPU | $0.1276 per vCPU-hour | Verified | active seconds only |
@@ -278,6 +303,48 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 | Secrets Manager (only if chosen) | about $0.40 per secret per month | Human-read required | fixed |
 
 **Gate rule**: the projection sums F (fixed monthly) and per-session cost × spec 001's session counts (`specs/001-max-height-ai-character/research.md:43-70`). It must be at or below $8, gross of credits. Otherwise a mitigation is documented here before deployment (FR-024, gate 1). The as-built AWS Pricing Calculator estimate follows implementation (SC-019).
+
+### Gate 1 projection on the adopted route (T145, T146; 2026-11-02)
+
+**Scope.** T145 narrows T138's candidate set to Haiku 4.5's adopted route, the global profile at $1.00 input and $5.00 output per 1M tokens (§ Q2, T144). Nova 2 Lite and Haiku 5.5 leave the set. Nova Lite v1 is not projected either, because T152 re-projects any cheaper model before it is adopted. T146 runs the projection on **estimated** token counts, because S2 (T101) now runs after the first deployment. **This is a floor, not the finished gate 1 projection**: T005a and T138 stay open, and the lines marked "not sized" below are not in it.
+
+**Inputs.** Every token figure is an **ESTIMATE pending S2 (T101)**. The method is spec 001 R0's: about 3K input tokens per turn and the 250-token reply cap.
+
+| Input | Value | Basis |
+| --- | --- | --- |
+| System prompt | about 3,000 tokens (**estimate**) | `personality/systemPrompt.ts` is 11,062 characters. The wiki's 2026-09-29 estimate is about 2,990 tokens, and it counted the TypeScript around the string, so the real prompt is smaller |
+| Tool definitions | about 400 tokens (**estimate**) | `get_news`, `get_weather` and `web_search` (`index.ts:55-95`), sized by hand from their descriptions and schemas. Excludes the model's own tool-use preamble, which S2 will include |
+| Input per model call | about 3,400 tokens (**estimate**) | System prompt plus tools. **Excludes** conversation history, Memory records, tool results and any second model call after a tool call, so it understates input |
+| Reply | 125 output tokens on average (500 characters ÷ 4); 250 at the cap | Spec 001 R0's 500-character average reply; `index.ts:97` |
+| Polly | 500 characters on average; 1,000 at the cap; one call per reply | Q1, Q7 (speech marks dropped, #47). $16 per 1M characters (R-cost) |
+| Volume, average case | 53 sessions × 15 turns = 795 turns | Spec 001 R0 ("~53 average sessions/month") |
+| Volume, full case | 16 sessions × 50 turns = 800 turns | Spec 001 R0 ("~16 full sessions/month"), at maximum-length replies |
+
+**Result: the conversation lines alone exceed $8 gross of credits.**
+
+| Line (monthly, gross) | Average case: 795 turns, 500-character replies | Full case: 800 turns, maximum replies |
+| --- | --- | --- |
+| Haiku 4.5, global route ($1.00 / $5.00), estimated tokens | $3.20 | $3.72 |
+| Polly Neural ($16 per 1M characters) | $6.36 | $12.80 |
+| **Conversation subtotal** | **$9.56** (about $0.180 per 15-turn session) | **$16.52** (about $1.03 per 50-turn session) |
+| For reference, US fallback route ($1.10 / $5.50) | $9.88 | $16.89 |
+| F: Runtime V2 compute, Memory, CloudFront, S3, Lambda, logs, spans, alarms, ECR, DynamoDB, Cognito, SSM | **not sized** (T005a, T138) | **not sized** |
+
+- **The projection exceeds the $8 gate before any F line is counted** (constitution gate 1; FR-024; SC-002). It would still exceed it with the LLM on the system prompt alone (about $2.88) and no tools. The figures are a floor: history, Memory context and tool-result tokens only add to the LLM line.
+- **Polly is about 66% of the conversation subtotal** (average case). Polly alone is $6.36, so F plus the LLM line must fit in $1.64 for any model. Haiku 5.5's listed rates (a tenth of Haiku 4.5's) would cut the LLM line to about $0.32, which leaves $6.68 before F. Spec 001's own $1 infrastructure figure is already stale (R-cost's additions are not in it).
+- **Raised with the builder (FR-024; T145).** No mitigation is chosen here. Options for the builder:
+  1. Accept the in-path breaker as the mitigation. It soft-degrades (voice off) at $8 − F and trips at $10 − F (Q6), so spend is bounded even though the projection at 53 average sessions is not. This means capacity, not the projection, is what the gate then limits.
+  2. Plan for fewer sessions. With a placeholder F of spec 001's $1 (not a figure from this research), $7 buys about 580 turns on the global route, about 39 average sessions.
+  3. Reduce Polly's share: a lower reply-character cap, or a shorter average reply, since Polly bills per character (Q1).
+  4. A cheaper model after T152 helps only the LLM line (about $3.20 here).
+  5. Re-state spec 001's usage assumption of 53 average sessions, which was sized to the $9 conversation allowance, not the $8 gate.
+
+**T146 outputs.**
+
+- **T117 and T082 are not complete.** T117 needs T005a's dated F inputs to compute F, `BREAKER_DEGRADE_MICRO_USD` and `BREAKER_TRIP_MICRO_USD`, and no number is invented for them. T082 has no target yet: no `BREAKER_*` or `PRICE_*` value exists in `packages/` (the breaker code, T077, and the Phase 10 stack work are unbuilt). See deviation C6.
+- **Derived `PRICE_*` values, for T082 when it runs**, in micro-USD per 1M units (1 micro-USD = $0.000001): `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` = 1,000,000 ($1.00); `PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD` = 5,000,000 ($5.00); `PRICE_POLLY_PER_MCHAR_MICRO_USD` = 16,000,000 ($16). If T152 or a re-pin changes the route, these are re-derived.
+- **`PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD` stays `0`** until S2 shows caching is reachable (FR-029; [runtime-config.md](./contracts/runtime-config.md) `:37`). The projection takes no cache discount.
+- **After T101 (post-deploy)**, re-run this per-session projection with the measured system-prompt and tool token counts and record it beside this one. Above $8 gross of credits, raise it with the builder (FR-024). Not yet run: **pending S2**.
 
 ## R-obs — observability (FR-022, P9)
 
@@ -368,7 +435,7 @@ Checked 2026-10-11 unless noted. "Not relied on" means no decision rests on the 
 | W24 | Verified | ARM64 image, port 8080, `/ping` and `/invocations`, 2 GB image limit, 120 s initialization, environment variables of at most 2,048 characters per value and 50 variables (AgentCore Runtime documentation). The V2 Region list was checked for `us-west-2` only |
 | W25 | Verified | The default idle timeout is 15 minutes, shorter than the decided 1800 s; the maximum lifetime is 8 hours |
 | W26 | Code verified; IAM and deploy behavior unverified | The warm-up error stops initialization (`warmup.ts`; `index.ts:282-312`), so the design grants `bedrock:ListAsyncInvokes` ([runtime-config.md](./contracts/runtime-config.md) § Execution role). Readiness and `platformVersion` are confirmed at first deploy (quickstart V-01). |
-| W27 | Unverified | The lifecycle status of the adopted model is read from its model card before Q2 closes |
+| W27 | Verified for Haiku 4.5 (model card and legacy lifecycle policy, re-read 2026-11-02, T144) | Active, model EOL date N/A, absent from the scheduled-EOL table; the "EOL no sooner than" floor (Oct 16, 2026) has passed, so a Legacy announcement can come at any time. `modelLifecycle` via `GetFoundationModel` not yet read (Q2). Other candidates' lifecycles are re-read at T152 |
 | W28 | Verified (S0-3, 2026-10-29) | Not invocable: mantle returns HTTP 403 "`anthropic.claude-haiku-4-5` is not available for this account" |
 | W29 | Partly verified | AgentCore Runtime, Memory and Web Search prices are verified (R-cost). The Nova Lite v1 and Polly Neural prices were human-read 2026-10-29 |
 | W30 / D5 | Conflict stands | The projection assumes no Polly free tier (conservative); no decision depends on resolving it |
@@ -442,7 +509,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | ID | Text | Bump | Trigger |
 | --- | --- | --- | --- |
 | A1 | Tech table IaC row: "AWS CDK (infrastructure) + AgentCore CLI (agent deployment)" becomes CDK-only | MINOR | Builder decision (Q8) |
-| A2 | LLM row: "Anthropic Haiku-class" becomes the adopted class | MINOR | Only if Q2 adopts a non-Haiku model |
+| A2 | LLM row: "Anthropic Haiku-class" becomes the adopted class | MINOR | Only if Q2 adopts a non-Haiku model. **A2 is not triggered for the first deployment: Haiku 4.5 is today's model** (T144, 2026-11-02; the LLM row pins the tier, not the version). It is resolved at the post-upgrade model review (T152) only if a non-Haiku candidate replaces Haiku 4.5 |
 | A3 | P11 rationale: an Organization "expires all remaining free-tier credits" is corrected to the verified mechanism (D10) | PATCH | Only once D10 is verified |
 | A4 | Gate 2: "The golden-set rubric (50 cases)" becomes 65 cases, the set the bible §9 grew to on 2026-04-19 (`3c8a5cb`) and `personality-gate.ts` encodes | MINOR | Before S1 is approved. MINOR, not PATCH: the case count changes what gate 2 checks, so the gate is materially expanded (P-14) |
 
