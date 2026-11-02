@@ -72,6 +72,14 @@ Wiki pages read as inputs:
 - Q: Should S0 get more probes, through cross-Region profiles, so that Nova 2 Lite and Claude Haiku 5.5 can compete under Q2? → A: Yes. S0-8 probes Nova 2 Lite's US profile (`us.amazon.nova-2-lite-v1:0`) and S0-9 probes Haiku 5.5's US profile (`us.anthropic.claude-haiku-5-5`). Each is one call under 100 tokens, well under $0.01, approved 2026-10-30. S0-4 tried only the bare ID, which Haiku 5.5's model card lists with no in-Region `bedrock-runtime` endpoint (read 2026-10-30). If S0-9 is also refused as "not available for this account", the Free plan is the suspected cause, and Haiku 5.5 is probed again after the Paid upgrade for a later model review (FR-003, FR-026).
 - Q: If the deployment cannot serve friends for a full month before the Free plan ends, may the cost-measurement month continue after the account moves to the Paid plan? → A: Yes. The month of operation may straddle the upgrade. Spend is measured gross of credits throughout, and remaining credits carry over. The builder still upgrades before the Free plan expires, so the account is not closed (FR-028, SC-019).
 
+### Session 2026-11-02
+
+- Q: With about a month left on the Free plan's credits and the goal of deploying soon and testing live, must S1 (the 65-case golden set) run and the FR-026 cheapest-model comparison close before the first deployment? → A: No. The first deployment adopts Claude Haiku 4.5, today's model (`index.ts:96`). S0-1 (global profile) and S0-2 (US profile) prove the account can invoke it, and its card lists Guardrails on `bedrock-runtime`. Because it is today's model, it needs no S1 run and does not trigger amendment A2 (the LLM row). Of its two S0-proven profiles, the one cheaper at re-verified prices is used (research.md R-cost: global $1.00/$5.00, US $1.10/$5.50 per 1M input/output tokens). S1, amendment A4 (gate 2's golden set, 50 → 65 cases) and the FR-026 comparison of cheaper candidates move to a post-upgrade model review, run once with Haiku 5.5 in the field. The candidates are Nova Lite v1, Nova 2 Lite, and Haiku 5.5 once T143's post-upgrade re-probe makes it available; Haiku 5.5 lists at about a tenth of Haiku 4.5's price. S2 runs after the first deployment, against the adopted model, and prompt caching stays off until it does (FR-029 unchanged). S4 is unchanged and still runs at first deploy. Gate 1's cost projection (T138) is still required before deploy; its candidate set is now Haiku 4.5's adopted route, which it already costs as the most expensive candidate. This narrows the 2026-10-30 answer's "cost and S1 character fidelity decide the model" to the post-upgrade review. It is a deliberate exception to FR-026 as first written: the builder explicitly declined running S1 before deploy (builder, 2026-11-02; FR-026, US5, Q2, #50). Reasons:
+  1. Deploy and test for real before the Free plan's credits run out, in about a month.
+  2. S1 is a cost optimization, not a deploy blocker. As today's model, Haiku 4.5 already satisfies P3 and gate 2.
+  3. Haiku 5.5 is unavailable until the Paid upgrade, so running S1 now would likely be repeated next month.
+  4. The model is not the dominant variable cost. A rough illustrative per-turn estimate, not a spec number: Polly voice at about 1,000 characters × $16 per 1M characters ≈ $0.016, against about $0.005 for Haiku 4.5 (assuming about 3K input tokens and the 250-token reply cap).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An invited friend holds a conversation on the first real deployment (Priority: P1)
@@ -160,17 +168,17 @@ A signed-in friend cannot reset their own caps or rate limits, impersonate anoth
 
 ### User Story 5 - Max's character holds on the cheapest model that works (Priority: P2)
 
-Max stays recognizably himself (stuttering, editorial, evasive, ironic, per spec 001 FR-007) on whichever text model the review selects. The builder's rule applies: if the Nova models are cheaper, consider them now; otherwise defer.
+Max stays recognizably himself (stuttering, editorial, evasive, ironic, per spec 001 FR-007) on whichever text model the review selects. The builder's original rule was: if the Nova models are cheaper, consider them now; otherwise defer. On 2026-11-02 the builder deferred the comparison. The first deployment keeps today's model, Claude Haiku 4.5, and cheaper candidates are compared once, at a post-upgrade model review (FR-026).
 
-**Why this priority**: The text model is the largest variable cost, and wiki figures (to be re-verified) put Nova 2 Lite well below Claude Haiku 4.5 per token. A cheaper model that loses the character, or can't be invoked on the account, is no saving. This is P2 because the first deployment can proceed on whichever model Q0 proves invocable (O4, O9, #50).
+**Why this priority**: Human-read prices put Nova 2 Lite, and Haiku 5.5 once the account can invoke it, below Claude Haiku 4.5 per token. A cheaper model that loses the character, or can't be invoked on the account, is no saving. And the model is not the dominant variable cost: a rough illustrative estimate puts Polly voice above Haiku 4.5 per turn (clarified 2026-11-02). This is P2 because the first deployment proceeds on Haiku 4.5, which S0 proved invocable, and the comparison waits for the post-upgrade model review (O4, O9, #50).
 
-**Independent Test**: Run the spike S1 golden set of real Max Height prompts against each candidate model that passed Q0 and the Guardrails gate. Judge character fidelity against `docs/max-personality-bible.md`, and compare cost at spec 001's usage assumptions using re-verified prices.
+**Independent Test**: For the first deployment, confirm the deployed agent invokes Haiku 4.5 through the cheaper of its two S0-proven profiles. At the post-upgrade model review, run the spike S1 golden set of real Max Height prompts against each candidate model that passed Q0 and the Guardrails gate. Judge character fidelity against `docs/max-personality-bible.md`, and compare cost at spec 001's usage assumptions using re-verified prices.
 
 **Acceptance Scenarios**:
 
-1. **Given** S0's results and re-verified prices, **When** Q2 is decided, **Then** the decision record compares the S0-eligible candidates (every model S0 proves invocable, in-Region or cross-Region, per FR-028 as clarified 2026-10-30) on price, availability on the account's plan and Region, Guardrails support, and S1 character fidelity, and states which is adopted and why.
-2. **Given** a candidate (or Nova 2 Lite or Haiku 5.5, if S0-8 or S0-9 succeeds) is verified not to support Guardrails, **When** Q2 is decided, **Then** the record says so, and #50 is resolved as not adopted unless the builder accepts an alternative enforcement point under Q8.
-3. **Given** the adopted model, **When** the golden set runs, **Then** replies stay in character, respect spec 001 FR-009's reply-length bound, and resist the prompt-injection cases of spec 001 FR-013.
+1. **Given** S0's results and re-verified prices, **When** Q2 is decided, **Then** the decision record adopts Haiku 4.5 for the first deployment, on the cheaper of its S0-proven global and US profiles, and records why the comparison waits (clarified 2026-11-02). At the post-upgrade model review, the record then compares the S0-eligible candidates (every model S0 or a later approved probe proves invocable, in-Region or cross-Region, per FR-028 as clarified 2026-10-30) on price, availability on the account's plan and Region, Guardrails support, and S1 character fidelity, and states which is adopted and why.
+2. **Given** a candidate at the post-upgrade model review (including Nova 2 Lite, or Haiku 5.5 if its re-probe succeeds) is verified not to support Guardrails, **When** the review decides, **Then** the record says so, and #50 is resolved as not adopted unless the builder accepts an alternative enforcement point under Q8.
+3. **Given** a candidate the post-upgrade model review would adopt in place of Haiku 4.5, **When** S1's golden set runs, **Then** replies stay in character, respect spec 001 FR-009's reply-length bound, and resist the prompt-injection cases of spec 001 FR-013.
 
 ---
 
@@ -244,8 +252,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-002**: Any constitution amendment arising from this review MUST land in its own pull request with a MINOR version bump and review of dependent artifacts, before the implementation tasks that depend on it run (constitution governance; O7). The sign-in amendment (FR-055) goes further and merges before `/speckit.plan` (clarified 2026-10-04).
 - **FR-003**: Each spike (S0–S3) MUST have a written cost estimate and explicit builder approval before it runs.
   - **S0**: Free-plan probe matrix ([contracts/s0-probe-matrix.md](./contracts/s0-probe-matrix.md)): seven calls in `us-west-2` covering the Haiku 4.5 global and geo profiles (expected denial), Haiku 4.5 on the mantle endpoint, Haiku 5.5, Nova 2 Lite's bare ID (expected denial: cross-Region only, D2 refuted), Nova Lite v1 and Polly. It establishes which candidates the account can invoke (P-01). Two probes were added on 2026-10-30, each one call under 100 tokens, well under $0.01, approved: **S0-8**, Nova 2 Lite's US cross-Region profile (`us.amazon.nova-2-lite-v1:0`), and **S0-9**, Haiku 5.5's US cross-Region profile (`us.anthropic.claude-haiku-5-5`). If S0-9 is refused, Haiku 5.5 is probed again after the Paid upgrade, which does not gate the first deployment.
-  - **S1**: Golden-set character check ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)): each S0-eligible candidate against an absolute rubric bar, not a comparison.
-  - **S2**: Measure real system-prompt plus tool-definition token usage from an invocation's reported usage, and verify the per-checkpoint cache minimum.
+  - **S1**: Golden-set character check ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)): each S0-eligible candidate against an absolute rubric bar, not a comparison. It runs at the post-upgrade model review, not before the first deployment, and only after amendment A4 grows gate 2's golden set from 50 to 65 cases (clarified 2026-11-02). Haiku 4.5, today's model, needs no S1 run (FR-026).
+  - **S2**: Measure real system-prompt plus tool-definition token usage from an invocation's reported usage, and verify the per-checkpoint cache minimum. It runs after the first deployment, against the adopted model. Prompt caching stays off until it does (FR-029; clarified 2026-11-02).
   - **S3**: Measure audio tokens per second and whether silence is billed, for the Nova Sonic generation Q1 would adopt. The current per-second figure is derived for Nova 2 Sonic, not published, and unchecked for Nova 2.5 Sonic (W31, W37).
 
 #### Review and decision register
@@ -256,7 +264,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   | -- | -------- | ----------------- |
   | Q0 | Inference path. The plan is decided: the account stays on the Free plan (FR-028). Open: which models the account can invoke from the pinned Region, in-Region or cross-Region (clarified 2026-10-30); this gates Q2 | O9 |
   | Q1 | Voice: Polly Neural, Nova Sonic (Nova 2 Sonic or Nova 2.5 Sonic), browser TTS, and conformance with P1 | #47, #48, O5 |
-  | Q2 | Text model: Haiku 4.5 or Nova 2 Lite | #50, O4 |
+  | Q2 | Text model. Decided for the first deployment: Haiku 4.5, today's model (clarified 2026-11-02). Open until the post-upgrade model review: whether a cheaper candidate (Nova Lite v1, Nova 2 Lite, Haiku 5.5) replaces it (FR-026) | #50, O4 |
   | Q3 | Personality placement: Strands hooks or post-processing (may be recorded as deferred with #42) | #42 |
   | Q4 | Streaming and transport: Lambda proxy, direct Runtime call with inbound JWT auth (sign-in now supplies a JWT), or native AgentCore WebSocket | #45, O3, O12 |
   | Q5 | Session identity, caps and edge rate limiting. The basis is decided: the verified sign-in identity (builder, 2026-10-03). Open: which token claim keys it, and how caps and edge rate limits apply | #55, O1, O14 |
@@ -317,7 +325,10 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 #### Model, voice and inference path
 
 - **FR-025**: Q0 MUST be decided first, using spike S0's evidence. The model inference path used by the deployment MUST be one S0 shows the account can invoke; Free-plan documentation alone does not exclude a path (FR-028).
-- **FR-026**: The text model (Q2) MUST be chosen by comparing every S0-eligible candidate (Nova Lite v1 and Haiku 4.5 from S0, plus Nova 2 Lite and Haiku 5.5 if S0-8 and S0-9 succeed) on re-verified price, availability on the account's plan and pinned Region, Guardrails support, and S1 character fidelity. Following the builder's rule, the Nova model is adopted if it is cheaper and passes those gates. A post-upgrade Haiku 5.5 re-probe, if S0-9 is refused, feeds a later model review, not this choice.
+- **FR-026**: The first deployment MUST use Claude Haiku 4.5, today's model (`index.ts:96`), as its text model (Q2; clarified 2026-11-02). S0-1 (global profile) and S0-2 (US profile) prove the account can invoke it, and its model card lists Guardrails on `bedrock-runtime`. As today's model, it needs no S1 run and no change to the constitution's LLM row. Of its two S0-proven profiles, the one cheaper at re-verified prices is used. This is a deliberate exception to choosing by comparison before deployment, for the builder's reasons in the 2026-11-02 clarification.
+  - **Post-upgrade model review.** The comparison runs once, after the Paid upgrade (FR-028), so Haiku 5.5 can take part. It MUST compare every S0-eligible candidate (Haiku 4.5, Nova Lite v1 and Nova 2 Lite, plus Haiku 5.5 if its post-upgrade re-probe succeeds) on re-verified price, availability on the account's plan and pinned Region, Guardrails support, and S1 character fidelity.
+  - **Rule.** Following the builder's rule, the cheapest candidate that passes those gates is adopted.
+  - **Gating.** The review gates nothing in the first deployment.
 - **FR-027**: The voice path (Q1) MUST be chosen by comparing Polly Neural, Nova Sonic and browser TTS at spec 001's usage assumptions. Nova Sonic means Nova 2 Sonic or its successor Nova 2.5 Sonic, and Nova 2.5 Sonic is compared only once its W37 facts are verified. A Nova Sonic generation is adopted only if cheaper. Strands `BidiAgent` is Python-only (W38), so a Strands-based Nova Sonic path would need a Python service beside the TypeScript agent; the comparison records that cost. Any departure from P1 (cloud-only TTS) requires an amendment under FR-002.
 - **FR-028**: **The account stays on the AWS Free plan** until the builder upgrades it to the Paid plan before the Free plan ends in December 2026 (builder, 2026-10-03). The first deployment's month of operation may continue past that upgrade (clarified 2026-10-30). The upgrade itself is out of scope. Consequences:
   - **Inference path.** The deployment MUST invoke its models through a path spike S0 (or a later approved probe) proves the account can invoke from the pinned Region. In-Region and cross-Region inference profiles are both eligible: the Free plan is temporary, so its documented lack of cross-Region support is recorded but is not grounds for rejection (clarified 2026-10-30). Q0 and S0 establish which models qualify (FR-025, FR-031).
@@ -372,8 +383,8 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   | ----------- | ------ |
   | Done (closed issue or merged PR); no action | #43, #44, #46, #51, #52, #53, #54, #57, #59, #60 |
   | Prerequisite, merged before `/speckit.plan` | #56 (Plan 1) |
-  | Open and in scope, resolved by Q0–Q9 | #45, #47, #48, #49, #50, #55, #61 (folded into Q6, FR-018 and FR-019; FR-001) |
-  | Deferred until after the first deployment | #42 |
+  | Open and in scope, resolved by Q0–Q9 | #45, #47, #48, #49, #55, #61 (folded into Q6, FR-018 and FR-019; FR-001) |
+  | Deferred until after the first deployment | #42; #50 (its Nova 2 Lite evaluation moves to the post-upgrade model review, FR-026; clarified 2026-11-02) |
   | Related, out of scope | #58 (semantic wiki maintenance workflow; relates to FR-006) |
 
 #### Wiki verification
