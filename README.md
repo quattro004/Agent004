@@ -8,17 +8,6 @@ Max Height is an interactive AI character you talk to in your browser. Flip the 
 
 This is a **non-commercial fan project** for a friends-and-family audience. It is not affiliated with or endorsed by the Max Headroom rights holders.
 
-## Status
-
-Work in progress, **not yet deployed to AWS**. The frontend runs locally with pre-generated greetings; the agent and infrastructure code exist and are tested, but the pieces below are still ahead:
-
-- A live end-to-end conversation: the WebSocket handler still emits placeholder frames and the agent replies in one chunk, not streamed tokens.
-- AgentCore Runtime and AgentCore Memory resources in CDK (the memory client is a stub).
-- Invite-only sign-in. The guest Cognito identity pool in the code today is being replaced before first deployment.
-- The 3D avatar and the installable PWA.
-
-The wiki's [Feature-Max-Height-Core](https://github.com/quattro004/Agent004/wiki/Feature-Max-Height-Core) page tracks what is built, verified, and open.
-
 ## Key Features
 
 - **Personality-first AI** — Max's character is the product. A detailed personality bible governs his speech patterns, stutter taxonomy, editorial deflection, and 80s-through-a-modern-lens worldview. A 65-case golden-set rubric gates quality before any visual polish ships.
@@ -30,7 +19,7 @@ The wiki's [Feature-Max-Height-Core](https://github.com/quattro004/Agent004/wiki
 
 ## Architecture
 
-The table shows the target design; see [Status](#status) for what exists today.
+The table shows the target design; not every piece is built yet. The wiki's [Feature-Max-Height-Core](https://github.com/quattro004/Agent004/wiki/Feature-Max-Height-Core) page tracks what is built and what is open.
 
 | Layer         | Technology                                                                                         |
 | ------------- | -------------------------------------------------------------------------------------------------- |
@@ -62,71 +51,26 @@ Current-state documentation lives on the [project wiki](https://github.com/quatt
 
 ## Getting Started
 
-Requires **Node.js 24** and **pnpm 11** to bootstrap. After that the repo pins its
-own toolchain: pnpm installs the exact pnpm and Node versions this project is
-built and tested against, so nobody has to match them by hand.
+You need a current Node.js (the major version is in [`.nvmrc`](.nvmrc)) and pnpm.
+Install `pnpm` however you like; it then switches itself to the exact pnpm and
+Node versions pinned in [`package.json`](package.json), so nobody has to match
+them by hand. `.npmrc` enforces the engine check, so an older Node makes
+`pnpm install` fail rather than warn.
 
 ```bash
 git clone https://github.com/quattro004/Agent004.git
 cd Agent004
 
-node -v                  # must be 24.x — `nvm use` / `fnm use` reads .nvmrc
-npm install -g pnpm@11   # only if you don't already have pnpm
-
-pnpm install             # self-switches pnpm, then downloads the pinned Node
-```
-
-Two pins are in play, both resolved by `pnpm install`:
-
-| Tool | Declared in                    | How it's applied                                                  |
-| ---- | ------------------------------ | ----------------------------------------------------------------- |
-| pnpm | `packageManager` (exact)       | pnpm re-executes as that version — `pnpm -v` prints `11.24.0`     |
-| Node | `devEngines.runtime` (`^24.x`) | pnpm downloads it and runs every script on it, pinned by checksum |
-
-So `node -v` may print `24.14.0` while `pnpm exec node -v` prints `24.20.0` —
-that is working as intended. Scripts, builds, and tests all use the pinned Node,
-which is what CI runs too.
-
-Notes:
-
-- **No Corepack required.** Node removed Corepack from its distribution in Node
-  25+, and pnpm 11 has a built-in equivalent: the
-  [`pmOnFail`](https://pnpm.io/settings/cli#pmonfail) setting (default
-  `download`) makes pnpm fetch and run the version declared in `packageManager`.
-  `corepack enable` still works on Node 24 but is redundant here.
-- `.npmrc` sets `engine-strict=true`, so an older Node makes `pnpm install` fail
-  outright rather than warn — hence the `node -v` check before installing.
-- `.nvmrc` still pins the major for `nvm`/`fnm` and for CI's `actions/setup-node`.
-  A test guards it against drifting from `devEngines.runtime`.
-- On Windows, pnpm recommends installing via npm — Microsoft Defender sometimes
-  blocks the standalone installer. On macOS/Linux you can instead use
-  `curl -fsSL https://get.pnpm.io/install.sh | sh -`.
-- If you manage toolchains with asdf, mise, or Volta, set `pmOnFail: ignore` and
-  `runtimeOnFail: ignore` in `pnpm-workspace.yaml` locally so pnpm defers to your
-  version manager.
-
-Then run the quality gate to confirm your environment is healthy:
-
-```bash
+pnpm install
 pnpm run validate    # lint → format:check → typecheck → build → test
 ```
 
-| Command                             | Purpose                             |
-| ----------------------------------- | ----------------------------------- |
-| `pnpm run validate`                 | Full gate — run before any PR       |
-| `pnpm audit --audit-level=moderate` | Dependency audit — CI runs this too |
-| `pnpm run lint`                     | ESLint                              |
-| `pnpm run format`                   | Auto-fix formatting                 |
-| `pnpm run typecheck`                | TypeScript project build            |
-| `pnpm run test`                     | All workspace tests                 |
-| `pnpm run test:coverage`            | All workspace tests + coverage      |
-
-`validate` does not include the audit, but CI runs both — run the audit too, or a
-locally-green branch can still fail CI.
-
-If your editor's Vitest extension reports "Vitest not found" right after cloning,
-that is expected before `pnpm install`; install, then reload the window. Don't run
-the `pnpm add -D vitest` it suggests — vitest is already a declared dependency.
+`validate` is the quality gate: run it before any PR. CI also runs
+`pnpm audit --audit-level=moderate`, which `validate` does not, so run that too
+or a locally green branch can still fail CI. The wiki's
+[Guide-Local-Setup](https://github.com/quattro004/Agent004/wiki/Guide-Local-Setup)
+and [Guide-Validation-Gate](https://github.com/quattro004/Agent004/wiki/Guide-Validation-Gate)
+cover the toolchain pinning, individual scripts, and known traps.
 
 Per-package development:
 
