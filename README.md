@@ -99,3 +99,5 @@ credentials only).
 ## Legal
 
 Max Height is a personal fan tribute inspired by Max Headroom. The name, likeness, and voice are deliberately distinct from the original character. No Matt Frewer voice cloning. Not a commercial product.
+
+The source code is released under the [MIT License](LICENSE). The license covers this project's own code and content only; it grants no rights to the Max Headroom character or any related trademark, likeness, or voice.
