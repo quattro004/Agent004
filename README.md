@@ -4,34 +4,46 @@ _Inspired by Max Headroom — the iconic 1980s "computer-generated" TV presenter
 
 ## About
 
-Max Height is an interactive AI character you talk to in your browser. Open the page, click "Turn on the TV," and a stylized talking head greets you from inside a glitchy CRT monitor — stuttering, editorializing, and refusing to give a straight answer, just like the original. Speak or type; Max replies in voice and on-screen text with his signature rapid-fire, self-important, media-saturated persona. He remembers prior visits (loosely) and pretends to know you.
+Max Height is an interactive AI character you talk to in your browser. Flip the TV's power switch and a stylized talking head greets you from inside a glitchy CRT monitor — stuttering, editorializing, and refusing to give a straight answer, just like the original. Type to Max (voice input is available where your browser supports it); he replies with his signature rapid-fire, self-important, media-saturated persona. The plan is for him to remember prior visits (loosely) and pretend to know you.
 
 This is a **non-commercial fan project** for a friends-and-family audience. It is not affiliated with or endorsed by the Max Headroom rights holders.
 
+## Status
+
+Work in progress, **not yet deployed to AWS**. The frontend runs locally with pre-generated greetings; the agent and infrastructure code exist and are tested, but the pieces below are still ahead:
+
+- A live end-to-end conversation: the WebSocket handler still emits placeholder frames and the agent replies in one chunk, not streamed tokens.
+- AgentCore Runtime and AgentCore Memory resources in CDK (the memory client is a stub).
+- Invite-only sign-in. The guest Cognito identity pool in the code today is being replaced before first deployment.
+- The 3D avatar and the installable PWA.
+
+The wiki's [Feature-Max-Height-Core](https://github.com/quattro004/Agent004/wiki/Feature-Max-Height-Core) page tracks what is built, verified, and open.
+
 ## Key Features
 
-- **Personality-first AI** — Max's character is the product. A detailed personality bible governs his speech patterns, stutter taxonomy, editorial deflection, and 80s-through-a-modern-lens worldview. A 50-case golden-set rubric gates quality before any visual polish ships.
+- **Personality-first AI** — Max's character is the product. A detailed personality bible governs his speech patterns, stutter taxonomy, editorial deflection, and 80s-through-a-modern-lens worldview. A 65-case golden-set rubric gates quality before any visual polish ships.
 - **Voice in, voice out** — press-and-hold mic input (Web Speech API) with Amazon Polly Neural TTS output, plus real-time stutter and pitch-glitch audio DSP in the browser.
-- **3D avatar with lip-sync** — React Three Fiber head-and-shoulders model inside a CRT bezel, driven by Polly viseme data, with continuous scanline/glitch effects. (MVP ships with a 2D placeholder; 3D arrives in V1.)
-- **Graceful degradation** — no WebGL → 2D fallback; no mic → text input; cloud down → in-character "signal lost" state. Never a white screen.
-- **Installable PWA** — add to home screen on mobile or desktop; app-shell caching for offline launch with an in-character offline state.
+- **Retro TV presentation** — a CRT bezel with scanline/static effects, a power switch, and volume and channel knobs. The channel knob cycles Max through retro, pop-art, and cartoon looks. The avatar is 2D today; a 3D React Three Fiber model with Polly viseme lip-sync is planned for V1.
+- **Graceful degradation** — no mic → text input; cloud down → in-character "signal lost" state. Never a white screen. (A 2D fallback for the planned 3D avatar comes with it.)
 - **Cloud-only architecture** — all AI inference runs server-side; nothing heavy in the browser.
-- **$10/month hard budget cap** — automated alarms, soft-degrade at $8 (TTS off, text continues), hard-stop at $10.
+- **$10/month hard budget cap** — email alarms at $5, $8, and $10, with the $10 alarm triggering a hard stop of guest spend. A soft-degrade at $8 (TTS off, text continues) is specified and has a frontend consumer, but nothing triggers it yet.
 
 ## Architecture
 
-| Layer         | Technology                                                  |
-| ------------- | ----------------------------------------------------------- |
-| Frontend      | React + Vite SPA, React Three Fiber, Zustand, Web Audio API |
-| Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime      |
-| LLM           | Amazon Bedrock — Claude 3.5 Haiku                           |
-| TTS           | Amazon Polly Neural (direct SDK, streaming)                 |
-| STT           | Web Speech API (browser built-in)                           |
-| Auth          | Amazon Cognito Identity Pool (guest/unauthenticated)        |
-| Memory        | AgentCore Memory (30-day rolling window)                    |
-| Observability | AgentCore Observability (traces, metrics, logs)             |
-| Hosting       | S3 + CloudFront                                             |
-| IaC           | AWS CDK (all infrastructure, including AgentCore resources) |
+The table shows the target design; see [Status](#status) for what exists today.
+
+| Layer         | Technology                                                                                         |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| Frontend      | React + Vite SPA, Zustand, Web Audio API (React Three Fiber planned for the 3D avatar)             |
+| Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime                                             |
+| LLM           | Amazon Bedrock — Claude Haiku 4.5                                                                  |
+| TTS           | Amazon Polly Neural (direct SDK, streaming)                                                        |
+| STT           | Web Speech API (browser built-in)                                                                  |
+| Auth          | Amazon Cognito Identity Pool — guest access today, moving to invite-only sign-in before deployment |
+| Memory        | AgentCore Memory (30-day rolling window) — not yet wired                                           |
+| Observability | AgentCore Observability (traces, metrics, logs)                                                    |
+| Hosting       | S3 + CloudFront                                                                                    |
+| IaC           | AWS CDK (all infrastructure, including AgentCore resources)                                        |
 
 ## Repo Layout
 
@@ -40,9 +52,13 @@ packages/
   frontend/           # React + Vite SPA
   agent/              # Strands agent for AgentCore Runtime
   infra/              # All AWS resources via CDK
-specs/                # Feature specifications (source of truth)
+  repo-tools/         # Repository hygiene tooling (wiki linter)
+specs/                # Feature specifications (authoritative while a feature is built)
 docs/                 # Design documents, personality bible
+.specify/             # Spec Kit config and the project constitution
 ```
+
+Current-state documentation lives on the [project wiki](https://github.com/quattro004/Agent004/wiki) (start at its `Index`); it is a separate git repo, cloned to a gitignored `wiki/` directory if you want it locally.
 
 ## Getting Started
 
@@ -131,9 +147,10 @@ credentials only).
 
 ## Contributing
 
-- Read `.specify/memory/constitution.md` and the relevant folder under `specs/` before writing code — they are the source of truth.
-- This project uses **TDD**: write a failing test first, then the implementation.
-- `pnpm run validate` must pass before opening a PR.
+- Read `.specify/memory/constitution.md`, the wiki `Index`, and the relevant folder under `specs/` before writing code. [`AGENTS.md`](AGENTS.md) has the working rules for contributors and AI assistants.
+- This project uses **TDD**: write a failing test first, then the implementation. New user-facing capabilities start with a Spec Kit spec.
+- `pnpm run validate` must pass before opening a PR, and so must CI's `CI` and `Audit` checks. `main` is protected: work on a `type/kebab-case-description` branch and open a PR.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
 
 ## Legal
 
