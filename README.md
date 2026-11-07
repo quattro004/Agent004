@@ -10,12 +10,11 @@ This is a **non-commercial fan project** for a friends-and-family audience. It i
 
 ## Key Features
 
-- **Personality-first AI** — Max's character is the product. A detailed personality bible governs his speech patterns, stutter taxonomy, editorial deflection, and 80s-through-a-modern-lens worldview. A 65-case golden-set rubric gates quality before any visual polish ships.
+- **Personality-first AI** — Max's character is the product. A detailed personality bible governs his speech patterns, stutter taxonomy, editorial deflection, and 80s-through-a-modern-lens worldview.
 - **Voice in, voice out** — press-and-hold mic input (Web Speech API) with Amazon Polly Neural TTS output, plus real-time stutter and pitch-glitch audio DSP in the browser.
-- **Retro TV presentation** — a CRT bezel with scanline/static effects, a power switch, and volume and channel knobs. The channel knob cycles Max through retro, pop-art, and cartoon looks. The avatar is 2D today; a 3D React Three Fiber model with Polly viseme lip-sync is planned for V1.
-- **Graceful degradation** — no mic → text input; cloud down → in-character "signal lost" state. Never a white screen. (A 2D fallback for the planned 3D avatar comes with it.)
+- **Retro TV presentation** — a CRT bezel with scanline/static effects, a power switch, and volume and channel knobs. The channel knob cycles Max through retro, pop-art, and cartoon looks.
+- **Graceful degradation** — no mic → text input; cloud down → in-character "signal lost" state. Never a white screen.
 - **Cloud-only architecture** — all AI inference runs server-side; nothing heavy in the browser.
-- **$10/month hard budget cap** — email alarms at $5, $8, and $10, with the $10 alarm triggering a hard stop of guest spend. A soft-degrade at $8 (TTS off, text continues) is specified and has a frontend consumer, but nothing triggers it yet.
 
 ## Architecture
 
