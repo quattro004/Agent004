@@ -8,8 +8,8 @@
  * - `<emphasis>` is NOT supported — emphasis uses `<prosody volume="loud">`.
  * - `<prosody>` supports only `volume` and `rate` on neural; the `pitch`
  *   attribute is unsupported, so it is omitted here and in the shared
- *   SSML wrapper. Max's raised pitch is applied at playback by the
- *   `pitch-processor` AudioWorklet, which these MP3s are routed through.
+ *   SSML wrapper. Pitch changes come at playback from the glitch engine
+ *   (`src/audio/glitchEngine.ts`), which these MP3s are routed through.
  * Written consonant repeats are authoring notation; greetingGenCore converts
  * them into the audition's selected phonetic pronunciation before synthesis.
  */

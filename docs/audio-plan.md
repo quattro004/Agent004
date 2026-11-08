@@ -28,7 +28,7 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 ## Decisions
 
 - **Provider:** Amazon Polly is the **sole** generation method — Matthew, neural, mp3, 24 kHz (reuse existing config). No other TTS provider (ElevenLabs, manual recording, browser TTS) is in scope.
-- **SSML:** Hand-tuned per greeting (breaks, prosody `rate`/`volume`, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML. Note the neural engine supports only `volume`/`rate` on `<prosody>` and rejects `<emphasis>`; Max's raised pitch comes from the `pitch-processor` AudioWorklet at playback, not from SSML.
+- **SSML:** Hand-tuned per greeting (breaks, prosody `rate`/`volume`, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML. Note the neural engine supports only `volume`/`rate` on `<prosody>` and rejects `<emphasis>`; pitch changes come from the glitch engine at playback (see § Voice glitch episodes), not from SSML.
 - **Duration calibration:** Auto-measure each MP3 and rewrite `audioDurationMs` (within the contract's ±500 ms / 1000–15000 ms bounds).
 - **Spec:** Update via speckit iterate to make video **optional/deferred** (not deleted) — avatar images are the MVP visual; mp4s are a future "if cheap" add.
 - **Extra scope:** mouth-threshold tuning + audio-driven timing refinement (tail buffer); volume knob is already wired → verify only.
@@ -210,6 +210,11 @@ the full-pool command, validating each measured duration rather than clamping.
 
 ### Playback DSP and signal measurements
 
+> **Superseded 2026-11-07** by § Voice glitch episodes below: the 1.05 pitch
+> worklet was removed (base pitch is now 1.0). The EQ figures and loudness
+> table still describe the chain; they were measured with the 1.05 shift in
+> place.
+
 `createUseGreeting()` already calls `audioChain.play()`. Normal speech uses a
 granular **1.05 pitch factor (+5%)** and a fixed EQ boost; pitch shift does not
 make the speech faster. The stutter-replay and static-burst nodes are present
@@ -245,6 +250,35 @@ The pure helper lives in `packages/agent/src/voice/ssml.ts`, ready for T029 to
 reuse. The greeting generator no longer imports the browser `pollyTts.ts` that
 T081 will delete. It handles single-consonant prefixes; vowel and multi-letter
 syllable glitches are outside this experiment.
+
+### Voice glitch episodes (2026-11-07)
+
+After four offline listening rounds that ran the real worklets in headless
+Edge, the builder chose **Take K**. `src/audio/glitchEngine.ts` now glitches
+every clip that `audioChain.play()` receives, before playback:
+
+- **Base pitch is 1.0**, which is the Polly voice. The 1.05 worklet is gone.
+- An **episode clock** alternates 6–10 s glitch spells with 10–20 s of clean
+  voice and starts glitched. It counts played audio, not wall time, and is
+  shared by every clip on the page.
+- Each spell picks a random non-empty mix of three effects:
+  - **pitch jumps**: down to 0.8–0.9 or up to 1.25–1.6, for 120–350 ms;
+  - **syllable replays**: the last 60–120 ms plays 2–3 times in all, with a
+    static tick on each repeat;
+  - **tape wobble**: speed and pitch swell ±12–25 % over 150–300 ms.
+- Replays and wobble change the clip's length. `play()` returns the played
+  duration, and greeting completion uses it.
+
+`GLITCH_CONFIG` holds the numbers and the wiki's `Component-Audio-Chain`
+tells the story; change neither without another listening round. The
+`stutter-processor` worklet is still in the graph as a passthrough. Its
+replay never worked and nothing triggers it.
+
+**Production builds do not load the worklets.** Vite inlines each
+`new URL('./xProcessor.ts', import.meta.url)` as a `data:video/mp2t` URL of
+raw TypeScript. Edge rejects it (checked 2026-11-07), so `init()` fails and
+greetings are silent outside `pnpm run dev`. The glitch engine runs on the
+main thread and is not affected, but nothing plays without the chain.
 
 ## Phases & Tasks
 
