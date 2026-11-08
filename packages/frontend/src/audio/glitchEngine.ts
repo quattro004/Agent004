@@ -19,7 +19,7 @@ const ALL_EFFECTS = GlitchEffect.Pitch | GlitchEffect.Replay | GlitchEffect.Wobb
 
 export const GLITCH_CONFIG = {
   glitchSpellSeconds: [6, 10],
-  cleanGapSeconds: [10, 20],
+  cleanGapSeconds: [5, 10],
   pitchJump: {
     perSecond: 1.2,
     downChance: 0.4,
