@@ -12,8 +12,10 @@
  *
  * Usage:
  *   pnpm --filter @max-height/frontend generate:greetings
- *   pnpm --filter @max-height/frontend generate:greetings -- --dry-run
- *   pnpm --filter @max-height/frontend generate:greetings -- --only greeting-003
+ *   pnpm --filter @max-height/frontend generate:greetings --dry-run
+ *   pnpm --filter @max-height/frontend generate:greetings --only greeting-003
+ *   pnpm --filter @max-height/frontend generate:greetings --experiment --only greeting-015
+ *   pnpm --filter @max-height/frontend generate:greetings --pace-experiment --only greeting-015
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -33,15 +35,19 @@ const greetingsDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'pub
 const manifestPath = join(greetingsDir, 'manifest.json');
 
 async function main(): Promise<void> {
-  const { dryRun, only } = parseCliArgs(process.argv.slice(2));
+  const { dryRun, only, experiment } = parseCliArgs(process.argv.slice(2));
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as GreetingManifest;
   const client = new PollyClient({});
+  const outputDir = experiment
+    ? join(greetingsDir, '..', '..', '.greeting-experiment')
+    : greetingsDir;
 
   const updated = await runGeneration({
     manifest,
     ssmlById: greetingSsml,
     dryRun,
     only,
+    experiment,
     log: (message) => console.log(message),
     synthesize: async (input: SynthesisInput) => {
       const response = await client.send(new SynthesizeSpeechCommand(input));
@@ -51,7 +57,7 @@ async function main(): Promise<void> {
       return await stream.transformToByteArray();
     },
     writeAudio: async (relativeAudioPath, bytes) => {
-      const target = join(greetingsDir, relativeAudioPath);
+      const target = join(outputDir, relativeAudioPath);
       await mkdir(dirname(target), { recursive: true });
       await writeFile(target, bytes);
     },
@@ -60,6 +66,13 @@ async function main(): Promise<void> {
 
   if (dryRun) {
     console.log('Dry run complete — no audio written, manifest unchanged.');
+    return;
+  }
+
+  if (experiment) {
+    console.log(
+      `Experiment clips written to ${outputDir}; production audio and manifest unchanged.`,
+    );
     return;
   }
 
