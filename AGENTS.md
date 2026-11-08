@@ -388,6 +388,23 @@ a decision worth testing. Wrapping `git push` was not.
 
 ## Product and legal guardrails
 
+Greeting voice auditions use the existing `generate:greetings` command:
+`--experiment --only <id>` compares pronunciation and `--pace-experiment
+--only <id>` compares the latest stutter-timing candidate (see
+`docs/audio-plan.md` § T158). Retuning uses new candidate folders; never
+overwrite a previously approved audition.
+Do not add a wrapper.
+Keep trial clips outside `public`; listen through the playback DSP and approve
+pronunciation and pacing before regenerating the production pool. Validate measured
+durations before overwriting production audio; do not clamp them to fit.
+For DSP claims, check actual coefficients and trigger call sites rather than
+trusting comments or node presence; see wiki `Component-Audio-Chain`.
+
+Polly IAM supports no `polly:Engine` or `polly:VoiceId` condition keys. Scope
+`SynthesizeSpeech` by `aws:RequestedRegion`; voice and engine are application
+settings, not IAM restrictions. Check the service authorization reference
+before copying condition-key examples, including P11's illustrative examples.
+
 - User-facing/project-facing name is **Max Height**.
 - Do not use **Max Headroom** in product/UI copy (README/About inspiration references are acceptable).
 - No Matt Frewer voice cloning or exact visual replica.

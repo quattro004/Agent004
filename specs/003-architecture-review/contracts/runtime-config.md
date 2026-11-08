@@ -71,7 +71,7 @@ The breaker's estimate is a **floor**, not the bill: lines that are not per-turn
 | --- | --- |
 | `bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream` | The adopted model's foundation-model ARN in `us-west-2` only. No inference-profile ARN (Q0). |
 | `bedrock:ListAsyncInvokes` | `*`, unless the service authorization reference offers a resource type (checked at task time). The warm-up probe calls it, and its error stops initialization, so without this grant `/ping` never reports healthy (`bedrock/warmup.ts`; `index.ts:282-312`; W26). It runs no model and bills nothing. |
-| `polly:SynthesizeSpeech` | `*`, with conditions `polly:Engine = neural` and `polly:VoiceId = Matthew` (spec 001 `contracts/polly-tts.md:202-210`) |
+| `polly:SynthesizeSpeech` | `*`, with `aws:RequestedRegion = us-west-2`. Neural and Matthew are application settings: AWS documents no `polly:Engine` or `polly:VoiceId` IAM keys ([service authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_polly.html), checked 2026-11-07). This corrects spec 001's frozen `contracts/polly-tts.md:202-210` example. |
 | `dynamodb:GetItem`, `PutItem`, `UpdateItem`, `DeleteItem` | The control table ARN |
 | `bedrock-agentcore:CreateEvent`, `ListSessions`, `ListEvents`, `DeleteEvent`, `RetrieveMemoryRecords`, `ListMemoryRecords`, `GetMemoryRecord`, `DeleteMemoryRecord`, `BatchDeleteMemoryRecords` | The one memory ARN ([memory-api.md](./memory-api.md)). Action names are checked against the service authorization reference at task time. The pruner role gets only the list and delete actions. |
 | `ssm:GetParameter` | The `SSM_PARAM_*` parameter ARNs only |

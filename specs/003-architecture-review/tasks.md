@@ -513,3 +513,57 @@ Scoped to the 2026-11-02 ceiling clarifications (spec.md § Clarifications; devi
 - [ ] T156 Record the post-measurement ceiling review. After V-17 (T131) and the SC-019 measured month, record the month's **gross** spend in research.md § R-cost and quickstart.md § Results. If gross spend fits under $10, propose lowering P2 back to $10 by constitution amendment (own PR, builder approval); otherwise record that the $20 ceiling stays. The $20 is provisional until then. Per spec.md § Clarifications 2026-11-02 and SC-019 (missing)
 - [ ] T157 Hand-edit the artifacts that hard-code the $10 ceiling, as the A5 PR (T153) is prepared, and do not run `/speckit.plan` (it regenerates destructively): plan.md (`:21`, `:62`, `:80`, `:91`, `:194`), research.md (§ Builder decisions `:29`, Q1 `:86`, Q6 `:212`, § R-cost `:305`, `:323`–`:347`), data-model.md (`:109`–`:112`), contracts/spend-control.md (`:9`–`:12`), contracts/runtime-config.md (`:33`–`:34`) and quickstart.md (`:28`, `:218`). Rewrite the gate and tiers to $16 and $10/$16/$20 and the breaker formulas to ($16 − F) and ($20 − F). Leave any statement of the projection's *current* result against the constitution's $8 gate as written until A5 merges. Per FR-016, FR-020, FR-023, FR-024 and SC-002 (contradicts)
 - [ ] T158 [US1] Fix written stutters being spelled out by Polly (builder, 2026-11-02: the greeting MP3s say "b b ball", not "buh-buh-ball"; wiki `Decision-Polly-Voice` § Open problem). Not a ceiling task, and a bug fix to existing behavior, so no new spec. First a probe (about a cent): synthesize one greeting on the Neural voice with `<phoneme alphabet="ipa" ph="bə">b</phoneme>`, with `ph="bʌ"` and with `<sub alias="buh">b</sub>`, listen, and record which renders well. The docs already confirm both tags are fully supported on Neural and that `bə`/`bʌ` are valid en-US IPA (wiki `Decision-Polly-Voice` § Docs check); unverified by ear: naturalness, `bə` versus `bʌ`, and nesting inside `<prosody rate>`. Do not use `<say-as interpret-as="characters">`: Neural does not support it, so it falls back to the Standard voice but bills as Neural. Then RED→GREEN (TDD skill): a pure `stutterToSsml` transform in a module both the T029 server path and `scripts/generate-greetings.ts` can import, pinned by tests that `X-x-word` forms become phonetic onsets and that non-stutter hyphens (`well-known`) are untouched. Replace the literal `b-b-`, `L-l-` and `p-` forms in `scripts/greetingSsml.ts`, regenerate the greetings, and listen. **Watch T081:** `scripts/greetingGenCore.ts:1` imports `wrapInSsml` from `pollyTts.ts`, which T081 deletes, so the shared module must not live there (extends deviation C4). Speech marks do not help here and are not part of this task. Per US1 and wiki `Decision-Polly-Voice` (missing)
+
+**T158 preparation, 2026-11-07 (partial; not a rollout).** The builder chose
+exaggerated delivery with the original dialogue preserved, but explicitly
+deferred AWS generation and listening. The shared single-consonant transform
+is prepared in `packages/agent/src/voice/ssml.ts` with RED→GREEN regressions,
+and all 16 greeting SSML entries are tuned for the experiment. The generator
+imports that helper rather than `pollyTts.ts`, resolving the T081 dependency.
+`generate:greetings --experiment --only greeting-015 --dry-run` previews
+schwa, strut and alias requests without AWS calls or writes; actual experiment
+clips go to the gitignored `.greeting-experiment` directory, not production.
+Duration validation now precedes production audio writes. Commands, a
+conservative three-request estimate and the listening checklist are in
+`docs/audio-plan.md` § T158. **Still pending:** AWS approval and execution,
+listening through the playback DSP, selecting the pronunciation, verifying
+all durations, regenerating the production MP3s and calibrating the manifest.
+
+**T158 first audition and pacing follow-up, 2026-11-07 (still partial).** The
+builder ran the three pronunciation clips and chose **IPA schwa**, but found
+the stutters and overall speech too slow. Measured greeting-015 durations:
+alias 16992 ms, schwa 16560 ms, strut 16344 ms; shipped baseline 12792 ms.
+All three trials exceed the unchanged 15000 ms ceiling. The first probe and
+pronunciation selection are now complete, superseding those pending items
+above; final pacing is not accepted.
+
+RED→GREEN adds `generate:greetings --pace-experiment --only greeting-015`:
+two isolated schwa clips at 115% overall rate and 50 ms onset gaps, with
+`pace-snappy` additionally wrapping just the repeated onsets in `x-fast`.
+The original pronunciation trials and production assets are preserved.
+Commands, the two-request cost bound and raw/reconstructed DSP measurements
+are in `docs/audio-plan.md` § T158. **Still pending:** builder generation and
+listening of the faster trials, final in-app acceptance, greeting-005 and
+non-`b` checks, all-pool regeneration and manifest calibration. The builder
+wants replay/static effect triggers for greetings **after** base pacing is
+right; this follow-up changes no DSP settings or trigger wiring.
+
+**T158 second audition and stutter-only follow-up, 2026-11-07 (still partial).**
+The builder preferred `pace-snappy` and explicitly approved its overall speech
+speed, requesting faster stuttering only. Actual greeting-015 measurements:
+`pace-faster` 15408 ms; `pace-snappy` 14976 ms, only 24 ms below the ceiling.
+The latest `--pace-experiment` now compares `pace-snappier` (20 ms onset gaps)
+with `pace-rapid` (no inserted gaps); both preserve 115% normal speech, schwa,
+onset-only `x-fast`, dialogue and other pauses. Prior candidates are preserved.
+New generation and listening remain pending, as do final in-app acceptance
+and all-pool production regeneration. See `docs/audio-plan.md` § T158.
+
+**T158 decision and production regeneration, 2026-11-07.** The builder listened
+and chose **`pace-rapid`** (schwa, 115% speech, onset-only `x-fast`, no inserted
+gaps; "almost too fast"). A `pace-gap-5ms` trial was not better, and numeric
+onset rates of 180% and 200% saved only 240 and 360 ms, so the gaps, not the
+onset rate, are the lever. `rapid` is now the default `SpeechPacing`, and the
+builder regenerated all 16 production MP3s and calibrated the manifest. Measured
+durations span 8424 to 14736 ms, inside the 1000 to 15000 ms bounds, with no
+clamping. See `docs/audio-plan.md` § T158. **Still pending:** in-app listening
+through the playback DSP, and the greeting-005 and non-`b` onset checks.
