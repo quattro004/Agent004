@@ -132,6 +132,11 @@ tells the story, with dates and worked examples.
 - **A red `pnpm audit` on an unchanged commit is news, not a regression.** It
   queries the live advisory database. Check the patched version's npm publish
   date before assuming new exposure — fixes often ship weeks before disclosure.
+- **Add a new `@aws-sdk/client-*` at the version the lockfile already resolves
+  for the others** (`pnpm add <pkg>@<x.y.z>`, then restore the `^x.y.z`
+  specifier). The SDK publishes daily, and a plain `pnpm add` takes the newest
+  release, which pulls a second `@aws-sdk/core` alongside the existing one.
+  Dependabot's `dependencies` group then bumps all clients together.
 - **pnpm will not re-resolve a transitive dependency the lockfile already
   satisfies.** `pnpm update <pkg> -r` and `--depth Infinity` both no-op on one.
   Use an `overrides:` entry in `pnpm-workspace.yaml` (pnpm 11 reads them nowhere

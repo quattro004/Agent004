@@ -39,6 +39,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-10-29 | S0-1/S0-2's cross-Region success is **recorded only, not adopted**; Nova Lite v1 stays the sole Q2 candidate. The builder confirmed the account is on the Free plan, and noted Haiku 4.5's lifecycle risk: its card (read 2026-10-29) shows Active with no EOL date, but its "EOL no sooner than" floor, 2026-10-16, has passed | Q0, Q2, D1 |
 | 2026-10-30 | Any route S0 (or a later approved probe) proves is eligible, in-Region or cross-Region; the Free plan is temporary, so its documented restrictions are not grounds for rejection. S0-8 and S0-9 approved. Supersedes the 2026-10-29 record-only decision (spec.md § Clarifications) | Q0, Q2, D1, FR-028 |
 | 2026-11-02 | The first deployment adopts Claude Haiku 4.5, today's model (`index.ts:96`), on the cheaper of its two S0-proven profiles, the global profile `global.anthropic.claude-haiku-4-5-20251001-v1:0`. The builder declined running S1 before deploy. S1, amendment A4 and FR-026's cheapest-model comparison move to a post-upgrade model review (T152); S2 runs after the first deployment; #50 is deferred. Recorded by T144 (spec.md § Clarifications 2026-11-02; deviation C5) | Q2, FR-003, FR-026, FR-038, US5, SC-019 |
+| 2026-11-13 | T005b (the FR-005 Well-Architected and AgentCore guidance assessment) is **deferred until after the first deployment**: "it'll be easier that way and also we are running out of time to spend our free credits". It no longer runs before Phase 2. Accepted cost: a finding that changes a recorded decision means rework on deployed resources (tasks.md deviation C8) | FR-005, Q0–Q9, § R-lens |
 
 ## Decision register (FR-004)
 
@@ -386,9 +387,28 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
   - Whether model-invocation costs carry the tag is **unverified** and not relied on. SC-019 groups spend by service, which needs no tag, and the account hosts only this project.
 - **Quotas (FR-033)**: before the first deploy, the builder reads the adopted model's Bedrock on-demand quotas for `us-west-2` in Service Quotas. The requests-per-minute and tokens-per-minute quotas are compared with spec 001's peak (60 messages per friend per hour × invited friends), and the result is recorded here.
 
+## Dependencies — gate 3 supply-chain review (P6, T001)
+
+Constitution P6 (`.specify/memory/constitution.md:106-114`) and gate 3 (`:261`) require each new dependency's maintainer, publish date and downloads to be reviewed before it is added. Plan § Dependencies (`plan.md:35`) names four new `packages/agent` dependencies. Registry facts were read with `npm view` and the npm downloads API on 2026-11-13. **Approved by the builder on 2026-11-13.**
+
+| Package | Purpose (plan.md:35) | Version added | Published | Latest on 2026-11-13 | Maintainer | Downloads/week | License |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `@aws-sdk/client-bedrock-agentcore` | Memory data plane | 3.1162.0 | 2026-11-04 | 3.1169.0 | AWS (`amzn-oss`, `aws-sdk-bot`; `aws/aws-sdk-js-v3`) | 1.5M | Apache-2.0 |
+| `@aws-sdk/client-polly` | Server-side voice | 3.1162.0 | 2026-11-04 | 3.1169.0 | AWS, as above | 0.95M | Apache-2.0 |
+| `@aws-sdk/client-dynamodb` | Control table | 3.1162.0 | 2026-11-04 | 3.1169.0 | AWS, as above | 18.4M | Apache-2.0 |
+| `@aws-sdk/client-ssm` | Tool API keys from SecureString | 3.1162.0 | 2026-11-04 | 3.1169.0 | AWS, as above | 13.3M | Apache-2.0 |
+
+- **Version: 3.1162.0, not the latest.** It is the version the lockfile already resolves for every existing `@aws-sdk/client-*` (`client-bedrock-runtime`, `client-polly`, `client-cognito-identity`, `client-apigatewaymanagementapi`), so the new clients share their `@aws-sdk/core` and Smithy packages. The AWS SDK publishes daily: 3.1169.0 was minutes old at the review, and a plain `pnpm add` resolved 3.1168.0, which pulled a second `@aws-sdk/core` into the agent. Specifiers use the existing `^3.1162.0` convention, so the Dependabot `dependencies` group moves all clients together. P6's ban on `^` applies to pre-1.0 packages only.
+- **Transitive additions (12 lockfile packages, one removed).** The three clients not already present; `@aws-sdk/core@3.981.0`, required only by `@aws-sdk/dynamodb-codec`'s own range (`pnpm why`); `dynamodb-codec`, `endpoint-cache`, `middleware-endpoint-discovery`, `types@3.975.1`, `xml-builder@3.972.43` and `@smithy/core@3.40.0`, all AWS; and two non-AWS packages through DynamoDB's endpoint discovery (`client-dynamodb` → `middleware-endpoint-discovery` → `endpoint-cache`):
+  - `mnemonist@0.38.3` (published 2021-03-01, latest 0.40.8) and `obliterator@1.6.1` (2020-02-12, latest 2.0.5). Both are MIT-licensed, from a single maintainer (`yomguithereal`), at about 23.5M downloads a week each. AWS pins `mnemonist` exactly, so no pre-1.0 range enters our graph. They are old but stable, and every DynamoDB v3 client carries them. Accepted.
+- **Removed**: `@smithy/core@3.37.0`, previously used only by `@smithy/fetch-http-handler@5.8.0`. AWS deprecated it for a custom-logger redaction bug ([aws/aws-sdk-js-v3#8393](https://github.com/aws/aws-sdk-js-v3/issues/8393)). The re-resolution moved `fetch-http-handler` to 5.8.1 on a non-deprecated core. No other existing package's resolved version changed.
+- **`pnpm audit`**: unchanged by this addition. Before and after: one `low`, `deepmerge` [GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4), reached only through `packages/infra`'s jest devDependencies, with no patched version. `pnpm audit --audit-level=moderate` (the CI gate) passes.
+
 ## R-lens — Well-Architected assessment (FR-005)
 
-FR-005 requires the codebase and architecture to be assessed against current AWS guidance: the Well-Architected Agentic AI Lens and Generative AI Lens, and the AgentCore Runtime, Memory, Identity and Observability guidance. Task T005b fills this table before Phase 2, citing each source the way the rest of this document does.
+> **Deferred until after the first deployment (builder decision 2026-11-13; tasks.md deviation C8).** The assessment is easier against deployed resources, and the AWS credits are time-limited. Accepted cost: a finding that changes a Q0–Q9 decision now means rework on deployed resources, not on paper.
+
+FR-005 requires the codebase and architecture to be assessed against current AWS guidance: the Well-Architected Agentic AI Lens and Generative AI Lens, and the AgentCore Runtime, Memory, Identity and Observability guidance. Task T005b fills this table after the first deployment (see the note above), citing each source the way the rest of this document does.
 
 A finding that only confirms a decision already recorded above is noted here and needs no further action. A finding that would **change** a Q0–Q9 decision stops the work: it goes to the builder, and the artifacts are reconciled with `/speckit.converge` rather than edited task by task.
 
