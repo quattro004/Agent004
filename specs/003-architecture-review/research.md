@@ -572,7 +572,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | P-07 | FR-022, FR-053 | 14-day log retention; sign-in records kept until deletion is requested or the friend is removed; memory follows the 30-day window . **Applied 2026-11-13** (T103) |
 | P-08 | FR-036 | The server enforces the contract's 2,000 characters . **Applied 2026-11-13** (T103) |
 | P-09 | spec 001 FR-010 (recorded, not edited) | The 20,000-token session cap counts conversational tokens . **Recorded in FR-056** (spec 001 is frozen), 2026-11-13 (T103); the wiki records it at close-out |
-| P-10 | FR-024, SC-019 | The projection and the month of operation include Memory cost |
+| P-10 | FR-024, SC-019 | The projection and the month of operation include Memory cost . **Applied 2026-11-13** (T103); SC-002 gets the same addition |
 | P-11 | FR-032 | The WebSocket gap bullets are superseded by the Q4 SSE transport |
 | P-12 | FR-018 | The hard-stop targets are the runtime execution role and the halt flag; there is no authenticated role, because the Identity Pool is removed |
 | P-13 | FR-026 | The text-model comparison adds Claude Haiku 5.5 (launched 2026-10-07) and Nova Lite v1 as candidates, alongside Haiku 4.5 and Nova 2 Lite . **Already in spec.md** (FR-026 post-upgrade review bullet, applied with the 2026-11-02 clarification); confirmed 2026-11-13 (T103) |
