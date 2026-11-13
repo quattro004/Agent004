@@ -328,7 +328,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-020**: An in-path circuit breaker MUST bound spend between Budgets refreshes (O11). Its limit and the signal it reads are decided in Q6 and derived from P2: the breaker trips at $20 − F, where F is R-cost's projected fixed monthly cost (clarified 2026-11-02; the figures themselves are deploy-time configuration, not set in this spec).
 - **FR-021**: The hard stop MUST have a defined recovery procedure (automatic at the start of the budget period, or manual, decided in Q6). The procedure MUST be documented and demonstrated once.
 - **FR-022**: Observability MUST fit the budget while meeting P9:
-  - every log destination has an explicit retention period (never the never-expire default)
+  - every log destination has an explicit 14-day retention period, never the never-expire default (builder, 2026-10-11; P-07)
   - log levels are set deliberately
   - billed tracing features (such as Transaction Search) are enabled only by recorded decision
   - model-invocation logging is enabled only if a recorded decision accepts the privacy trade-off for friends' messages
@@ -450,7 +450,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-052**: **Sign-in secrets.** Identity-provider client secrets and keys MUST be stored per P11: SSM SecureString or environment variables, never in source (`constitution.md:210-211`). Their storage MUST NOT add recurring cost unless the decision record justifies it. Secrets Manager charges per secret per month, so the plan MUST check whether CloudFormation can consume an SSM SecureString for Cognito identity-provider resources.
 - **FR-053**: **Privacy.** Sign-in makes friends' emails stored personal data, so P7's rationale that privacy obligations are minimal (`constitution.md:131-132`) no longer fully holds. A privacy page MUST disclose:
   - what sign-in stores
-  - how long it is kept (the retention period is defined at plan)
+  - how long it is kept: the sign-in record and allowlist entry until the friend requests deletion or the builder removes them, long-term memories on the constitution's 30-day rolling window (FR-014), and logs for 14 days (FR-022) (P-07)
   - how to request deletion
 
   Deletion on request MUST remove the person's sign-in record and allowlist entry, alongside spec 001 FR-017's memory wipe. Spec 001's privacy requirements call for a privacy page (`specs/001-max-height-ai-character/spec.md:298-302`), but none exists in frontend source (search on 2026-10-03). It is therefore created, not updated.
