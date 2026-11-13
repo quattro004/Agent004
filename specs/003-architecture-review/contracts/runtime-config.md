@@ -35,7 +35,7 @@ Every value a deployment needs is listed here with its source. A value marked **
 | `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` | **Derived** from the adopted model's human-read price | R-cost |
 | `PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD` | Same | R-cost |
 | `PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD` | Same; `0` while caching is off (S2) | R-cost; #49 |
-| `PRICE_POLLY_PER_MCHAR_MICRO_USD` | **Derived** from the human-read Polly Neural price; spec 001 R0 had $16 per 1M | R-cost |
+| `PRICE_POLLY_PER_MCHAR_MICRO_USD` | **Derived** from the Polly Standard price, $4 per 1M → 4,000,000 (amendment A6, 2026-11-13; spec 001 R0 had Neural's $16) | R-cost |
 | `PRICE_MEMORY_EVENT_MICRO_USD` | **Derived**: $1.00 per GB × the event's billed size (12 KB minimum, 64 KB maximum) | R-cost (verified 2026-10-11) |
 | `PRICE_MEMORY_RETRIEVAL_MICRO_USD` | **Derived**: $0.50 per 1,000 → 500 | R-cost (verified) |
 | `PRICE_RUNTIME_PER_TURN_MICRO_USD` | **Derived**: R-cost's per-session Runtime V2 estimate ÷ spec 001's turns per session | R-cost |

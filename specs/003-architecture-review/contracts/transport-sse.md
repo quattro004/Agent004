@@ -94,7 +94,7 @@ action:     result | error
 | --- | --- | --- |
 | `session` | `countedSessionId`, `opened` (true when this turn opened a new counted session), `voice` (`"on"` or `"off"`) | First event of every successful stream. `voice: "off"` when the soft-degrade is active or the friend muted voice. |
 | `text` | `delta` (string) | Incremental reply text, in order. The browser renders the concatenation. |
-| `audio` | `seq` (integer from 0), `format` (`"mp3"`), `data` (base64) | Each event is one independently decodable Polly Neural segment, synthesized as reply text completes. There are no speech marks (#47). Absent when `voice` is `"off"`. |
+| `audio` | `seq` (integer from 0), `format` (`"mp3"`), `data` (base64) | Each event is one independently decodable Polly Standard segment, synthesized as reply text completes. There are no speech marks (#47). Absent when `voice` is `"off"`. |
 | `done` | `turnsUsed`, `state` (`"ACTIVE"` or `"SIGNED_OFF"`) | Terminal. `SIGNED_OFF` means this reply was Max's in-character sign-off, so the next message opens a fresh counted session. |
 | `result` | `action`, `data` (the action's payload, [memory-api.md](./memory-api.md)) | Terminal. Action requests only. |
 | `error` | `code`, `retryable` (boolean), `inCharacterMessage` (string or null) | Terminal. No `session` event precedes a pre-turn refusal. |

@@ -12,7 +12,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 
 - **Transport (Q4).** The browser streams over Server-Sent Events (SSE) through a CloudFront `/runtimes/*` path behavior straight to AgentCore Runtime V2. The runtime authorizes the friend's Cognito user-pool JWT on the way in. The API Gateway WebSocket path and its stub handler are removed. A Lambda streaming proxy is the fallback, used only if a first-deploy probe fails.
 - **Identity (Q5, Q9).** Sign-in is Google-first, with Microsoft and Login with Amazon deferred. Access is invite-only, with one allowlist entry per identity. A pre token generation trigger re-checks the allowlist at every sign-in and silent refresh. The server keys every cap, rate limit, session and memory namespace to the verified JWT `sub`, never to a client field (#55).
-- **Voice (Q1).** Polly Neural runs server-side in the runtime, and its audio streams alongside the reply text. The browser holds no AWS credentials, so the Identity Pool is removed. Speech marks are dropped.
+- **Voice (Q1).** Polly Standard, voice Matthew (amendment A6, 2026-11-13), runs server-side in the runtime, and its audio streams alongside the reply text. The browser holds no AWS credentials, so the Identity Pool is removed. Speech marks are dropped.
 - **Spend (Q6, Q7).** Three layers protect the budget:
   - Budgets measures gross spend, with credits excluded.
   - An in-path circuit breaker tallies real model usage from `result.metrics.accumulatedUsage`. The current `extractUsage` reads a field that does not exist.
@@ -162,7 +162,7 @@ packages/agent/
 │   ├── spend/
 │   │   ├── usage.ts                # NEW: reads result.metrics.accumulatedUsage (replaces extractUsage)
 │   │   └── breaker.ts              # NEW: in-path tally, degrade and trip thresholds
-│   ├── voice/pollyStream.ts        # NEW: server-side Polly Neural synthesis
+│   ├── voice/pollyStream.ts        # NEW: server-side Polly Standard synthesis
 │   ├── memory/                     # CHANGE: real AgentCore client; ownership-checked handlers
 │   ├── handlers/sessionManager.ts  # CHANGE: caps on conversational tokens, keyed to sub
 │   └── tools/                      # unchanged

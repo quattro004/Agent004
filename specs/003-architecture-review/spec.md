@@ -89,6 +89,10 @@ Wiki pages read as inputs:
 - Q: Is $20 permanent? → A: **Provisional.** After the SC-019 measured month, the gross spend is recorded; if it fits under $10, the builder proposes lowering P2 back by amendment (SC-019, T156).
 - Q: Does the builder move to AWS's new account experience (enforced spend limits, minimum $20, pause at cap)? → A: **No (prior decision, confirmed 2026-11-02).** The builder stays on the existing **classic** AWS account in `us-west-2`. The new experience needs a new account pinned to `us-east-2`, cannot coexist with the Region choice, and cannot be converted to from an existing account (wiki `Source-AWS-New-Account-Experience`). The spend limit, hard stop and breaker remain this spec's own mechanisms (FR-018–FR-021); AWS's pause-at-cap is not relied on.
 
+### Session 2026-11-13
+
+- Q: Polly Neural costs four times Standard ($16 against $4 per 1M characters) and is the largest projected line. Which engine does the first deployment use? → A: **Polly Standard, voice Matthew** (builder, 2026-11-13: "so we can get to MVP under budget let's go with Matthew standard voice"). AWS's available-voices table lists Matthew on Standard, so the voice stays the same (research.md § Q1). The gate 1 projection then passes in both cases without a mitigation (research.md § R-cost). It requires constitution amendment A6 (the TTS row; deviation C10). Standard also accepts `<prosody pitch>`, `<emphasis>` and `<amazon:effect vocal-tract-length>`, which Neural rejects. A Standard Matthew has not yet been heard: it is auditioned through the DSP when T158 regenerates the greetings, and if it fails by ear the builder re-decides. This narrows FR-027's "Polly Neural" candidate to Polly Standard; the Nova Sonic and browser-TTS comparisons stand.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An invited friend holds a conversation on the first real deployment (Priority: P1)

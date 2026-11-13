@@ -1,7 +1,31 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.5.0 → 1.6.0 (amendment A5, 2026-11-13)
+  Version change : 1.6.0 → 1.7.0 (amendment A6, 2026-11-13)
+  Bump rationale : MINOR — the tech table's TTS row changes
+                   from "Amazon Polly Neural" to "Amazon Polly
+                   Standard" (voice Matthew). Builder decision
+                   2026-11-13: Standard costs $4 per 1M
+                   characters against Neural's $16, and Polly
+                   was the largest projected line. P1 is
+                   unaffected (TTS stays in the cloud). Same
+                   route as A5: committed on the
+                   003-architecture-review branch (deviation
+                   C10).
+
+  Modified sections (A6): Technology Stack (TTS row).
+
+  Dependent artifacts reviewed (A6):
+    - specs/003-architecture-review/ (spec clarification,
+      research Q1 and R-cost, plan, tasks T029 and T158,
+      contracts transport-sse and runtime-config).
+    - packages/frontend/scripts/greetingGenCore.ts and
+      services/pollyTts.ts still request Engine 'neural';
+      greetings change under T158, pollyTts.ts is deleted by
+      T081, and the server path is built Standard by T029.
+    - Wiki Decision-Polly-Voice and Source-Amazon-Polly.
+
+  Previous change: 1.5.0 → 1.6.0 (amendment A5, 2026-11-13)
   Bump rationale : MINOR — P2's ceiling rises from $10 to $20
                    per month. Its meaning is unchanged (a hard
                    cap, a rule and not a target, with automated
@@ -234,7 +258,7 @@ pinning it to one product would have cost real money here.
 | Frontend | React + Vite SPA, React Three Fiber, Zustand, Web Audio API |
 | Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime |
 | LLM | Amazon Bedrock — Anthropic Haiku-class (specific model version in plan) |
-| TTS | Amazon Polly Neural (direct SDK, streaming) |
+| TTS | Amazon Polly Standard, voice Matthew (direct SDK, streaming) |
 | STT | Web Speech API (browser built-in) |
 | Auth | Amazon Cognito User Pool (invite-only federated sign-in); Identity Pool if authenticated AWS credentials are needed |
 | Memory | AgentCore Memory (30-day rolling window) |
@@ -318,4 +342,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.6.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-13
+**Version**: 1.7.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-13
