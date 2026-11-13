@@ -563,7 +563,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 
 | ID | Target | Change |
 | --- | --- | --- |
-| P-01 | FR-003 (S0) | S0 becomes the probe matrix; Nova 2 Lite is not in-Region (D2 refuted) |
+| P-01 | FR-003 (S0) | S0 becomes the probe matrix; Nova 2 Lite is not in-Region (D2 refuted) . **Already in spec.md** (FR-003 S0 bullet, applied with the 2026-10-30 clarifications); confirmed 2026-11-13 (T103) |
 | P-02 | FR-044, FR-054, SC-015 | Google-first; Microsoft and Login with Amazon deferred |
 | P-03 | FR-014, the 2026-10-03 memory clarification, the 2026-10-04 dropout clarification, FR-030 (T023b/c), FR-037's third bullet, and Assumptions "Out of scope" | **Long-term memory un-deferred**: AgentCore Memory ships in the first deployment. After a dropout, Max loses verbatim in-session history but recalls extracted memories |
 | P-04 | FR-035 | Use the typed `platformVersion` with a pinning test; Strands 1.20.0 |
@@ -575,7 +575,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | P-10 | FR-024, SC-019 | The projection and the month of operation include Memory cost |
 | P-11 | FR-032 | The WebSocket gap bullets are superseded by the Q4 SSE transport |
 | P-12 | FR-018 | The hard-stop targets are the runtime execution role and the halt flag; there is no authenticated role, because the Identity Pool is removed |
-| P-13 | FR-026 | The text-model comparison adds Claude Haiku 5.5 (launched 2026-10-07) and Nova Lite v1 as candidates, alongside Haiku 4.5 and Nova 2 Lite |
+| P-13 | FR-026 | The text-model comparison adds Claude Haiku 5.5 (launched 2026-10-07) and Nova Lite v1 as candidates, alongside Haiku 4.5 and Nova 2 Lite . **Already in spec.md** (FR-026 post-upgrade review bullet, applied with the 2026-11-02 clarification); confirmed 2026-11-13 (T103) |
 | P-14 | FR-002 | An amendment that changes a principle, a quality gate or a technology-table row is MINOR; correcting a factual claim in a rationale is PATCH. FR-002's blanket "MINOR version bump" is narrowed accordingly (A3 stays PATCH, A4 becomes MINOR) |
 | P-15 | US3 scenario 6 | Soft-degrade is text-only. Spec 001 FR-016's browser-TTS fallback is recorded as unmet rather than amended, because browser TTS would itself breach P1 (Q1) |
 
