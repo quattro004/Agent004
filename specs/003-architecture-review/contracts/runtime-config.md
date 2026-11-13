@@ -45,7 +45,7 @@ Every value a deployment needs is listed here with its source. A value marked **
 
 That is 29 variables, under the limit of 50.
 
-When the Memory extraction cost is resolved (R-cost, currently **unverified**), and if it is billed per event, a `PRICE_MEMORY_EXTRACTION_*` variable is added and counted by the breaker.
+No `PRICE_MEMORY_EXTRACTION_*` variable is needed. Built-in strategies include extraction in the long-term storage price (R-cost, resolved 2026-11-13 under T005a).
 
 The breaker's estimate is a **floor**, not the bill: lines that are not per-turn, such as logs, spans and ECR, sit in F. That is why the limits are set below P2's dollar thresholds by F, rather than at them.
 

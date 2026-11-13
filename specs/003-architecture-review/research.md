@@ -42,6 +42,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-11-13 | T005b (the FR-005 Well-Architected and AgentCore guidance assessment) is **deferred until after the first deployment**: "it'll be easier that way and also we are running out of time to spend our free credits". It no longer runs before Phase 2. Accepted cost: a finding that changes a recorded decision means rework on deployed resources (tasks.md deviation C8) | FR-005, Q0–Q9, § R-lens |
 | 2026-11-13 | T005: (a) the Google client secret lives in SSM SecureString `/max-height/google-client-secret`, applied by `handlers/idp-secret.ts`, not in Secrets Manager: "it's ok as long as we use SecureString"; (b) `cdk bootstrap`'s default `AdministratorAccess` CloudFormation execution role is accepted as a P11 note | Q9, FR-052, § R-deploy, P11 |
 | 2026-11-13 | Amendment A5 (the $20 ceiling) lands on this feature branch, not in its own PR: "We don't need a PR - we are doing this work in the current branch". MINOR bump, 1.5.0 → 1.6.0. Waives FR-002's own-PR rule; the constitution's procedure is still met by the branch's PR (deviation C9). The $9.56 conversation estimate is unmeasured; the builder wants real numbers from a deployment as soon as possible | FR-002, P2, gate 1, T153, T157 |
+| 2026-11-13 | T005a approved: the gate 1 projection ($12.35 average case, which passes; $18.92 full case, over $16 with the measure-then-re-project and breaker mitigation) and its F lines, read from AWS's Price List files instead of builder-dated reads. About 10 friends will sign in. The builder asked whether Polly Neural is worth 4× Standard; that question is open in § Q1 | gate 1, FR-024, SC-002, § R-cost, Q1 |
 
 ## Decision register (FR-004)
 
@@ -96,6 +97,11 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
   - Browser Polly with Identity Pool credentials: rejected, because it adds a signed-in AWS credential surface and CSP entries for no benefit.
   - Browser TTS: rejected, because it would break P1. Spec 001 FR-016's browser-TTS SHOULD is recorded as unmet.
 - **Issues**: #47 (speech marks dropped; free tier not counted, see Q7) and #48 (Nova Sonic hybrid not adopted; the issue stays open for after the first deployment).
+- **Open: Neural or Standard (raised by the builder 2026-11-13).** Q1 never compared engines; Neural was inherited from spec 001 R4 and the constitution's tech table (`constitution.md:237`). Facts, read 2026-11-13:
+  - **Price**: Standard is $4 per 1M characters, Neural $16 (Price List, AmazonPolly `us-west-2`, published 2026-10-22). Standard would cut Polly from $6.36 to $1.59 (average case) and from $12.80 to $3.20 (full case). The full case would then fall to about $9.32, under the gate with no mitigation.
+  - **Voice**: Matthew has **no Standard voice**. US English Standard males are Joey and Kevin (`docs.aws.amazon.com/polly/latest/dg/standard-voices.html`); British Brian is another option. Switching means a new voice, re-auditioned through the DSP, and regenerated greetings so replies and greetings match (`AGENTS.md` § Product and legal guardrails).
+  - **SSML**: Standard supports every tag except the news style, including `<prosody pitch>`, `<emphasis>` and `<amazon:effect vocal-tract-length>` (`docs.aws.amazon.com/polly/latest/dg/supportedtags.html`). Neural has none of those. Concatenative Standard sounds less natural, which may suit a glitchy TV character.
+  - **Cost to switch**: a constitution amendment (the tech table), changes to the greeting pipeline and Q1, and an audition. Not decided; nothing changes for the first deployment unless the builder chooses it.
 
 ### Q2 — Text model
 
@@ -280,7 +286,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 
 ## R-cost — projection inputs (FR-024, gate 1)
 
-Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered text) are **Verified**. All others are **human-read required** before the projection gates deployment.
+Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered text) are **Verified**. That page was re-read 2026-11-13 for T005a. Rows marked **Price List 2026-11-13** were read that day from AWS's public regional Price List offer files (`pricing.us-east-1.amazonaws.com/offers/v1.0/aws/<service>/current/us-west-2/index.json`; CloudFront from its global file). Each row gives the file's publication date. No free tier is subtracted from any row, so a free-tier claim no longer gates the projection.
 
 | Line item | Unit price | Status | Per-session estimate (method) |
 | --- | --- | --- | --- |
@@ -296,19 +302,24 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 | Memory short-term storage | $0.10 per GB-month | Verified | 7-day expiry; negligible |
 | Memory long-term storage (built-in strategies) | $0.75 per 1,000 records per month | Verified | records per friend × friends |
 | Memory long-term retrieval | $0.50 per 1,000 | Verified | one per counted session |
-| Memory built-in extraction model cost | unknown | **Unverified**: whether it is included or billed separately | must be resolved before the projection passes |
+| Memory built-in extraction model cost | **$0, included** for built-in strategies | **Resolved 2026-11-13** (`aws.amazon.com/bedrock/agentcore/pricing`). The page describes "built-in memory strategies, which include automatic processing". The pricing-table footnote says only built-in-with-override and self-managed strategies "may incur additional charges for the model usage in your account". We use built-in strategies with no override (memory-api.md `:11`) | none; no `PRICE_MEMORY_EXTRACTION_*` (runtime-config.md) |
 | AgentCore Web Search | $7 per 1,000 queries | Verified | not adopted; the alternative when Google CSE ends (N4) |
-| DynamoDB provisioned (small capacity) | Always Free claim | Human-read required | expected $0 |
-| Cognito Lite MAUs | free tier claim | Human-read required | expected $0 |
-| CloudFront (including the SPA rewrite Function and site invalidations), S3, the deploy-time `BucketDeployment` Lambda, CloudWatch Logs (14 days) and the four operations alarms, ECR storage | various | Human-read required | spec 001 R0 put infrastructure at about $1 a month; ECR, the Function, the upload Lambda and the alarms are now added |
-| Transaction Search spans | per GB ingested | Human-read required | see R-obs |
-| Secrets Manager (only if chosen) | about $0.40 per secret per month | Human-read required | fixed |
+| DynamoDB on-demand | $0.625 per 1M write, $0.125 per 1M read request units; storage $0.25 per GB-month beyond 25 GB | **Price List 2026-11-13** (AmazonDynamoDB, published 2026-11-11) | a few writes per turn; about $0.01 a month |
+| Cognito Lite MAUs | $0.0055 per MAU (first tier) | **Price List 2026-11-13** (AmazonCognito, published 2026-10-20, `USW2-CognitoLiteMAU`). The free tier is not subtracted | friends × $0.0055 |
+| CloudFront | $0.085 per GB out (US, first 10 TB); $0.01 per 10,000 HTTPS requests; first 1,000 invalidation paths free | **Price List 2026-11-13** (AmazonCloudFront, published 2026-10-19) | about 1 GB a month: SPA, greetings, streamed reply audio |
+| Lambda (BucketDeployment, pre token trigger, pruner, hard stop) | $0.20 per 1M requests; $0.0000166667 per GB-second | **Price List 2026-11-13** (AWSLambda, published 2026-11-11) | under $0.01 |
+| CloudWatch Logs | $0.50 per GB ingested (Standard); $0.03 per GB-month stored | **Price List 2026-11-13** (AmazonCloudWatch, published 2026-11-04) | includes the `aws/spans` log group that Transaction Search writes |
+| CloudWatch alarms | $0.10 per standard alarm metric per month | Same file | four operations alarms |
+| Transaction Search span indexing | $0.75 per 1M spans indexed | Same file (`USW2-XRay-Spans-Indexed`) | under $0.02 |
+| ECR storage | $0.10 per GB-month | **Price List 2026-11-13** (AmazonECR, published 2026-11-13) | images kept × image size |
+| SSM Parameter Store, standard SecureString | $0 (standard tier, standard throughput, `aws/ssm` key) | T005 chose SSM over Secrets Manager. The standard-tier $0 is from the Parameter Store pricing page and is not re-read here | $0 |
+| Route 53 | none | No hosted zone; DNS stays at GoDaddy (spec.md § Assumptions) | $0 |
 
 **Gate rule**: the projection sums F (fixed monthly) and per-session cost × spec 001's session counts (`specs/001-max-height-ai-character/research.md:43-70`). It must be at or below $16 (gate 1, constitution 1.6.0), gross of credits. Otherwise a mitigation is documented here before deployment (FR-024, gate 1). The as-built AWS Pricing Calculator estimate follows implementation (SC-019).
 
 ### Gate 1 projection on the adopted route (T145, T146; 2026-11-02)
 
-**Scope.** T145 narrows T138's candidate set to Haiku 4.5's adopted route, the global profile at $1.00 input and $5.00 output per 1M tokens (§ Q2, T144). Nova 2 Lite and Haiku 5.5 leave the set. Nova Lite v1 is not projected either, because T152 re-projects any cheaper model before it is adopted. T146 runs the projection on **estimated** token counts, because S2 (T101) now runs after the first deployment. **This is a floor, not the finished gate 1 projection**: T005a and T138 stay open, and the lines marked "not sized" below are not in it.
+**Scope.** T145 narrows T138's candidate set to Haiku 4.5's adopted route, the global profile at $1.00 input and $5.00 output per 1M tokens (§ Q2, T144). Nova 2 Lite and Haiku 5.5 leave the set. Nova Lite v1 is not projected either, because T152 re-projects any cheaper model before it is adopted. T146 runs the projection on **estimated** token counts, because S2 (T101) now runs after the first deployment. **This is a floor, not the finished gate 1 projection**: T005a and T138 stay open, and the lines marked "not sized" below are not in it. (F was sized later under T005a; see § F and the full gate 1 projection.)
 
 **Inputs.** Every token figure is an **ESTIMATE pending S2 (T101)**. The method is spec 001 R0's: about 3K input tokens per turn and the 250-token reply cap.
 
@@ -330,7 +341,7 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 | Polly Neural ($16 per 1M characters) | $6.36 | $12.80 |
 | **Conversation subtotal** | **$9.56** (about $0.180 per 15-turn session) | **$16.52** (about $1.03 per 50-turn session) |
 | For reference, US fallback route ($1.10 / $5.50) | $9.88 | $16.89 |
-| F: Runtime V2 compute, Memory, CloudFront, S3, Lambda, logs, spans, alarms, ECR, DynamoDB, Cognito, SSM | **not sized** (T005a, T138) | **not sized** |
+| F: Runtime V2 compute, Memory, CloudFront, S3, Lambda, logs, spans, alarms, ECR, DynamoDB, Cognito, SSM | about $2.79, sized under T005a (§ F and the full projection, below) | about $2.40 |
 
 - **The projection exceeds the $8 gate before any F line is counted** (constitution gate 1; FR-024; SC-002). It would still exceed it with the LLM on the system prompt alone (about $2.88) and no tools. The figures are a floor: history, Memory context and tool-result tokens only add to the LLM line.
 - **Polly is about 66% of the conversation subtotal** (average case). Polly alone is $6.36, so F plus the LLM line must fit in $1.64 for any model. Haiku 5.5's listed rates (a tenth of Haiku 4.5's) would cut the LLM line to about $0.32, which leaves $6.68 before F. Spec 001's own $1 infrastructure figure is already stale (R-cost's additions are not in it).
@@ -347,6 +358,44 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 - **Derived `PRICE_*` values, for T082 when it runs**, in micro-USD per 1M units (1 micro-USD = $0.000001): `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` = 1,000,000 ($1.00); `PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD` = 5,000,000 ($5.00); `PRICE_POLLY_PER_MCHAR_MICRO_USD` = 16,000,000 ($16). If T152 or a re-pin changes the route, these are re-derived.
 - **`PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD` stays `0`** until S2 shows caching is reachable (FR-029; [runtime-config.md](./contracts/runtime-config.md) `:37`). The projection takes no cache discount.
 - **After T101 (post-deploy)**, re-run this per-session projection with the measured system-prompt and tool token counts and record it beside this one. Above $16 gross of credits (gate 1 since A5), raise it with the builder (FR-024). Not yet run: **pending S2**.
+
+### F and the full gate 1 projection (T005a; 2026-11-13)
+
+**Every usage figure here is an estimate**, pending measurement after the first deployment (S2/T101, S4, T146). Rates come from the R-cost table. No free tier or credit is subtracted. Where usage is unknown, the assumption leans high.
+
+| F line (monthly, gross) | Average case: 53 sessions × 15 turns | Full case: 16 sessions × 50 turns | Assumption |
+| --- | --- | --- | --- |
+| Runtime V2 CPU | $0.06 | $0.06 | 2 active vCPU-seconds per turn. CPU is not billed during I/O wait, which is most of a turn (model and Polly streaming) |
+| Runtime V2 memory | $0.60 | $0.27 | 1 GB billed for the whole session plus the 1,800 s idle timeout (research `:239`): 10-minute average sessions and 30-minute full sessions (the cap). AWS reclaims idle memory sooner, so this is high |
+| Memory short-term | $0.03 | $0.03 | Two events per turn at the 12 KB billing minimum, plus retrieval if the S4 fallback runs |
+| Memory long-term storage | $0.75 | $0.75 | **Planning figure of 1,000 records.** About 8 records per session (1 summary, ~5 facts, ~2 preferences), so about 420 new records a month at average use. The 30-day pruner only removes inactive friends' records, so storage **grows** while friends stay active: about $0.32 in month 1, about $3.80 if 12 months accumulate unconsolidated |
+| Memory long-term retrieval | $0.08 | $0.02 | Three per session (one per strategy namespace, memory-api.md `:50`) |
+| CloudFront | $0.10 | $0.10 | About 1 GB out and under 10,000 requests |
+| S3 | $0.01 | $0.01 | Under 1 GB stored. The rate was not re-read, and the cost is under $0.01 at any published rate |
+| Lambda | $0.01 | $0.01 | Deploy uploads, sign-in triggers, the daily pruner and the hard stop |
+| CloudWatch Logs and spans | $0.53 | $0.53 | 1 GB ingested (runtime logs plus `aws/spans`), 14-day retention, span indexing |
+| CloudWatch alarms | $0.40 | $0.40 | Four standard alarms |
+| ECR | $0.15 | $0.15 | About 1.5 GB (a few ARM64 images retained) |
+| DynamoDB | $0.01 | $0.01 | On-demand control-table traffic |
+| Cognito Lite | $0.06 | $0.06 | 10 friends (builder, 2026-11-13) |
+| SSM, Route 53, Budgets | $0 | $0 | Standard parameters, no hosted zone, one budget |
+| **F** | **$2.79** | **$2.40** | |
+
+**Result against gate 1 ($16, constitution 1.6.0), gross of credits:**
+
+| | Average case | Full case |
+| --- | --- | --- |
+| Conversation (§ above) | $9.56 | $16.52 |
+| F | $2.79 | $2.40 |
+| **Projected month** | **$12.35: passes**, with $3.65 headroom | **$18.92: over $16**, under the $20 hard stop |
+
+- **The average case passes gate 1.** F is about $2.79, and Polly is still the largest single line.
+- **The full case is over the gate, so it carries a mitigation (FR-024, gate 1), approved by the builder on 2026-11-13 (T005a):**
+  1. **The projection is an estimate. Measure, then re-project.** Deploy, run S2 (T101) and T146's re-projection on measured tokens, Runtime seconds, Memory records and log volume, and record the result beside this one. T117 then sets F from measured figures.
+  2. **The in-path breaker bounds spend before the bill does.** It soft-degrades to text only at $16 − F and trips at $20 − F (Q6, A5). Polly is about 67% of the full case, so voice-off removes most of the overshoot. The $20 hard stop (P2) is the backstop.
+  3. **Watch Memory long-term storage.** It is the one F line that compounds. If T146 shows records growing past the planning figure, the options are a shorter retention window or dropping a strategy, decided then.
+- **For T117, not set here:** a planning F of about $2.79 gives breaker limits of about $13.21 (degrade) and $17.21 (trip). These are **not** `BREAKER_*` values; T117 computes those from measured inputs (deviation C6).
+- **Human reads.** T005a asked the builder to read and date every human-read price. The F lines here were instead read from AWS's Price List files (`AGENTS.md` § External facts go stale), and together they total under $3. The builder approved T005a as presented, substitution included, on 2026-11-13 (§ Builder decisions).
 
 ## R-obs — observability (FR-022, P9)
 
