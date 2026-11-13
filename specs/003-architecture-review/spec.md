@@ -371,7 +371,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - CDK bootstrap
   - an ARM64 container-image build path that works from the builder's Windows machine (local emulation or a cloud build)
   - model access enabled and new-account quotas checked against spec 001's rate limits
-  - cost-allocation tags activated far enough ahead of deployment for spend attribution (about 24 hours, per AWS guidance the builder cited)
+  - cost-allocation tags activated far enough ahead of deployment for spend attribution: up to 48 hours, per AWS documentation, not the "about 24 hours" first cited (P-06)
   - the budget stack deployed first (infra-plan)
   - the third-party sign-in app registrations (FR-054)
   - the custom subdomain's certificate, its DNS validation record, and the subdomain's own DNS record at GoDaddy (FR-049), as manual steps documented in the deployment guide
