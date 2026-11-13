@@ -40,6 +40,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-10-30 | Any route S0 (or a later approved probe) proves is eligible, in-Region or cross-Region; the Free plan is temporary, so its documented restrictions are not grounds for rejection. S0-8 and S0-9 approved. Supersedes the 2026-10-29 record-only decision (spec.md § Clarifications) | Q0, Q2, D1, FR-028 |
 | 2026-11-02 | The first deployment adopts Claude Haiku 4.5, today's model (`index.ts:96`), on the cheaper of its two S0-proven profiles, the global profile `global.anthropic.claude-haiku-4-5-20251001-v1:0`. The builder declined running S1 before deploy. S1, amendment A4 and FR-026's cheapest-model comparison move to a post-upgrade model review (T152); S2 runs after the first deployment; #50 is deferred. Recorded by T144 (spec.md § Clarifications 2026-11-02; deviation C5) | Q2, FR-003, FR-026, FR-038, US5, SC-019 |
 | 2026-11-13 | T005b (the FR-005 Well-Architected and AgentCore guidance assessment) is **deferred until after the first deployment**: "it'll be easier that way and also we are running out of time to spend our free credits". It no longer runs before Phase 2. Accepted cost: a finding that changes a recorded decision means rework on deployed resources (tasks.md deviation C8) | FR-005, Q0–Q9, § R-lens |
+| 2026-11-13 | T005: (a) the Google client secret lives in SSM SecureString `/max-height/google-client-secret`, applied by `handlers/idp-secret.ts`, not in Secrets Manager: "it's ok as long as we use SecureString"; (b) `cdk bootstrap`'s default `AdministratorAccess` CloudFormation execution role is accepted as a P11 note | Q9, FR-052, § R-deploy, P11 |
 
 ## Decision register (FR-004)
 
@@ -272,9 +273,8 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 - **Tokens**: the browser uses the authorization-code flow with PKCE. The access token is the bearer, validated with `allowedClients` set to the app client ID. Tokens are kept in memory, and the refresh token in `sessionStorage`. Refresh is silent ([contracts/auth-and-allowlist.md](./contracts/auth-and-allowlist.md)).
 - **Google client secret**:
   - CloudFormation cannot resolve `ssm-secure` in Cognito `ProviderDetails`.
-  - **Proposed**: a custom resource (`handlers/idp-secret.ts`) reads the SSM SecureString and calls `UpdateIdentityProvider`, so the secret never enters the template.
-  - **Fallback**: a Secrets Manager dynamic reference, at about $0.40 per secret per month (human-read required).
-  - **Builder to confirm**, because FR-052 requires a justification for any recurring cost.
+  - **Decided (builder, 2026-11-13, T005 (a))**: a custom resource (`handlers/idp-secret.ts`) reads the SSM **SecureString** and calls `UpdateIdentityProvider`, so the secret never enters the template. The builder's condition is that the parameter is a SecureString, never a plain String.
+  - **Rejected**: a Secrets Manager dynamic reference, at about $0.40 per secret per month, which FR-052 would need to justify as a recurring cost.
 - **Google consent screen**: only non-sensitive scopes are requested: `openid email`. `profile` is dropped because no profile field is used, which narrows the FR-053 disclosure. The claim that "Testing" status limits users and tokens is **Unverified**, and is checked at registration (FR-054). Production status is preferred if it needs no verification for these scopes.
 
 ## R-cost — projection inputs (FR-024, gate 1)
@@ -370,7 +370,7 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 - **Bootstrap**: `us-west-2` and `us-east-1`, because the certificate stack and `crossRegionReferences` need both (plan, Complexity Tracking). Bootstrap needs IAM write, so it runs once, in CloudShell, as an administrator.
   - CDK's default gives the CloudFormation execution role **`AdministratorAccess`** ([`cdk bootstrap` reference](https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd-bootstrap.html), `--cloudformation-execution-policies`).
   - Scoping it is possible, but the scope must cover every resource type the stacks create, including IAM roles, so the gain is small. The deploy identity itself holds no direct permissions, its credentials are temporary, and no `--trust` account is added.
-  - **Proposed**: accept the default and record it as a P11 note. **Builder to confirm.**
+  - **Decided (builder, 2026-11-13, T005 (b))**: accept the default and record it as a P11 note.
 - **ARM64 image build**: local Docker Desktop. CDK's `DockerImageAsset` with `platform: Platform.LINUX_ARM64` (`aws-ecr-assets/lib/image-asset.d.ts:53,252`, `aws-cdk-lib` 2.272.0) builds at `cdk deploy` and pushes to the bootstrap ECR repository.
   - The builder's machine is x86-64 (`PROCESSOR_ARCHITECTURE=AMD64`) with the Docker 29.5.2 client installed (checked 2026-10-11), so the ARM64 build runs under emulation: slower, but it needs no AWS resource.
   - **Fallback**: an AWS CodeBuild ARM build. It is a new AWS resource with its own cost line, so it is costed and approved before adoption.
