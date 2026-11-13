@@ -576,7 +576,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | P-11 | FR-032 | The WebSocket gap bullets are superseded by the Q4 SSE transport . **Applied 2026-11-13** (T103); the gap bullets are kept as a record |
 | P-12 | FR-018 | The hard-stop targets are the runtime execution role and the halt flag; there is no authenticated role, because the Identity Pool is removed . **Applied 2026-11-13** (T103) |
 | P-13 | FR-026 | The text-model comparison adds Claude Haiku 5.5 (launched 2026-10-07) and Nova Lite v1 as candidates, alongside Haiku 4.5 and Nova 2 Lite . **Already in spec.md** (FR-026 post-upgrade review bullet, applied with the 2026-11-02 clarification); confirmed 2026-11-13 (T103) |
-| P-14 | FR-002 | An amendment that changes a principle, a quality gate or a technology-table row is MINOR; correcting a factual claim in a rationale is PATCH. FR-002's blanket "MINOR version bump" is narrowed accordingly (A3 stays PATCH, A4 becomes MINOR) |
+| P-14 | FR-002 | An amendment that changes a principle, a quality gate or a technology-table row is MINOR; correcting a factual claim in a rationale is PATCH. FR-002's blanket "MINOR version bump" is narrowed accordingly (A3 stays PATCH, A4 becomes MINOR) . **Applied 2026-11-13** (T103) |
 | P-15 | US3 scenario 6 | Soft-degrade is text-only. Spec 001 FR-016's browser-TTS fallback is recorded as unmet rather than amended, because browser TTS would itself breach P1 (Q1) |
 
 ## Constitution amendments (FR-002): each in its own PR before the tasks that depend on it
