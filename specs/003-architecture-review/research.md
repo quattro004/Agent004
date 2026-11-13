@@ -242,7 +242,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 
 ### Q8 — Platform, IaC, memory, harness, Guardrails, observability
 
-- **IaC**: CDK owns everything, including the runtime (`CfnRuntime`) and Memory (`CfnMemory`) as L1 constructs in 2.272.0 (`bedrockagentcore.generated.d.ts:6640` for CfnMemory, `:11006-11007` and `:11773` for runtime `platformVersion`). The AgentCore CLI is not used, which needs amendment A1 (W18). Because `platformVersion` is now typed, FR-035's override is replaced by the typed property and a test assertion pins it (P-04; **W17 refuted** for 2.272.0).
+- **IaC**: CDK owns everything, including the runtime (`CfnRuntime`) and Memory (`CfnMemory`) as L1 constructs in 2.272.0 (`bedrockagentcore.generated.d.ts:6640` for CfnMemory, `:11006-11007` and `:11773` for runtime `platformVersion`). The AgentCore CLI is not used, which needs amendment A1 (W18; applied 2026-11-13, constitution 1.8.0). Because `platformVersion` is now typed, FR-035's override is replaced by the typed property and a test assertion pins it (P-04; **W17 refuted** for 2.272.0).
 - **Harness**: Strands `Agent` 1.20.0. Each counted session gets one `Agent` in the runtime microVM with the default `SlidingWindowConversationManager` (window 40; `agent.d.ts:113`, `agent.js:58`). Today a fresh `Agent` is built per request (`index.ts:90-108,182`), so there is no in-session history (**new finding N2**).
 - **In-session history**: runtime session state ("context is preserved between invocations to the same session", AgentCore Runtime sessions documentation). The idle timeout stays at 1800 s, against a service default of 15 minutes (**W25 verified**), and the maximum lifetime is 8 hours.
   - **Risk**: the Runtime V2 pricing page says "Idle memory is reclaimed automatically in Runtime v2 after 120 seconds", which may drop in-process state. Spike S4 tests it at first deploy.
@@ -582,7 +582,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 
 | ID | Text | Bump | Trigger |
 | --- | --- | --- | --- |
-| A1 | Tech table IaC row: "AWS CDK (infrastructure) + AgentCore CLI (agent deployment)" becomes CDK-only | MINOR | Builder decision (Q8) |
+| A1 | Tech table IaC row: "AWS CDK (infrastructure) + AgentCore CLI (agent deployment)" becomes CDK-only | MINOR | Builder decision (Q8). **Applied 2026-11-13, constitution 1.7.0 → 1.8.0** (T002); landed on this branch like A5 (tasks.md deviation C11) |
 | A2 | LLM row: "Anthropic Haiku-class" becomes the adopted class | MINOR | Only if Q2 adopts a non-Haiku model. **A2 is not triggered for the first deployment: Haiku 4.5 is today's model** (T144, 2026-11-02; the LLM row pins the tier, not the version). It is resolved at the post-upgrade model review (T152) only if a non-Haiku candidate replaces Haiku 4.5 |
 | A3 | P11 rationale: an Organization "expires all remaining free-tier credits" is corrected to the verified mechanism (D10) | PATCH | Only once D10 is verified |
 | A4 | Gate 2: "The golden-set rubric (50 cases)" becomes 65 cases, the set the bible §9 grew to on 2026-04-19 (`3c8a5cb`) and `personality-gate.ts` encodes | MINOR | Before S1 is approved. MINOR, not PATCH: the case count changes what gate 2 checks, so the gate is materially expanded (P-14) |

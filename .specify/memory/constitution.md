@@ -1,7 +1,30 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.6.0 → 1.7.0 (amendment A6, 2026-11-13)
+  Version change : 1.7.0 → 1.8.0 (amendment A1, 2026-11-13)
+  Bump rationale : MINOR — the tech table's IaC row changes
+                   from "AWS CDK (infrastructure) + AgentCore
+                   CLI (agent deployment)" to "AWS CDK" alone.
+                   Builder decision 2026-10-11 (spec 003
+                   research Q8): CDK owns the runtime
+                   (CfnRuntime) and Memory (CfnMemory) as L1
+                   constructs in aws-cdk-lib 2.272.0, so the
+                   AgentCore CLI is not used. Same route as A5
+                   and A6: committed on the
+                   003-architecture-review branch (deviation
+                   C11).
+
+  Modified sections (A1): Technology Stack (IaC row).
+
+  Dependent artifacts reviewed (A1):
+    - specs/003-architecture-review/ tasks T024 and T025
+      build the runtime with CDK alone; research Q8 and the
+      amendments table record A1 as applied.
+    - docs/ mention the AgentCore CLI as background only.
+    - Wiki Decision-AgentCore-Runtime-V2 and
+      Guide-Deployment, ingested after the branch merges.
+
+  Previous change: 1.6.0 → 1.7.0 (amendment A6, 2026-11-13)
   Bump rationale : MINOR — the tech table's TTS row changes
                    from "Amazon Polly Neural" to "Amazon Polly
                    Standard" (voice Matthew). Builder decision
@@ -264,7 +287,7 @@ pinning it to one product would have cost real money here.
 | Memory | AgentCore Memory (30-day rolling window) |
 | Observability | AgentCore Observability (traces, metrics, logs) |
 | Hosting | S3 + CloudFront |
-| IaC | AWS CDK (infrastructure) + AgentCore CLI (agent deployment) |
+| IaC | AWS CDK (infrastructure and agent deployment) |
 
 Technology choices are load-bearing — changes to this table
 require a constitution amendment (MINOR version bump minimum).
@@ -342,4 +365,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.7.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-13
+**Version**: 1.8.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-13
