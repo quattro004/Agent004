@@ -570,7 +570,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | P-05 | FR-037 and the 2026-10-04 dropout clarification | Strict continuity: the counted session continues across a new runtime session ID; a fresh cap only after sign-off or expiry . **Applied 2026-11-13** (T103) |
 | P-06 | FR-033 | Cost-allocation tags take up to 48 hours to activate, not about 24 . **Applied 2026-11-13** (T103) |
 | P-07 | FR-022, FR-053 | 14-day log retention; sign-in records kept until deletion is requested or the friend is removed; memory follows the 30-day window . **Applied 2026-11-13** (T103) |
-| P-08 | FR-036 | The server enforces the contract's 2,000 characters |
+| P-08 | FR-036 | The server enforces the contract's 2,000 characters . **Applied 2026-11-13** (T103) |
 | P-09 | spec 001 FR-010 (recorded, not edited) | The 20,000-token session cap counts conversational tokens |
 | P-10 | FR-024, SC-019 | The projection and the month of operation include Memory cost |
 | P-11 | FR-032 | The WebSocket gap bullets are superseded by the Q4 SSE transport |
