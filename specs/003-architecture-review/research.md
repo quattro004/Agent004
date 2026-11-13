@@ -566,7 +566,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | P-01 | FR-003 (S0) | S0 becomes the probe matrix; Nova 2 Lite is not in-Region (D2 refuted) . **Already in spec.md** (FR-003 S0 bullet, applied with the 2026-10-30 clarifications); confirmed 2026-11-13 (T103) |
 | P-02 | FR-044, FR-054, SC-015 | Google-first; Microsoft and Login with Amazon deferred . **Applied 2026-11-13** (T103) |
 | P-03 | FR-014, the 2026-10-03 memory clarification, the 2026-10-04 dropout clarification, FR-030 (T023b/c), FR-037's third bullet, and Assumptions "Out of scope" | **Long-term memory un-deferred**: AgentCore Memory ships in the first deployment. After a dropout, Max loses verbatim in-session history but recalls extracted memories . **Applied 2026-11-13** (T103) |
-| P-04 | FR-035 | Use the typed `platformVersion` with a pinning test; Strands 1.20.0 |
+| P-04 | FR-035 | Use the typed `platformVersion` with a pinning test; Strands 1.20.0 . **Applied 2026-11-13** (T103). The pin had moved to Strands 1.24.0, and `aws-cdk-lib` to 2.275.0, whose `.d.ts` still types `platformVersion` (`:12361`); FR-035 cites the pin rather than a fixed version |
 | P-05 | FR-037 and the 2026-10-04 dropout clarification | Strict continuity: the counted session continues across a new runtime session ID; a fresh cap only after sign-off or expiry |
 | P-06 | FR-033 | Cost-allocation tags take up to 48 hours to activate, not about 24 |
 | P-07 | FR-022, FR-053 | 14-day log retention; sign-in records kept until deletion is requested or the friend is removed; memory follows the 30-day window |
