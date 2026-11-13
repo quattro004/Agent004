@@ -361,12 +361,14 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - T111/T113: alarms
   - Phase 6
 - **FR-031**: The deployment Region MUST be pinned explicitly in infrastructure code, which today sets none. It defaults to infra-plan's Region, provided the adopted model is invocable from there under Q0.
-- **FR-032**: The path from the signed-in friend to the agent runtime MUST be implemented end to end via the transport decided in Q4. Every invoking principal MUST be granted invoke permission on the specific deployed runtime only, not a wildcard. Verified gaps the path must close (see W4–W6 and W1):
+- **FR-032**: The path from the signed-in friend to the agent runtime MUST be implemented end to end via the transport decided in Q4 (P-11). The browser sends `fetch` POSTs to a CloudFront path behavior, CloudFront forwards them to the AgentCore Runtime, the runtime's inbound JWT authorizer validates the Cognito access token, and the reply streams back as SSE ([contracts/transport-sse.md](./contracts/transport-sse.md)). Voice is synthesized server-side and streamed with the reply (Q1), so the browser holds no AWS credentials. Every invoking principal MUST be granted invoke permission on the specific deployed runtime only, not a wildcard.
+
+  The WebSocket path's verified gaps (W4–W6 and W1) are superseded rather than closed, because the API Gateway WebSocket API, `websocket-handler.ts` and the browser WebSocket client are removed. They were:
   - the WebSocket handler's agent call is a stub (`websocket-handler.ts:109`)
   - the browser opens an unsigned socket (`useWebSocket.ts:75`), while the API's connect route requires IAM authorization (`agent-stack.ts:62`). The presigning helper exists but nothing calls it (`cognitoAuth.ts:76`).
-  - server and client disagree on message payload fields: `connection_ack` and `session_state_change` at `websocket-handler.ts:115,121` vs `useWebSocket.ts:41,56`, and `agent_turn_complete` at `websocket-handler.ts:128`. Both sides MUST match the spec 001 WebSocket and message-protocol contracts, or the contracts are amended. The contracts' guest-credential auth is superseded by FR-056.
+  - server and client disagree on message payload fields: `connection_ack` and `session_state_change` at `websocket-handler.ts:115,121` vs `useWebSocket.ts:41,56`, and `agent_turn_complete` at `websocket-handler.ts:128`. The contracts' guest-credential auth is superseded by FR-056.
   - the identity-pool role's invoke grant (today on the unauthenticated role, which FR-041 removes) defaults to a wildcard runtime ARN (`packages/infra/bin/app.ts:11-12`, `cognito-stack.ts:43-44`)
-  - the browser's Polly client is created with no credentials or Region (`packages/frontend/src/services/pollyTts.ts:28`, `new PollyClient({})`). The voice path therefore needs credentials from the signed-in identity, or a server-side path, as decided under Q1 and Q4.
+  - the browser's Polly client is created with no credentials or Region (`packages/frontend/src/services/pollyTts.ts:28`, `new PollyClient({})`). Q1 moved voice server-side.
 - **FR-033**: Deploy prerequisites MUST be completed and recorded before the first deploy:
   - CDK bootstrap
   - an ARM64 container-image build path that works from the builder's Windows machine (local emulation or a cloud build)
