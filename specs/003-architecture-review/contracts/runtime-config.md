@@ -30,8 +30,8 @@ Every value a deployment needs is listed here with its source. A value marked **
 | `RATE_LIMIT_PER_DAY` | `500` | Spec 001 `contracts/websocket-api.md:208` |
 | `MESSAGE_MAX_CHARS` | `2000` | P-08; spec 001 `contracts/websocket-api.md:209` |
 | `HISTORY_WINDOW` | `40` | Strands `SlidingWindowConversationManager` default (`agent.d.ts:113`) |
-| `BREAKER_DEGRADE_MICRO_USD` | **Derived**: (8 − F) × 10⁶ | Research Q6; F from R-cost |
-| `BREAKER_TRIP_MICRO_USD` | **Derived**: (10 − F) × 10⁶ | Research Q6; F from R-cost |
+| `BREAKER_DEGRADE_MICRO_USD` | **Derived**: (16 − F) × 10⁶ | Research Q6; F from R-cost |
+| `BREAKER_TRIP_MICRO_USD` | **Derived**: (20 − F) × 10⁶ | Research Q6; F from R-cost |
 | `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` | **Derived** from the adopted model's human-read price | R-cost |
 | `PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD` | Same | R-cost |
 | `PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD` | Same; `0` while caching is off (S2) | R-cost; #49 |

@@ -1,43 +1,47 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.4.0 → 1.5.0
-  Bump rationale : MINOR — P7 replaces guest access with
-                   invite-only federated sign-in and a verified
-                   email allowlist. P11 ties spend-bearing
-                   runtime access to the signed-in identity;
-                   the Auth technology row adds a Cognito
-                   User Pool. P2's guest-role example is
-                   updated without changing its $10 rule.
+  Version change : 1.5.0 → 1.6.0 (amendment A5, 2026-11-13)
+  Bump rationale : MINOR — P2's ceiling rises from $10 to $20
+                   per month. Its meaning is unchanged (a hard
+                   cap, a rule and not a target, with automated
+                   enforcement); only the figures move. Alerts
+                   scale to $10 and $16 (50% and 80%), and gate
+                   1's mitigation threshold to $16 (80%). The
+                   builder chose MINOR over MAJOR on 2026-11-13.
+                   The $20 is provisional: spec 003 T156 proposes
+                   lowering it back if a measured month fits
+                   under $10.
 
-  Modified principles : P2 Budget Ceiling (example only),
-                        P7 Friends-and-Family Audience Only,
-                        P11 Credential & Secret Hygiene.
+  Modified principles : P2 Budget Ceiling.
 
   Added : None.
 
   Modified sections:
-    - Core Principles (P2, P7 and P11).
-    - Technology Stack (Auth row).
-    - Quality Gates (gate #7 aligned with P11).
+    - Core Principles (P2).
+    - Quality Gates (gate #1).
+
+  Amendment route: committed on the 003-architecture-review
+    branch and merged with that branch's pull request, not in
+    its own pull request. Builder decision 2026-11-13, waiving
+    spec 003 FR-002's own-PR rule (spec 003 tasks.md deviation
+    C9). The governance procedure's pull request is the
+    branch's.
 
   Dependent artifacts reviewed:
-    - specs/003-architecture-review/spec.md FR-041–FR-056
-      defines the sign-in behavior and requires this amendment
-      before planning. It remains on its feature branch.
-    - specs/001-max-height-ai-character/ and its guest-auth
-      contracts are frozen, point-in-time artifacts; spec 003
-      FR-056 supersedes them for access.
-    - docs/infra-plan.md and docs/audio-plan.md describe the
-      old guest path and remain historical until the new
-      deployment design replaces it.
-    - The wiki describes current guest code until implementation
-      and must ingest this amendment after it merges.
+    - specs/003-architecture-review/ (spec, plan, research,
+      data-model, contracts, quickstart, tasks) hand-edited to
+      the A5 figures by T157.
+    - specs/001-max-height-ai-character/ is frozen; spec 003
+      supersedes its $5, $8 and $10 threshold values.
+    - packages/infra/lib/budget-stack.ts still encodes $10 and
+      changes under spec 003 T155, with tests.
+    - The wiki (Concept-Budget-Ceiling and pages citing $10)
+      must ingest this amendment after the branch merges.
 
-  Follow-up TODOs : Decide signed-in credentials, revocation,
-    spend-stop mechanism and sign-in cost in spec 003 planning;
-    remove the unauthenticated infrastructure during
-    implementation, not in this governance-only amendment.
+  Previous amendment (1.4.0 → 1.5.0, 2026-10-11): P7 invite-only
+    federated sign-in; P11 ties runtime access to the signed-in
+    identity; Auth row adds a Cognito User Pool.
 -->
 
 # Max Height Constitution
@@ -55,13 +59,13 @@ clients, and operational simplicity. A single inference path
 means one place to monitor, one place to budget, one place to
 debug.
 
-### P2. Budget Ceiling — $10/Month Hard Cap
+### P2. Budget Ceiling — $20/Month Hard Cap
 
-The $10/month figure is a **rule**, not a target. Enforcement
+The $20/month figure is a **rule**, not a target. Enforcement
 is automated and mandatory:
 
-- AWS Budgets email alarm MUST fire at $5 and $8.
-- Hard-stop mechanism MUST activate at $10 (e.g., revoking
+- AWS Budgets email alarm MUST fire at $10 and $16.
+- Hard-stop mechanism MUST activate at $20 (e.g., revoking
   access to all spend-bearing paths).
 - Per-session token cap MUST be enforced.
 - No feature ships without a documented cost model.
@@ -251,7 +255,7 @@ The following gates MUST pass before work proceeds past them:
 
 1. **Cost model gate**: Every feature MUST include a cost
    estimate before implementation begins. Features that push
-   the projected monthly total above $8 MUST include a
+   the projected monthly total above $16 MUST include a
    mitigation plan.
 
 2. **Personality gate**: The golden-set rubric (50 cases) MUST
@@ -314,4 +318,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.5.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-10-11
+**Version**: 1.6.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-13

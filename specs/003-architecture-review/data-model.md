@@ -106,10 +106,10 @@ The spec's Spend Signal, made concrete in [contracts/spend-control.md](./contrac
 
 | Kind | Source | Threshold source | Action | Recovery |
 | --- | --- | --- | --- | --- |
-| Alert | Budgets, gross of credits | P2: $5 and $8 | Email | None needed |
-| Soft-degrade | `SPEND#` tally | $8 minus F (R-cost) | Voice off, text only | New month |
-| Breaker | `SPEND#` tally | $10 minus F (R-cost) | Refuse turns, in character | New month, or the operator raises it with a recorded reason |
-| Hard stop | Budgets 100% ACTUAL | P2: $10 | `CONTROL#HALT` plus a deny policy on the runtime role | Manual runbook |
+| Alert | Budgets, gross of credits | P2: $10 and $16 | Email | None needed |
+| Soft-degrade | `SPEND#` tally | $16 minus F (R-cost) | Voice off, text only | New month |
+| Breaker | `SPEND#` tally | $20 minus F (R-cost) | Refuse turns, in character | New month, or the operator raises it with a recorded reason |
+| Hard stop | Budgets 100% ACTUAL | P2: $20 | `CONTROL#HALT` plus a deny policy on the runtime role | Manual runbook |
 
 ### Memory (AgentCore Memory)
 

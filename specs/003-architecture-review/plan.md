@@ -18,7 +18,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
   - An in-path circuit breaker tallies real model usage from `result.metrics.accumulatedUsage`. The current `extractUsage` reads a field that does not exist.
   - A redesigned hard stop fails loudly if its target is missing, and a person recovers it manually.
 
-  Soft-degrade turns voice off at $8, leaving text only.
+  Soft-degrade turns voice off at $16 − F, leaving text only.
 - **Conversation state (Q8, builder 2026-10-11).**
   - **In-session history.** One Strands `Agent` lives per counted session inside the runtime session's microVM, using the SDK's default 40-message sliding window.
   - **Long-term memory is un-deferred.** AgentCore Memory, with a 30-day rolling window that a scheduled pruner enforces, ships in the first deployment. This reverses the 2026-10-03 clarification and FR-014 (spec patch P-03).
@@ -59,7 +59,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 
 **Constraints**:
 
-- P2 caps spend at $10 a month, with email alerts at $5 and $8. The cost gate is $8 projected.
+- P2 caps spend at $20 a month, with email alerts at $10 and $16. The cost gate is $16 projected (constitution 1.6.0, amendment A5).
 - Free plan: inference only through routes S0 proves (in-Region or cross-Region, clarified 2026-10-30), Always Free offers only, and no AWS Organization (FR-028).
 - Spec 001's per-session caps: 20,000 conversational tokens, 50 turns, 30 minutes.
 - Messages are limited to 2,000 characters on the client, the server and in the contract (spec patch P-08).
@@ -77,7 +77,7 @@ Checked against constitution v1.5.0 (`.specify/memory/constitution.md`).
 | Principle / gate | Pre-research status | Post-design status (Phase 1) | Evidence / action |
 | --- | --- | --- | --- |
 | **P1** Cloud-only (`:47-56`) | Pass | Pass | Polly runs in the runtime; there is no browser inference or browser TTS on the deployed path. Spec 001 FR-016's browser-TTS SHOULD is recorded as unmet rather than amended, because browser TTS would itself break P1 (research Q1). |
-| **P2** Budget ceiling (`:58-71`) | Pass, with conditions | Pass, pending S0 and a human price read | Alerts at $5 and $8 go by email (Plan 1, #62). The $10 hard stop is redesigned (Q6). The session cap is enforced server-side on the verified `sub`. The cost model is research R-cost, and its pass depends on the model chosen after S0 and on human-read prices (FR-007). |
+| **P2** Budget ceiling (`:58-71`) | Pass, with conditions | Pass, pending S0 and a human price read | Alerts at $10 and $16 go by email (Plan 1, #62). The $20 hard stop is redesigned (Q6). The session cap is enforced server-side on the verified `sub`. The cost model is research R-cost, and its pass depends on the model chosen after S0 and on human-read prices (FR-007). |
 | **P3** Personality first (`:73-82`) | Pass | Pass, pending S1 | No visual or audio polish is in scope. If Q2 adopts any model other than Haiku 4.5, the S1 golden set must pass for it before it serves friends. |
 | **P4** IP and legal (`:84-94`) | Pass | Pass | The product is named Max Height everywhere, the fan framing stays in the footer and About, and the privacy page is new (FR-053). |
 | **P5** No LLM-as-judge (`:96-104`) | Pass | Pass | Built-in Memory extraction runs asynchronously and never scores live outputs. |
@@ -88,7 +88,7 @@ Checked against constitution v1.5.0 (`.specify/memory/constitution.md`).
 | **P10** Unit tests (`:166-177`) | Pass | Pass | Every implementation task follows TDD, and the design names the RED test for each behavior (quickstart). |
 | **P11** Credentials (`:179-224`) | Pass | Pass; the builder accepted the bootstrap policy on 2026-11-13 (T005) | The deploy identity uses CloudShell session export (P11 preference 1) and may only assume the CDK bootstrap roles (research R-deploy). CDK bootstrap's default `AdministratorAccess` execution role is recorded as a P11 note. Runtime roles are least-privilege and scoped by Region. Polly supports no voice/engine IAM condition keys; Neural and Matthew are application settings, not permission restrictions (runtime-config.md, checked 2026-11-07). The browser holds no AWS credentials. Secrets live in SSM SecureString. |
 | Tech table (`:226-246`) | Conflicts recorded | Amendments A1–A3 | **A1**: the IaC row becomes CDK-only (builder decision). **A2**: the LLM row is amended only if Q2 leaves the Haiku class. **A3**: P11's claim that an Organization expires credits is corrected to the verified fact (D10). The Memory row (`:236`) now conforms. |
-| Gate 1 Cost model | Pending | Pending S0 and the human price read | R-cost projection, gross of credits and including Memory. Above $8, a mitigation is required (FR-024). |
+| Gate 1 Cost model | Pending | Pending S0 and the human price read | R-cost projection, gross of credits and including Memory. Above $16, a mitigation is required (FR-024). |
 | Gate 2 Personality | Pass | Pending S1 | S1 runs for every S0-eligible candidate against the 65-case set ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)); every eligible candidate is a model change. Amendment A4 corrects the gate's "50 cases" to 65. |
 | Gate 3 Dependency | Pending | Pending | Review of the four SDK clients, recorded in their PR. |
 | Gate 4 Degradation | Pass | Pass | Quickstart scenarios V-08 to V-10. |

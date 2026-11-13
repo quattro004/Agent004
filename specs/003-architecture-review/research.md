@@ -26,7 +26,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-10-11 | One allowlist entry per identity, with no identity linking | Q5, Q9, FR-046 |
 | 2026-10-11 | Silent token refresh, with pre token generation re-checking the allowlist | Q9, FR-047 |
 | 2026-10-11 | Voice: Polly Neural server-side in the runtime, audio streamed with the reply; no browser AWS credentials; Identity Pool removed; speech marks dropped | Q1, Q4, FR-032 |
-| 2026-10-11 | Soft-degrade is text-only (voice off) at $8, with no P1 amendment; spec 001 FR-016's browser-TTS SHOULD is recorded as unmet | Q1, Q6, FR-023 |
+| 2026-10-11 | Soft-degrade is text-only (voice off) at $8 ($16 − F since amendment A5), with no P1 amendment; spec 001 FR-016's browser-TTS SHOULD is recorded as unmet | Q1, Q6, FR-023 |
 | 2026-10-11 | Transport `jwt-cloudfront`: CloudFront forwards to AgentCore Runtime with inbound JWT auth and SSE; a Lambda streaming proxy is the fallback, gated by a first-deploy probe | Q4 |
 | 2026-10-11 | Strict session continuity: the server-counted session continues across a new runtime session ID | Q5, FR-037 (P-05) |
 | 2026-10-11 | Hard-stop recovery is manual | Q6, FR-021 |
@@ -41,6 +41,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 | 2026-11-02 | The first deployment adopts Claude Haiku 4.5, today's model (`index.ts:96`), on the cheaper of its two S0-proven profiles, the global profile `global.anthropic.claude-haiku-4-5-20251001-v1:0`. The builder declined running S1 before deploy. S1, amendment A4 and FR-026's cheapest-model comparison move to a post-upgrade model review (T152); S2 runs after the first deployment; #50 is deferred. Recorded by T144 (spec.md § Clarifications 2026-11-02; deviation C5) | Q2, FR-003, FR-026, FR-038, US5, SC-019 |
 | 2026-11-13 | T005b (the FR-005 Well-Architected and AgentCore guidance assessment) is **deferred until after the first deployment**: "it'll be easier that way and also we are running out of time to spend our free credits". It no longer runs before Phase 2. Accepted cost: a finding that changes a recorded decision means rework on deployed resources (tasks.md deviation C8) | FR-005, Q0–Q9, § R-lens |
 | 2026-11-13 | T005: (a) the Google client secret lives in SSM SecureString `/max-height/google-client-secret`, applied by `handlers/idp-secret.ts`, not in Secrets Manager: "it's ok as long as we use SecureString"; (b) `cdk bootstrap`'s default `AdministratorAccess` CloudFormation execution role is accepted as a P11 note | Q9, FR-052, § R-deploy, P11 |
+| 2026-11-13 | Amendment A5 (the $20 ceiling) lands on this feature branch, not in its own PR: "We don't need a PR - we are doing this work in the current branch". MINOR bump, 1.5.0 → 1.6.0. Waives FR-002's own-PR rule; the constitution's procedure is still met by the branch's PR (deviation C9). The $9.56 conversation estimate is unmeasured; the builder wants real numbers from a deployment as soon as possible | FR-002, P2, gate 1, T153, T157 |
 
 ## Decision register (FR-004)
 
@@ -85,7 +86,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
 
 ### Q1 — Voice
 
-- **Decision**: Polly Neural, synthesized **server-side in the runtime**. The audio streams to the browser on the same SSE response as the text ([contracts/transport-sse.md](./contracts/transport-sse.md)). The browser holds no AWS credentials, so the Identity Pool and its roles are removed. Speech marks are dropped, so there is no dual billing (#47). At the $8 soft-degrade, Max goes text-only.
+- **Decision**: Polly Neural, synthesized **server-side in the runtime**. The audio streams to the browser on the same SSE response as the text ([contracts/transport-sse.md](./contracts/transport-sse.md)). The browser holds no AWS credentials, so the Identity Pool and its roles are removed. Speech marks are dropped, so there is no dual billing (#47). At the soft-degrade threshold ($16 − F since A5; $8 when decided), Max goes text-only.
 - **Rationale**:
   - It keeps P1, because TTS stays in the cloud.
   - It removes the browser's need for AWS credentials (FR-032's `new PollyClient({})` gap, `pollyTts.ts:28`) and the CSP gap D9.
@@ -211,7 +212,7 @@ Paths without a package prefix are in `packages/infra/lib/` (infra), `packages/a
   - **In-path breaker**:
     - After each turn, the runtime adds the turn's estimated cost to `SPEND#<yyyy-mm>` in the control table with an atomic `ADD`. The estimate is billed usage times the configured rates: model tokens, Polly characters, Memory events and retrievals.
     - Before each turn, it refuses when the tally reaches the trip limit, and turns voice off when it reaches the degrade limit.
-    - **Limits are derived, not invented**: trip = P2's $10 minus F, and degrade = $8 minus F. F is R-cost's projected fixed monthly cost. Both limits and all rates are deploy-time configuration taken from R-cost ([contracts/runtime-config.md](./contracts/runtime-config.md)).
+    - **Limits are derived, not invented**: trip = P2's $20 minus F, and degrade = $16 minus F (amendment A5). F is R-cost's projected fixed monthly cost. Both limits and all rates are deploy-time configuration taken from R-cost ([contracts/runtime-config.md](./contracts/runtime-config.md)).
 - **Evidence**:
   - Budgets data refreshes up to three times a day (D7 verified).
   - The SNS topic policy is fixed by #62 (`budget-stack.ts:85-99`).
@@ -303,7 +304,7 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 | Transaction Search spans | per GB ingested | Human-read required | see R-obs |
 | Secrets Manager (only if chosen) | about $0.40 per secret per month | Human-read required | fixed |
 
-**Gate rule**: the projection sums F (fixed monthly) and per-session cost × spec 001's session counts (`specs/001-max-height-ai-character/research.md:43-70`). It must be at or below $8, gross of credits. Otherwise a mitigation is documented here before deployment (FR-024, gate 1). The as-built AWS Pricing Calculator estimate follows implementation (SC-019).
+**Gate rule**: the projection sums F (fixed monthly) and per-session cost × spec 001's session counts (`specs/001-max-height-ai-character/research.md:43-70`). It must be at or below $16 (gate 1, constitution 1.6.0), gross of credits. Otherwise a mitigation is documented here before deployment (FR-024, gate 1). The as-built AWS Pricing Calculator estimate follows implementation (SC-019).
 
 ### Gate 1 projection on the adopted route (T145, T146; 2026-11-02)
 
@@ -321,7 +322,7 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 | Volume, average case | 53 sessions × 15 turns = 795 turns | Spec 001 R0 ("~53 average sessions/month") |
 | Volume, full case | 16 sessions × 50 turns = 800 turns | Spec 001 R0 ("~16 full sessions/month"), at maximum-length replies |
 
-**Result: the conversation lines alone exceed $8 gross of credits.**
+**Result (2026-11-02, against the then-$8 gate): the conversation lines alone exceed $8 gross of credits.** Against A5's $16 gate (2026-11-13), the average case's $9.56 is under it before F, and the full case's $16.52 is over it.
 
 | Line (monthly, gross) | Average case: 795 turns, 500-character replies | Full case: 800 turns, maximum replies |
 | --- | --- | --- |
@@ -334,7 +335,7 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 - **The projection exceeds the $8 gate before any F line is counted** (constitution gate 1; FR-024; SC-002). It would still exceed it with the LLM on the system prompt alone (about $2.88) and no tools. The figures are a floor: history, Memory context and tool-result tokens only add to the LLM line.
 - **Polly is about 66% of the conversation subtotal** (average case). Polly alone is $6.36, so F plus the LLM line must fit in $1.64 for any model. Haiku 5.5's listed rates (a tenth of Haiku 4.5's) would cut the LLM line to about $0.32, which leaves $6.68 before F. Spec 001's own $1 infrastructure figure is already stale (R-cost's additions are not in it).
 - **Raised with the builder (FR-024; T145).** No mitigation is chosen here. Options for the builder:
-  1. Accept the in-path breaker as the mitigation. It soft-degrades (voice off) at $8 − F and trips at $10 − F (Q6), so spend is bounded even though the projection at 53 average sessions is not. This means capacity, not the projection, is what the gate then limits.
+  1. Accept the in-path breaker as the mitigation. It soft-degrades (voice off) at $8 − F and trips at $10 − F (Q6; $16 − F and $20 − F since A5), so spend is bounded even though the projection at 53 average sessions is not. This means capacity, not the projection, is what the gate then limits.
   2. Plan for fewer sessions. With a placeholder F of spec 001's $1 (not a figure from this research), $7 buys about 580 turns on the global route, about 39 average sessions.
   3. Reduce Polly's share: a lower reply-character cap, or a shorter average reply, since Polly bills per character (Q1).
   4. A cheaper model after T152 helps only the LLM line (about $3.20 here).
@@ -345,7 +346,7 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 - **T117 and T082 are not complete.** T117 needs T005a's dated F inputs to compute F, `BREAKER_DEGRADE_MICRO_USD` and `BREAKER_TRIP_MICRO_USD`, and no number is invented for them. T082 has no target yet: no `BREAKER_*` or `PRICE_*` value exists in `packages/` (the breaker code, T077, and the Phase 10 stack work are unbuilt). See deviation C6.
 - **Derived `PRICE_*` values, for T082 when it runs**, in micro-USD per 1M units (1 micro-USD = $0.000001): `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` = 1,000,000 ($1.00); `PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD` = 5,000,000 ($5.00); `PRICE_POLLY_PER_MCHAR_MICRO_USD` = 16,000,000 ($16). If T152 or a re-pin changes the route, these are re-derived.
 - **`PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD` stays `0`** until S2 shows caching is reachable (FR-029; [runtime-config.md](./contracts/runtime-config.md) `:37`). The projection takes no cache discount.
-- **After T101 (post-deploy)**, re-run this per-session projection with the measured system-prompt and tool token counts and record it beside this one. Above $8 gross of credits, raise it with the builder (FR-024). Not yet run: **pending S2**.
+- **After T101 (post-deploy)**, re-run this per-session projection with the measured system-prompt and tool token counts and record it beside this one. Above $16 gross of credits (gate 1 since A5), raise it with the builder (FR-024). Not yet run: **pending S2**.
 
 ## R-obs — observability (FR-022, P9)
 
@@ -532,6 +533,7 @@ Spec 003 is in flight, so these are applied to `spec.md` with the builder's appr
 | A2 | LLM row: "Anthropic Haiku-class" becomes the adopted class | MINOR | Only if Q2 adopts a non-Haiku model. **A2 is not triggered for the first deployment: Haiku 4.5 is today's model** (T144, 2026-11-02; the LLM row pins the tier, not the version). It is resolved at the post-upgrade model review (T152) only if a non-Haiku candidate replaces Haiku 4.5 |
 | A3 | P11 rationale: an Organization "expires all remaining free-tier credits" is corrected to the verified mechanism (D10) | PATCH | Only once D10 is verified |
 | A4 | Gate 2: "The golden-set rubric (50 cases)" becomes 65 cases, the set the bible §9 grew to on 2026-04-19 (`3c8a5cb`) and `personality-gate.ts` encodes | MINOR | Before S1 is approved. MINOR, not PATCH: the case count changes what gate 2 checks, so the gate is materially expanded (P-14) |
+| A5 | P2: $10/month hard cap becomes $20; alerts $5/$8 become $10/$16; hard stop $10 becomes $20. Gate 1: $8 becomes $16 | MINOR | **Applied 2026-11-13, constitution 1.5.0 → 1.6.0** (T153). Builder chose MINOR, and chose to land it on the `003-architecture-review` branch rather than in its own PR (deviation C9). Provisional: T156 |
 
 ## New findings (proposed issues; filed only with the builder's permission)
 

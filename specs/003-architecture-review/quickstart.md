@@ -25,7 +25,7 @@ Record each one in [§ Results](#results) before the first spend-bearing stack d
 | --- | --- | --- | --- |
 | 1 | Free plan end date and remaining credits | Read them in the Billing console. V-17's month must end before the plan does. | FR-028, SC-019 |
 | 2 | Spikes run and the model adopted | S0 → Q2 decision → S1 pass → S2 measurement, each approved before it runs | research § Spikes, Q2; [s0-probe-matrix.md](./contracts/s0-probe-matrix.md); [s1-golden-set.md](./contracts/s1-golden-set.md) |
-| 3 | Cost projection at or below $8, gross of credits | Every human-read price is read and dated, including the Memory extraction cost | research § R-cost; SC-002, gate 1 |
+| 3 | Cost projection at or below $16, gross of credits, or above it with a documented mitigation | Every human-read price is read and dated, including the Memory extraction cost | research § R-cost; SC-002, gate 1 |
 | 4 | Model access and quotas | The adopted model's Service Quotas in `us-west-2`, compared with spec 001's peak | research § R-deploy, Quotas |
 | 5 | One-time administrator setup | In CloudShell, as an administrator, once: `cdk bootstrap` for `us-west-2` and `us-east-1`. Create the deploy user, its deploy policy and the operator policy ([§ Operator permissions](#operator-permissions)), and the SSM parameters (row 7). | research § R-deploy (the `AdministratorAccess` default was accepted by the builder on 2026-11-13) |
 | 6 | ARM64 build path | Docker Desktop is running, and `docker buildx ls` lists `linux/arm64` | research § R-deploy |
@@ -215,7 +215,7 @@ After deploy step 11:
   2. Create a temporary cost budget, `MaxHeight-AlertDemo`. Make it monthly, with credits, refunds and discounts excluded, and a limit at or below the figure from step 1. Give it ACTUAL email notifications at 50% and 80% to the owner email. Budgets without actions are free ([AWS Budgets pricing](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/)).
   3. Wait for the next Budgets update. "AWS Budgets information is updated up to three times a day. Updates typically occur between 8 to 12 hours after the previous update" ([Budgets console help](https://docs.aws.amazon.com/help-panel/cost-management/latest/console/hp-budgets-overview-table.html)).
   4. Read `MaxHeight-Monthly`'s notifications.
-- **Expected**: one email per tier. `MaxHeight-Monthly` has the same two email notifications at 50% and 80%, which are $5 and $8. That is the configuration this demonstration stands in for, and `budget-stack.test.ts` asserts it.
+- **Expected**: one email per tier. `MaxHeight-Monthly` has the same two email notifications at 50% and 80%, which are $10 and $16 of the $20 budget (T155). That is the configuration this demonstration stands in for, and `budget-stack.test.ts` asserts it.
 
 ### V-12 Hard stop and recovery (SC-003, SC-005; FR-021)
 

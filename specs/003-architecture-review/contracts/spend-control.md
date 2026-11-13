@@ -6,10 +6,10 @@ There are four layers, from cheapest and earliest to last resort:
 
 | Layer | Reads | Fires at | Acts within | Effect |
 | --- | --- | --- | --- | --- |
-| Alerts | Budgets (gross) | P2: $5 and $8 | Budgets refresh (up to 3 times a day, D7) | Email only |
-| Soft-degrade | `SPEND#<yyyy-mm>` | `BREAKER_DEGRADE_MICRO_USD` = (8 − F) × 10⁶ | The next turn | Voice off; text only (FR-023; spec 001 FR-016) |
-| Breaker | `SPEND#<yyyy-mm>` | `BREAKER_TRIP_MICRO_USD` = (10 − F) × 10⁶ | The next turn | Chat turns refused in character |
-| Hard stop | Budgets (gross) | P2: $10 | Budgets refresh | `CONTROL#HALT`, plus a deny-all-spend policy on the runtime role |
+| Alerts | Budgets (gross) | P2: $10 and $16 | Budgets refresh (up to 3 times a day, D7) | Email only |
+| Soft-degrade | `SPEND#<yyyy-mm>` | `BREAKER_DEGRADE_MICRO_USD` = (16 − F) × 10⁶ | The next turn | Voice off; text only (FR-023; spec 001 FR-016) |
+| Breaker | `SPEND#<yyyy-mm>` | `BREAKER_TRIP_MICRO_USD` = (20 − F) × 10⁶ | The next turn | Chat turns refused in character |
+| Hard stop | Budgets (gross) | P2: $20 | Budgets refresh | `CONTROL#HALT`, plus a deny-all-spend policy on the runtime role |
 
 F is R-cost's projected fixed monthly cost. Every threshold comes from P2 or is derived from it. None is set here.
 
