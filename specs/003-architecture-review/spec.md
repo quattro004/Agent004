@@ -57,7 +57,7 @@ Wiki pages read as inputs:
 ### Session 2026-10-03
 
 - Q: Should the account stay on the AWS Free plan or be upgraded to the Paid plan before the first deployment? → A: Stay on the Free plan. The builder upgrades to Paid when the Free plan ends in December 2026, and that upgrade is out of scope. The goal is to get a deployment out, operate it for about a month, and see what it costs (FR-028, FR-033, SC-019).
-- Q: Does the first deployment include long-term memory, or is it deferred with conversations kept session-only? → A: Deferred. Conversations are session-only, and long-term memory follows as spec 001's V1 feature (FR-014, FR-030).
+- Q: Does the first deployment include long-term memory, or is it deferred with conversations kept session-only? → A: Deferred. Conversations are session-only, and long-term memory follows as spec 001's V1 feature (FR-014, FR-030). _(2026-10-11: reversed. Long-term memory ships in the first deployment; FR-014, P-03.)_
 - Q: Does #61 still need to merge before `/speckit.plan`, now that the guest role it fixes is being removed? → A: No. #61 is folded into the Q6 hard-stop redesign (FR-018, FR-019), and only Plan 1 (#56) gates planning. #61 closes when the redesigned hard stop ships with its fail-loud test (FR-001, FR-038).
 
 ### Session 2026-10-04
@@ -66,7 +66,7 @@ Wiki pages read as inputs:
 - Q: After the builder removes a friend's email from the allowlist, how soon must they lose access? → A: At their next session start. The server checks the allowlist whenever it opens a session, and a session already open ends within spec 001's 30-minute session cap, which is the worst case. The plan picks the mechanism under Q9 (FR-042, SC-016).
 - Q: Should the sign-in constitution amendment (FR-055) merge now, before `/speckit.plan`, or wait and go in one PR with the review's other amendments? → A: Now. It goes in its own PR off `main` (v1.4.0 → v1.5.0) and merges before `/speckit.plan`, so the plan's constitution check runs against the amended text. The review's other amendments each get their own PR once decided (FR-002, FR-055).
 - Q: When should the wiki corrections D1–D11 be pushed? → A: Split them. D3 (what remains), D8 and D9 were checked against code, so they're pushed now, before planning, once the builder approves the diff. D1, D2, D5, D6, D7, D10 and D11 are builder-cited AWS facts, pushed as one approved batch during plan research once each is verified against AWS documentation (FR-007). Wiki commit `c6c193c` already resolved D4 (FR-040).
-- Q: If a friend's conversation is cut off before spec 001's cap, for example because the runtime restarts or is redeployed, what happens when they send their next message? → A: It continues in a fresh session. After spec 001 FR-028's signal-lost state, the friend's next message opens a new server-counted session with a fresh cap and the same rate limits. Max acknowledges the dropout in character. The earlier transcript stays on screen, but Max no longer remembers it (FR-037, FR-014).
+- Q: If a friend's conversation is cut off before spec 001's cap, for example because the runtime restarts or is redeployed, what happens when they send their next message? → A: It continues in a fresh session. After spec 001 FR-028's signal-lost state, the friend's next message opens a new server-counted session with a fresh cap and the same rate limits. Max acknowledges the dropout in character. The earlier transcript stays on screen, but Max no longer remembers it (FR-037, FR-014). _(2026-10-11: Max now recalls what long-term memory extracted, though not the verbatim transcript; FR-014, P-03.)_
 
 ### Session 2026-10-30
 
@@ -311,11 +311,12 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - No limit may be reset through a client-controlled value: a forged, changed or omitted session identifier, a reconnect, or cleared browser storage.
 - **FR-012**: Memory namespaces MUST be derived only from the verified sign-in identity, providing tenant isolation between friends (O8, deviation C4).
 - **FR-013**: Forget-me (spec 001 FR-017) and Export (spec 001 FR-018) MUST operate only on the requester's own data.
-- **FR-014**: **Long-term memory is deferred** from the first deployment (builder, 2026-10-03). Conversations are session-only: the agent carries nothing from one session to the next. This matches spec 001, which places returning-visitor memory in V1 (spec 001 User Story 4 and SC-007). No memory infrastructure exists today anyway (W2, W3; deviation C4). When long-term memory is built:
-  - FR-010, FR-012 and FR-013 govern it.
-  - The Q8 memory-path decision chooses between AgentCore Memory, with the constitution's 30-day rolling window (`constitution.md:230`), and the alternatives in W35.
+- **FR-014**: **Long-term memory ships in the first deployment** (builder, 2026-10-11: "seems like long term memory is within budget and I wanted it initially anyway"; P-03). It was deferred on 2026-10-03 (Clarifications), and the builder reversed that once Q8 had costed it. Q8 chose AgentCore Memory ([contracts/memory-api.md](./contracts/memory-api.md); research.md § Q8):
+  - FR-010, FR-012 and FR-013 govern it. The namespace derives from the verified `sub`, and only the runtime calls Memory.
+  - Long-term records follow the constitution's 30-day rolling window. They have no built-in expiry, so a pruner enforces it (N5).
+  - A retrieval failure degrades to "no memories" (P8), loudly, never silently.
 
-  The trade-off: the month of operation (SC-019) and the FR-024 projection exclude memory's cost, which is projected when memory is planned. Forget-me and Export (spec 001 FR-017 and FR-018) still ship. Today they act only on browser storage (`packages/frontend/src/services/dataManager.ts:13,31`), and FR-053 extends deletion to the sign-in record.
+  Its cost is in the FR-024 projection and the month of operation (SC-019, P-10). Forget-me and Export (spec 001 FR-017 and FR-018) act on the requester's memory namespace as well as on browser storage (`packages/frontend/src/services/dataManager.ts:13,31`), and FR-053 extends deletion to the sign-in record.
 - **FR-015**: Access MUST require sign-in, and only invited friends on the allowlist may get past it (builder, 2026-10-03; P7; O14). Guest (signed-out) access is removed entirely, including the identity pool's unauthenticated identities (`cognito-stack.ts:20`). FR-041–FR-056 define sign-in and access. This decision resolved the access-gating clarification formerly here.
 
 #### Spend control and observability
@@ -355,7 +356,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 
 - **FR-030**: Infra-plan Phases 2–6 MUST be complete:
   - T151: snapsafe base image
-  - T023b/c (AgentCore Memory) is excluded: it is deferred by FR-014
+  - T023b/c (AgentCore Memory) is included, because FR-014 un-defers it (P-03)
   - T152/T153: CDK deployment of AgentCore Runtime V2
   - T111/T113: alarms
   - Phase 6
@@ -386,7 +387,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-037**: The deployment MUST preserve cloud-only AI behavior (no browser-side model inference) and the existing graceful-degradation paths: text fallback, signal-lost state and capability fallbacks. A session cut off before spec 001's cap (for example by a runtime restart or redeploy) MUST recover through spec 001 FR-028's signal-lost flow (clarified 2026-10-04):
   - The friend's next message opens a new server-counted session (FR-011).
   - Max acknowledges the dropout in character.
-  - The earlier transcript stays on screen but is not sent to the new session, because memory is session-only (FR-014).
+  - The earlier transcript stays on screen but is not sent to the runtime. Max loses the verbatim in-session history, but recalls whatever long-term memory has extracted from it (FR-014, P-03).
 
 #### Issue disposition
 
@@ -549,7 +550,6 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - #42 personality hooks (deferred until after the first deployment)
   - #58 semantic wiki maintenance workflow
   - upgrading the account to the Paid plan (the builder does this before the Free plan ends, FR-028)
-  - long-term memory (deferred to spec 001's V1, FR-014)
   - spec 001 V1 features not needed for the first deployment
   - public or self-service registration, and any audience beyond invited friends (the builder will consider scaling later if friends like it)
 - **Dependencies**:
