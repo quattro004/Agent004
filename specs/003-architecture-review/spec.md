@@ -468,11 +468,12 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   This is a MINOR bump (v1.4.0 → v1.5.0), because the principle is materially expanded and the stack changes. It lands in its own pull request off `main` and merges **before `/speckit.plan`**, so the plan's constitution check runs against the amended text (clarified 2026-10-04). The review's other amendments (US6 scenario 4) each get their own pull request once their question is decided.
 
   **Satisfied 2026-10-11:** #68 merged (`1727039`). The old text above is the amendment rationale; the current constitution on this branch is v1.5.0. No sign-in infrastructure has shipped.
-- **FR-056**: **Spec 001 supersession.** For access (and, for the last item, spend thresholds), this spec supersedes:
+- **FR-056**: **Spec 001 supersession.** For access (and, for the last two items, what the session cap counts and the spend thresholds), this spec supersedes:
   - spec 001's 2026-04-20 clarification, which removed the shared-password gate in favor of the unlisted URL, rate limits and the hard stop (`specs/001-max-height-ai-character/spec.md:42`)
   - spec 001's guest-identified Visitor entity (`:289`) and its guest-identity privacy disclosure (`:302`)
   - the guest-credential auth in spec 001's WebSocket and Polly contracts (`contracts/websocket-api.md:14,22`; `contracts/polly-tts.md:15,191`)
-- spec 001's $5, $8 and $10 figures (FR-015, FR-016, SC-006 and its Assumptions) as to threshold values only, from the date A5 merges: alerts at $10 and $16, soft-degrade at $16 − F, hard stop at $20 (clarified 2026-11-02). Their behaviors (in-character break state, voice off at soft-degrade) are unchanged.
+  - what spec 001 FR-010's 20,000-token session cap counts: conversational tokens, the friend's message plus Max's reply. Billed spend, including the system prompt and tool definitions, is bounded separately by the in-path breaker (FR-020; builder, 2026-10-11; P-09)
+  - spec 001's $5, $8 and $10 figures (FR-015, FR-016, SC-006 and its Assumptions) as to threshold values only, from the date A5 merges: alerts at $10 and $16, soft-degrade at $16 − F, hard stop at $20 (clarified 2026-11-02). Their behaviors (in-character break state, voice off at soft-degrade) are unchanged.
 
   Spec 001 is frozen and is not edited. At close-out, a wiki Decision page (for example `Decision-Access-And-Sign-In`) records the decision. The pages in [Wiki Pages to Update After the Access Decision](#wiki-pages-to-update-after-the-access-decision) are then updated under FR-040's approval rule. They are not discrepancies, because they were true when written.
 
