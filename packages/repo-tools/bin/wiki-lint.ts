@@ -16,7 +16,9 @@ async function main(): Promise<number> {
 
   const pages = await readWikiPages(wikiDir);
   if (pages === null) {
-    console.log(`No wiki clone at ${wikiDir}. Run \`pnpm run wiki:pull\` first. Skipping.`);
+    console.log(
+      `No wiki clone at ${wikiDir}. Run \`git clone https://github.com/quattro004/Agent004.wiki.git wiki\` first. Skipping.`,
+    );
     return 0;
   }
 

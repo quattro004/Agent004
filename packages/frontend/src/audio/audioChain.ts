@@ -1,13 +1,16 @@
 /**
  * Audio chain orchestrator.
  * Manages AudioContext lifecycle, registers AudioWorklet processors,
- * connects chain: source → stutter → pitch → EQ → static → analyser → destination.
+ * glitches each clip (see glitchEngine.ts), then connects
+ * source → stutter → EQ → static → analyser → gain → destination.
  * Provides mouth-open detection via AnalyserNode FFT.
  */
+import { createGlitcher, type Glitcher } from './glitchEngine';
 
 export interface AudioChain {
   init(): Promise<void>;
-  play(audioBuffer: AudioBuffer): void;
+  /** Plays a clip with voice glitches applied; returns the played duration in ms (0 before init). */
+  play(audioBuffer: AudioBuffer): number;
   stop(): void;
   setVolume(level: number): void;
   getIsMouthOpen(): boolean;
@@ -18,22 +21,30 @@ export interface AudioChain {
   dispose(): void;
 }
 
+export interface AudioChainOptions {
+  glitcher?: Glitcher;
+}
+
 const FFT_SIZE = 256;
 const MOUTH_THRESHOLD = 100;
 const LOW_FREQ_BIN_COUNT = 8; // ~0–500Hz at 44100Hz with FFT 256
 const VOLUME_RAMP_SECONDS = 0.02; // 20ms ramp avoids clicks
 const DEFAULT_VOLUME = 0.5;
 const STATIC_GAIN = 0.11;
+const TICK_SAMPLES = 441;
+const TICK_GAIN = 0.15;
 
-export function createAudioChain(): AudioChain {
+export function createAudioChain(options: AudioChainOptions = {}): AudioChain {
+  const glitcher = options.glitcher ?? createGlitcher();
   let ctx: AudioContext | null = null;
   let analyser: AnalyserNode | null = null;
   let gainNode: GainNode | null = null;
   let stutterNode: AudioWorkletNode | null = null;
-  let pitchNode: AudioWorkletNode | null = null;
   let eqNode: AudioWorkletNode | null = null;
   let staticNode: AudioWorkletNode | null = null;
   let currentSource: AudioBufferSourceNode | null = null;
+  let tickSources: AudioBufferSourceNode[] = [];
+  let tickBuffer: AudioBuffer | null = null;
   let staticSource: AudioBufferSourceNode | null = null;
   let staticStopTimer: ReturnType<typeof setTimeout> | null = null;
   let frequencyData: Uint8Array<ArrayBuffer> | null = null;
@@ -54,6 +65,30 @@ export function createAudioChain(): AudioChain {
     gainNode.gain.linearRampToValueAtTime(level, ctx.currentTime + VOLUME_RAMP_SECONDS);
   }
 
+  function stopVoice(): void {
+    currentSource?.stop();
+    currentSource = null;
+    for (const tick of tickSources) tick.stop();
+    tickSources = [];
+  }
+
+  function scheduleTick(when: number): void {
+    if (!ctx || !gainNode) return;
+    if (!tickBuffer) {
+      tickBuffer = ctx.createBuffer(1, TICK_SAMPLES, ctx.sampleRate);
+      const data = tickBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * TICK_GAIN;
+    }
+    const tick = ctx.createBufferSource();
+    tick.buffer = tickBuffer;
+    tick.connect(gainNode);
+    tick.start(when);
+    tickSources.push(tick);
+    tick.onended = () => {
+      tickSources = tickSources.filter((pending) => pending !== tick);
+    };
+  }
+
   return {
     init() {
       // Idempotent: only create AudioContext once. Subsequent calls
@@ -66,12 +101,10 @@ export function createAudioChain(): AudioChain {
         await ctx.resume();
 
         await ctx.audioWorklet.addModule(new URL('./stutterProcessor.ts', import.meta.url).href);
-        await ctx.audioWorklet.addModule(new URL('./pitchProcessor.ts', import.meta.url).href);
         await ctx.audioWorklet.addModule(new URL('./eqProcessor.ts', import.meta.url).href);
         await ctx.audioWorklet.addModule(new URL('./staticProcessor.ts', import.meta.url).href);
 
         stutterNode = new AudioWorkletNode(ctx, 'stutter-processor');
-        pitchNode = new AudioWorkletNode(ctx, 'pitch-processor');
         eqNode = new AudioWorkletNode(ctx, 'eq-processor');
         staticNode = new AudioWorkletNode(ctx, 'static-processor');
 
@@ -82,9 +115,8 @@ export function createAudioChain(): AudioChain {
         gainNode = ctx.createGain();
         gainNode.gain.value = currentVolume;
 
-        // Chain: stutter → pitch → EQ → static → analyser → gain → destination
-        stutterNode.connect(pitchNode);
-        pitchNode.connect(eqNode);
+        // Chain: stutter → EQ → static → analyser → gain → destination
+        stutterNode.connect(eqNode);
         eqNode.connect(staticNode);
         staticNode.connect(analyser);
         analyser.connect(gainNode);
@@ -108,25 +140,31 @@ export function createAudioChain(): AudioChain {
     },
 
     play(audioBuffer: AudioBuffer) {
-      if (!ctx || !stutterNode) return;
+      if (!ctx || !stutterNode) return 0;
 
-      // Stop any currently playing source
-      currentSource?.stop();
+      stopVoice();
+
+      const sampleRate = audioBuffer.sampleRate;
+      const glitched = glitcher(audioBuffer.getChannelData(0), sampleRate);
+      const buffer = ctx.createBuffer(1, glitched.samples.length, sampleRate);
+      buffer.getChannelData(0).set(glitched.samples);
 
       const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
+      source.buffer = buffer;
       source.connect(stutterNode);
-      source.start();
+      const startAt = ctx.currentTime;
+      source.start(startAt);
       currentSource = source;
+      for (const offset of glitched.tickOffsets) scheduleTick(startAt + offset / sampleRate);
 
       source.onended = () => {
         if (currentSource === source) currentSource = null;
       };
+      return (glitched.samples.length / sampleRate) * 1000;
     },
 
     stop() {
-      currentSource?.stop();
-      currentSource = null;
+      stopVoice();
     },
 
     setVolume(level: number) {
@@ -226,7 +264,7 @@ export function createAudioChain(): AudioChain {
     },
 
     dispose() {
-      currentSource?.stop();
+      stopVoice();
       if (staticStopTimer) {
         clearTimeout(staticStopTimer);
         staticStopTimer = null;
@@ -248,10 +286,10 @@ export function createAudioChain(): AudioChain {
       analyser = null;
       gainNode = null;
       stutterNode = null;
-      pitchNode = null;
       eqNode = null;
       staticNode = null;
       currentSource = null;
+      tickBuffer = null;
       initPromise = null;
       pendingVolume = null;
     },

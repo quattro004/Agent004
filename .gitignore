@@ -37,6 +37,9 @@ coverage/
 test-results/
 playwright-report/
 
+# Local Polly greeting audition clips (never deployed)
+/packages/frontend/.greeting-experiment/
+
 # Docker
 *.secret.yaml
 

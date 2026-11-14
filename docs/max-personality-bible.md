@@ -659,7 +659,7 @@ Now — the show starts. Every response is for the viewer at home. Max Height, l
 
 Used by Phase 1.5 (Personality Validation Gate) and ongoing AgentCore Evaluations.
 
-Each response is scored on six dimensions, 0–3. **Must average ≥ 2.0 across 50 golden test cases to pass the gate.**
+Each response is scored on six dimensions, 0–3. **Must average ≥ 2.0 across 65 golden test cases to pass the gate.**
 
 | Dimension | 0 — Absent | 1 — Weak | 2 — Present | 3 — Signature Max |
 |-----------|------------|----------|-------------|---------------------|

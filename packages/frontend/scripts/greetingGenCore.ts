@@ -1,4 +1,9 @@
-import { wrapInSsml } from '../src/services/pollyTts';
+import {
+  stutterToSsml,
+  wrapInSsml,
+  type SpeechPacing,
+  type StutterPronunciation,
+} from '../../agent/src/voice/ssml';
 
 export interface GreetingManifestEntry {
   id: string;
@@ -17,14 +22,32 @@ export const MIN_DURATION_MS = 1000;
 export const MAX_DURATION_MS = 15000;
 
 /**
- * Return the hand-tuned SSML when supplied, otherwise fall back to the shared
- * `wrapInSsml` wrapper used by the conversation TTS path.
+ * Convert hand-tuned SSML stutters, or wrap plain text with the same transform.
  */
-export function buildGreetingSsml(text: string, customSsml?: string): string {
+export function buildGreetingSsml(
+  text: string,
+  customSsml?: string,
+  pronunciation: StutterPronunciation = 'ipa-schwa',
+  pacing: SpeechPacing = 'rapid',
+): string {
   if (customSsml !== undefined && customSsml.trim().length > 0) {
-    return customSsml;
+    if (pacing !== 'original') {
+      const outerRate =
+        /^(\s*<speak\b(?:[^>"']|"[^"]*"|'[^']*')*>\s*<prosody\b(?:[^>"']|"[^"]*"|'[^']*')*?\srate\s*=\s*)(["'])[^"']*\2/i;
+      customSsml = outerRate.test(customSsml)
+        ? customSsml.replace(
+            outerRate,
+            (_match, prefix: string, quote: string) => `${prefix}${quote}115%${quote}`,
+          )
+        : customSsml.replace(
+            /^(\s*<speak\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*)(<\/speak>\s*)$/i,
+            (_match, opening: string, body: string, closing: string) =>
+              `${opening}<prosody rate="115%">${body}</prosody>${closing}`,
+          );
+    }
+    return stutterToSsml(customSsml, pronunciation, pacing);
   }
-  return wrapInSsml(text);
+  return wrapInSsml(text, pronunciation, pacing);
 }
 
 /**
@@ -98,17 +121,25 @@ export async function measureMp3DurationMs(buffer: Uint8Array, parse: Mp3Parser)
 export interface GenerationCliOptions {
   dryRun: boolean;
   only: string | undefined;
+  experiment?: true | 'pacing';
 }
 
-/** Parse the generation script's supported flags: `--dry-run` and `--only <greetingId>`. */
+/** Experiments require --only so an audition never synthesizes the entire pool. */
 export function parseCliArgs(argv: string[]): GenerationCliOptions {
   let dryRun = false;
   let only: string | undefined;
+  let experiment: true | 'pacing' | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--dry-run') {
       dryRun = true;
+    } else if (arg === '--experiment' || arg === '--pace-experiment') {
+      const mode = arg === '--experiment' ? true : 'pacing';
+      if (experiment !== undefined && experiment !== mode) {
+        throw new Error('Cannot combine --experiment and --pace-experiment.');
+      }
+      experiment = mode;
     } else if (arg === '--only') {
       const value = argv[i + 1];
       if (value === undefined || value.startsWith('--')) {
@@ -121,7 +152,10 @@ export function parseCliArgs(argv: string[]): GenerationCliOptions {
     }
   }
 
-  return { dryRun, only };
+  if (experiment && !only) {
+    throw new Error('An experiment requires --only <greetingId>');
+  }
+  return { dryRun, only, ...(experiment ? { experiment } : {}) };
 }
 
 // --- Polly synthesis ---
@@ -159,6 +193,7 @@ export interface RunGenerationDeps {
   measure: (bytes: Uint8Array) => Promise<number>;
   dryRun?: boolean;
   only?: string;
+  experiment?: boolean | 'pacing';
   log?: (message: string) => void;
 }
 
@@ -176,6 +211,46 @@ export async function runGeneration(deps: RunGenerationDeps): Promise<GreetingMa
     throw new Error(`No greeting with id "${only}" exists in the manifest.`);
   }
 
+  if (deps.experiment) {
+    if (!only || selected.length !== 1) {
+      throw new Error('An experiment requires a single greeting selected with --only.');
+    }
+    const greeting = selected[0];
+    if (!greeting.audioPath) {
+      throw new Error(`Greeting "${greeting.id}" has no audioPath in the manifest.`);
+    }
+    const pronunciations: StutterPronunciation[] = ['ipa-schwa', 'ipa-strut', 'alias'];
+    const variants: {
+      label: string;
+      pronunciation: StutterPronunciation;
+      pacing?: SpeechPacing;
+    }[] =
+      deps.experiment === 'pacing'
+        ? [{ label: 'pace-gap-5ms', pronunciation: 'ipa-schwa', pacing: 'gap5' }]
+        : pronunciations.map((pronunciation) => ({ label: pronunciation, pronunciation }));
+    for (const { label, pronunciation, pacing } of variants) {
+      const ssml = buildGreetingSsml(
+        greeting.text ?? '',
+        ssmlById[greeting.id],
+        pronunciation,
+        pacing,
+      );
+      const path = `${label}/${greeting.audioPath}`;
+      log?.(`[experiment] ${greeting.id} / ${label} → ${path}\n${ssml}`);
+      if (dryRun) continue;
+      const audio = await synthesize(buildSynthesisInput(ssml));
+      const duration = Math.round(await measure(audio));
+      await writeAudio(path, audio);
+      log?.(`${label}: ${duration} ms`);
+      if (duration < MIN_DURATION_MS || duration > MAX_DURATION_MS) {
+        log?.(
+          `${label}: ${duration} ms is outside ${MIN_DURATION_MS}–${MAX_DURATION_MS} ms; re-tune before rollout.`,
+        );
+      }
+    }
+    return manifest;
+  }
+
   if (dryRun) {
     for (const greeting of selected) {
       log?.(
@@ -186,6 +261,7 @@ export async function runGeneration(deps: RunGenerationDeps): Promise<GreetingMa
   }
 
   const measuredMsById: Record<string, number> = {};
+  const pendingAudio: { path: string; bytes: Uint8Array; id: string }[] = [];
 
   for (const greeting of selected) {
     if (!greeting.audioPath) {
@@ -193,10 +269,14 @@ export async function runGeneration(deps: RunGenerationDeps): Promise<GreetingMa
     }
     const ssml = buildGreetingSsml(greeting.text ?? '', ssmlById[greeting.id]);
     const audio = await synthesize(buildSynthesisInput(ssml));
-    await writeAudio(greeting.audioPath, audio);
     measuredMsById[greeting.id] = await measure(audio);
-    log?.(`${greeting.id} → ${greeting.audioPath} (${Math.round(measuredMsById[greeting.id])} ms)`);
+    pendingAudio.push({ path: greeting.audioPath, bytes: audio, id: greeting.id });
   }
 
-  return calibrateDurations(manifest, measuredMsById);
+  const updated = calibrateDurations(manifest, measuredMsById);
+  for (const { path, bytes, id } of pendingAudio) {
+    await writeAudio(path, bytes);
+    log?.(`${id} → ${path} (${Math.round(measuredMsById[id])} ms)`);
+  }
+  return updated;
 }

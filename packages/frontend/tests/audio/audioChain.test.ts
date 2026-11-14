@@ -484,3 +484,142 @@ describe('audioChain — static noise (tune-in)', () => {
     expect(() => chain.playStatic(3000)).not.toThrow();
   });
 });
+
+describe('audioChain — voice glitches', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeGlitchChain() {
+    const gainNode = {
+      gain: { value: 1, linearRampToValueAtTime: vi.fn(), setValueAtTime: vi.fn() },
+      connect: vi.fn(),
+    };
+    const sources: Array<{
+      buffer: unknown;
+      connect: ReturnType<typeof vi.fn>;
+      start: ReturnType<typeof vi.fn>;
+      stop: ReturnType<typeof vi.fn>;
+      onended: null | (() => void);
+    }> = [];
+    const workletNodes: Array<{ name: string; connect: ReturnType<typeof vi.fn> }> = [];
+    const mockAudioContext = {
+      currentTime: 2,
+      sampleRate: 1000,
+      resume: vi.fn().mockResolvedValue(undefined),
+      audioWorklet: { addModule: vi.fn().mockResolvedValue(undefined) },
+      createAnalyser: vi.fn().mockReturnValue({
+        fftSize: 0,
+        frequencyBinCount: 128,
+        getByteFrequencyData: vi.fn(),
+        connect: vi.fn(),
+      }),
+      createGain: vi.fn().mockReturnValue(gainNode),
+      createBuffer: vi.fn((channels: number, length: number, sampleRate: number) => {
+        const data = new Float32Array(length);
+        return { numberOfChannels: channels, length, sampleRate, getChannelData: () => data };
+      }),
+      createBufferSource: vi.fn(() => {
+        const source = {
+          buffer: null as unknown,
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+          onended: null as null | (() => void),
+        };
+        sources.push(source);
+        return source;
+      }),
+      destination: {},
+      close: vi.fn(),
+    };
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(function () {
+        return mockAudioContext;
+      }),
+    );
+    vi.stubGlobal(
+      'AudioWorkletNode',
+      vi.fn(function (_ctx: unknown, name: string) {
+        const node = { name, connect: vi.fn(), port: { postMessage: vi.fn() } };
+        workletNodes.push(node);
+        return node;
+      }),
+    );
+    const voice = Float32Array.from([0.1, 0.2, 0.3, 0.4]);
+    const decoded = {
+      numberOfChannels: 1,
+      length: voice.length,
+      sampleRate: 1000,
+      getChannelData: () => voice,
+    } as unknown as AudioBuffer;
+    const glitched = Float32Array.from([0.1, 0.2, 0.1, 0.2, 0.3, 0.4]);
+    const glitcher = vi.fn().mockReturnValue({ samples: glitched, tickOffsets: [2] });
+    return {
+      mockAudioContext,
+      gainNode,
+      sources,
+      workletNodes,
+      decoded,
+      voice,
+      glitched,
+      glitcher,
+    };
+  }
+
+  it('plays the glitched voice and returns how long it lasts', async () => {
+    const { sources, workletNodes, decoded, voice, glitched, glitcher } = makeGlitchChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain({ glitcher });
+    await chain.init();
+
+    const playedMs = chain.play(decoded);
+
+    expect(glitcher).toHaveBeenCalledWith(voice, 1000);
+    const voiceSource = sources[0];
+    expect((voiceSource.buffer as AudioBuffer).getChannelData(0)).toEqual(glitched);
+    expect(voiceSource.connect).toHaveBeenCalledWith(workletNodes[0]);
+    expect(voiceSource.start).toHaveBeenCalledWith(2);
+    expect(playedMs).toBe(6);
+  });
+
+  it('sounds a static tick through the volume control at each replay', async () => {
+    const { gainNode, sources, decoded, glitcher } = makeGlitchChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain({ glitcher });
+    await chain.init();
+
+    chain.play(decoded);
+
+    expect(sources).toHaveLength(2);
+    const tick = sources[1];
+    expect(tick.connect).toHaveBeenCalledWith(gainNode);
+    expect(tick.start).toHaveBeenCalledWith(2 + 2 / 1000);
+  });
+
+  it('cancels ticks that have not sounded when playback stops', async () => {
+    const { sources, decoded, glitcher } = makeGlitchChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain({ glitcher });
+    await chain.init();
+    chain.play(decoded);
+
+    chain.stop();
+
+    expect(sources).toHaveLength(2);
+    expect(sources[1].stop).toHaveBeenCalled();
+  });
+
+  it('leaves the base pitch of the voice alone', async () => {
+    const { mockAudioContext, workletNodes } = makeGlitchChain();
+    const { createAudioChain } = await import('../../src/audio/audioChain');
+    const chain = createAudioChain({ glitcher: vi.fn() });
+    await chain.init();
+
+    expect(workletNodes.map((node) => node.name)).not.toContain('pitch-processor');
+    expect(mockAudioContext.audioWorklet.addModule).not.toHaveBeenCalledWith(
+      expect.stringContaining('pitchProcessor'),
+    );
+  });
+});

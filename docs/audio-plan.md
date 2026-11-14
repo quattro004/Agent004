@@ -28,10 +28,257 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 ## Decisions
 
 - **Provider:** Amazon Polly is the **sole** generation method — Matthew, neural, mp3, 24 kHz (reuse existing config). No other TTS provider (ElevenLabs, manual recording, browser TTS) is in scope.
-- **SSML:** Hand-tuned per greeting (breaks, prosody `rate`/`volume`, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML. Note the neural engine supports only `volume`/`rate` on `<prosody>` and rejects `<emphasis>`; Max's raised pitch comes from the `pitch-processor` AudioWorklet at playback, not from SSML.
+- **SSML:** Hand-tuned per greeting (breaks, prosody `rate`/`volume`, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML. Note the neural engine supports only `volume`/`rate` on `<prosody>` and rejects `<emphasis>`; pitch changes come from the glitch engine at playback (see § Voice glitch episodes), not from SSML.
 - **Duration calibration:** Auto-measure each MP3 and rewrite `audioDurationMs` (within the contract's ±500 ms / 1000–15000 ms bounds).
 - **Spec:** Update via speckit iterate to make video **optional/deferred** (not deleted) — avatar images are the MVP visual; mp4s are a future "if cheap" add.
 - **Extra scope:** mouth-threshold tuning + audio-driven timing refinement (tail buffer); volume knob is already wired → verify only.
+
+## T158 — Phonetic greeting audition and pacing comparison (2026-11-07)
+
+The builder chose exaggerated stuttering while preserving the existing dialogue,
+initially deferred AWS generation, then ran the three-pronunciation experiment.
+**IPA schwa sounded best**, but both the stutters and overall speech were too
+slow. The shipped MP3s and manifest remain unchanged. T158 stays open until
+pacing is accepted, all durations are checked and production is regenerated.
+
+### First audition and measurements
+
+The existing pronunciation comparison remains available from the repo root:
+
+```powershell
+pnpm --filter @max-height/frontend generate:greetings --experiment --only greeting-015 --dry-run
+```
+
+This prints three otherwise identical requests: `ipa-schwa` (`bə`/`mə`),
+`ipa-strut` (`bʌ`/`mʌ`) and `alias` (`buh`/`muh`). It makes no AWS calls and
+writes nothing. The trial uses the existing 100 ms SSML pause between repeated
+onsets; this is a tuning choice, not a new timing requirement.
+
+After approving the spend and supplying temporary, least-privilege credentials
+in the same PowerShell session with `AWS_REGION=us-west-2`, omit `--dry-run`:
+
+```powershell
+pnpm --filter @max-height/frontend generate:greetings --experiment --only greeting-015
+```
+
+The three MP3s go under
+`packages/frontend/.greeting-experiment/{ipa-schwa,ipa-strut,alias}/audio/`.
+That directory is gitignored and outside `public`; neither production audio nor
+`manifest.json` is written. Each variant takes one Neural Matthew request,
+with no speech marks. At the [published $16 per million Neural characters](https://aws.amazon.com/polly/pricing/)
+(re-read 2026-11-07), counting even all SSML markup gives a conservative bound
+of **$0.034 for the three greeting-015 requests**, before allowances. This is
+an estimate, not approval to run AWS.
+
+The IAM grant is `polly:SynthesizeSpeech` on `*` with
+`aws:RequestedRegion = us-west-2`, as in Phase 3 below. The
+[Polly service authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_polly.html)
+(checked 2026-11-07) supports no `polly:Engine` or `polly:VoiceId` condition
+keys. Neural and Matthew are request settings, not IAM-enforceable restrictions.
+
+Listen for phonetic sounds rather than letter names, abrupt but intelligible
+restarts, and an original retro-TV presenter cadence. Judge the clips through
+the existing audio-chain DSP before accepting the client experience; raw MP3s
+do not include its pitch/EQ treatment.
+
+Then audition `greeting-005`, the previous near-15-second outlier, and a
+non-`b` greeting such as `greeting-001`. All 16 SSML entries have stronger
+onset repeats, but the full pool's new durations and naturalness are **not yet verified**.
+Experiments retain out-of-range clips with a re-tune warning. Full generation
+checks all measured durations before overwriting any production MP3.
+Schwa is now the builder's pronunciation choice; its initial pacing is not
+approved for rollout.
+
+Measured with `music-metadata` against the actual experiment files and the
+matching committed `greeting-015.mp3`, not estimated from SSML:
+
+| Recording | Duration | Bytes | Overall dialogue WPM | Within 15 s |
+| --- | ---: | ---: | ---: | --- |
+| Alias | 16,992 ms | 101,996 | 78 | No |
+| **IPA schwa** | **16,560 ms** | **99,404** | **80** | **No** |
+| IPA strut | 16,344 ms | 98,108 | 81 | No |
+| Shipped greeting-015 | 12,792 ms | 76,796 | 103 | Yes |
+
+All four files are mono, 24 kHz MPEG-2 Layer III MP3s at approximately 48 kbps.
+The shipped duration matches its manifest exactly. Schwa is 1,560 ms over the
+ceiling and about 29.5% longer than the shipped clip. WPM uses 22 canonical
+dialogue words and includes all pauses and added onsets; it is **not**
+articulation-only speech rate.
+
+### Second audition — faster and snappy (completed)
+
+The second audition made two Neural Matthew requests without speech marks.
+These are the previous candidates; the command now generates the next pair:
+
+| Profile | Overall rate | Onset gap | Extra onset acceleration |
+| --- | --- | --- | --- |
+| `pace-faster` | 115% | 50 ms | None |
+| `pace-snappy` | 115% | 50 ms | `x-fast` around repeated onsets only, not the full word |
+
+The 115% rate already exists in greeting-005; the 50 ms gap uses the existing
+audio chain's nominal replay timing as a trial starting point. These are
+audition choices, **not new shipping requirements**. AWS documents Neural
+support for prosody `rate`, including percentage and preset speeds; actual
+timing is voice-dependent ([voice speed](https://docs.aws.amazon.com/polly/latest/dg/voice-speed-change-vip.html),
+[prosody](https://docs.aws.amazon.com/polly/latest/dg/prosody-tag.html)).
+The `x-fast` trial addresses the duration of the syllables themselves, not
+just the silence between them.
+
+The previous output is under
+`packages/frontend/.greeting-experiment/{pace-faster,pace-snappy}/audio/`.
+The three original pronunciation clips remain intact for comparison; production
+audio and the manifest are untouched. Their SSML requests contain 701 and
+767 characters including markup, giving a conservative combined cost bound
+of **$0.024**, rounded up from $0.023488, before allowances.
+
+Measured from the builder's actual second-audition files:
+
+| Recording | Duration | Bytes | Overall dialogue WPM | Within 15 s |
+| --- | ---: | ---: | ---: | --- |
+| `pace-faster` | 15,408 ms | 92,492 | 86 | No |
+| **`pace-snappy`** | **14,976 ms** | **89,900** | **88** | **Yes, only 24 ms headroom** |
+
+The builder preferred **snappy** and clarified that normal speech speed is
+good: only the stuttering should speed up. These are duration/word-rate
+measurements, not a new loudness analysis or automated listening judgment.
+
+### Next generation — faster stutter onsets only
+
+The builder preferred `pace-snappier` and asked for a stutter about 20% faster
+with all other speech unchanged. `x-fast` is a Polly preset whose speed AWS
+documents only as approximate, so the next pair replaces it with numeric rates
+(valid range 20–200%) to find out empirically whether a faster onset is
+possible at all:
+
+```powershell
+pnpm --filter @max-height/frontend generate:greetings --pace-experiment --only greeting-015 --dry-run
+pnpm --filter @max-height/frontend generate:greetings --pace-experiment --only greeting-015
+```
+
+Run the live command in the shell with temporary credentials. Both new schwa
+trials keep **115% normal speech**, `pace-snappier`'s 20 ms gaps, the same words
+and all other pauses; only the repeated-onset `rate` differs:
+
+| Profile | Onset `rate` |
+| --- | --- |
+| `pace-onset-180` | 180% |
+| `pace-onset-200` | 200% (Polly's ceiling) |
+
+Compare each against `pace-snappier` (88,748 bytes). If both
+clips match it, `x-fast` is already at the ceiling and the remaining lever is
+the 20 ms gap (`pace-rapid` shows the no-gap limit). It is also unverified
+whether a nested `prosody` rate is relative to the 115% outer rate or absolute;
+the measured durations will show. These are experiment choices, not shipping
+timing requirements. Output goes to
+`packages/frontend/.greeting-experiment/{pace-onset-180,pace-onset-200}/audio/`;
+all seven previous trial clips remain untouched. The two requests contain 763
+and 821 characters including markup, giving a conservative combined bound of
+**$0.026** before allowances. New audio durations and naturalness still need
+the builder's generation and listen. The command prints actual durations and
+warns if either clip exceeds 15 seconds; do not assume a faster SSML setting
+guarantees a compliant MP3.
+
+Measured from the builder's generated files:
+
+| Recording | Duration | Change vs `pace-snappier` |
+| --- | ---: | ---: |
+| `pace-snappier` | 14,784 ms | — |
+| `pace-onset-180` | 14,544 ms | −240 ms |
+| `pace-onset-200` | 14,424 ms | −360 ms |
+| `pace-rapid` (no gaps) | 12,288 ms | −2,496 ms |
+
+Raising the onset `rate` from `x-fast` to 200% saves only 2.4% of the clip.
+Removing the 20 ms `<break>` tags saves 17%, far more than their nominal
+duration, so Polly appears to render each `<break>` between onsets much
+longer than its stated time (an inference from durations, not verified by
+listening or speech marks). The inserted gaps, not the onset `rate`, are
+the dominant stutter-speed lever.
+
+### Decision: `rapid` is final and the production default
+
+The builder listened and chose **`pace-rapid`** ("almost too fast"). A single
+gentler trial, `pace-gap-5ms` (`rapid` plus 5 ms gaps), was **not better**, so
+`rapid` stays. It is the default `SpeechPacing` in
+`packages/agent/src/voice/ssml.ts` and `buildGreetingSsml`, so the full-pool
+command uses it; `original` and the other profiles remain selectable
+explicitly. The `gap5` profile and `--pace-experiment` harness remain only as
+the record of that rejected trial; `pace-gap-5ms` output lives in
+`packages/frontend/.greeting-experiment/pace-gap-5ms/audio/`.
+
+**No production audio or manifest duration has been regenerated.** Do that with
+the full-pool command, validating each measured duration rather than clamping.
+
+### Playback DSP and signal measurements
+
+> **Superseded 2026-11-07** by § Voice glitch episodes below: the 1.05 pitch
+> worklet was removed (base pitch is now 1.0). The EQ figures and loudness
+> table still describe the chain; they were measured with the 1.05 shift in
+> place.
+
+`createUseGreeting()` already calls `audioChain.play()`. Normal speech uses a
+granular **1.05 pitch factor (+5%)** and a fixed EQ boost; pitch shift does not
+make the speech faster. The stutter-replay and static-burst nodes are present
+but **no application call sites trigger them**, so current greeting stutters
+come from SSML. The builder explicitly deferred adding those triggers until
+the base pronunciation and pacing are right. No DSP settings were changed.
+
+The EQ comments describe a roughly 5 kHz/+6 dB treatment, but the actual
+coefficients plus dry-signal mix peak near **3,340 Hz / +9.54 dB at 44.1 kHz**.
+That is the calculated filter response, not the overall speech loudness;
+frequency scales with browser sample rate.
+
+The files were also decoded locally using Edge Web Audio at 44.1 kHz and
+processed through the current worklet code in 128-frame blocks, with
+replay/static bursts inactive:
+
+| Recording | Raw peak dBFS | Raw RMS dBFS | DSP peak at 50% volume | DSP RMS at 50% volume |
+| --- | ---: | ---: | ---: | ---: |
+| Alias | -7.61 | -25.72 | -13.58 | -33.37 |
+| IPA schwa | -7.70 | -26.49 | -13.29 | -34.07 |
+| IPA strut | -7.26 | -26.39 | -12.66 | -34.00 |
+| Shipped greeting-015 | -8.19 | -26.21 | -14.49 | -33.70 |
+
+No samples exceeded full scale in any recording, before volume or at 50%.
+These are sample peak and whole-clip RMS measurements from a reconstruction,
+**not LUFS, true peak, hardware-output capture or subjective listening**.
+Separate looping TV noise is excluded. A temporary local Vite/Edge check also
+served the private schwa clip and initialized, started and stopped playback
+through the app's actual native worklet chain; both helpers were stopped.
+Final client acceptance still needs human listening through that chain.
+
+The pure helper lives in `packages/agent/src/voice/ssml.ts`, ready for T029 to
+reuse. The greeting generator no longer imports the browser `pollyTts.ts` that
+T081 will delete. It handles single-consonant prefixes; vowel and multi-letter
+syllable glitches are outside this experiment.
+
+### Voice glitch episodes (2026-11-07)
+
+After four offline listening rounds that ran the real worklets in headless
+Edge, the builder chose **Take K**. `src/audio/glitchEngine.ts` now glitches
+every clip that `audioChain.play()` receives, before playback:
+
+- **Base pitch is 1.0**, which is the Polly voice. The 1.05 worklet is gone.
+- An **episode clock** alternates 6–10 s glitch spells with 10–20 s of clean
+  voice and starts glitched. It counts played audio, not wall time, and is
+  shared by every clip on the page.
+- Each spell picks a random non-empty mix of three effects:
+  - **pitch jumps**: down to 0.8–0.9 or up to 1.25–1.6, for 120–350 ms;
+  - **syllable replays**: the last 60–120 ms plays 2–3 times in all, with a
+    static tick on each repeat;
+  - **tape wobble**: speed and pitch swell ±12–25 % over 150–300 ms.
+- Replays and wobble change the clip's length. `play()` returns the played
+  duration, and greeting completion uses it.
+
+`GLITCH_CONFIG` holds the numbers and the wiki's `Component-Audio-Chain`
+tells the story; change neither without another listening round. The
+`stutter-processor` worklet is still in the graph as a passthrough. Its
+replay never worked and nothing triggers it.
+
+**Production builds do not load the worklets.** Vite inlines each
+`new URL('./xProcessor.ts', import.meta.url)` as a `data:video/mp2t` URL of
+raw TypeScript. Edge rejects it (checked 2026-11-07), so `init()` fails and
+greetings are silent outside `pnpm run dev`. The glitch engine runs on the
+main thread and is not affected, but nothing plays without the chain.
 
 ## Phases & Tasks
 
