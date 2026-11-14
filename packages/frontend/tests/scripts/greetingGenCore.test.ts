@@ -302,9 +302,9 @@ describe('parseCliArgs', () => {
 });
 
 describe('buildSynthesisInput', () => {
-  it('requests neural Matthew mp3 audio at 24 kHz from SSML', () => {
+  it('requests Standard Matthew mp3 audio at 24 kHz from SSML (amendment A6)', () => {
     expect(buildSynthesisInput('<speak>Hi.</speak>')).toEqual({
-      Engine: 'neural',
+      Engine: 'standard',
       VoiceId: 'Matthew',
       LanguageCode: 'en-US',
       OutputFormat: 'mp3',

@@ -571,3 +571,12 @@ builder regenerated all 16 production MP3s and calibrated the manifest. Measured
 durations span 8424 to 14736 ms, inside the 1000 to 15000 ms bounds, with no
 clamping. See `docs/audio-plan.md` § T158. **Still pending:** in-app listening
 through the playback DSP, and the greeting-005 and non-`b` onset checks.
+
+**T158 Standard engine switch, 2026-11-14 (still partial).** RED→GREEN switches
+`buildSynthesisInput` in `scripts/greetingGenCore.ts` to `Engine: 'standard'`
+(amendment A6, C10). The builder deferred regeneration until after the first
+deploy, so it does not block it. **Still pending:** full-pool regeneration on
+Standard, which is the first listen to Standard Matthew (record the verdict in
+research.md § Q1); manifest calibration, including `voiceConfig.engine`; and
+the in-app and onset checks above. See `docs/audio-plan.md` § Generator
+switched to Polly Standard.
