@@ -45,7 +45,7 @@ function playThrough(seed: number, totalSeconds: number): Uint8Array {
 }
 
 describe('episode clock', () => {
-  it('starts glitched, then alternates 6–10 s glitch spells with 10–20 s of clean voice across buffers', () => {
+  it('starts glitched, then alternates 6–10 s glitch spells with 5–10 s of clean voice across buffers', () => {
     const all = runs(playThrough(7, 3000));
     const complete = all.slice(0, -1); // the final run is cut off by the end of the test
 
@@ -55,8 +55,8 @@ describe('episode clock', () => {
       expect(mix === 0).toBe(i % 2 === 1);
       const seconds = length / RATE;
       if (mix === 0) {
-        expect(seconds).toBeGreaterThanOrEqual(10);
-        expect(seconds).toBeLessThanOrEqual(20);
+        expect(seconds).toBeGreaterThanOrEqual(5);
+        expect(seconds).toBeLessThanOrEqual(10);
       } else {
         expect(seconds).toBeGreaterThanOrEqual(6);
         expect(seconds).toBeLessThanOrEqual(10);
