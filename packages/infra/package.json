@@ -11,7 +11,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-apigatewaymanagementapi": "^3.1159.0",
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.1162.0",
     "aws-cdk-lib": "^2.275.0",
     "constructs": "^10.8.1"
   },
@@ -19,7 +19,7 @@
     "@types/aws-lambda": "^8.10.164",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.6",
-    "aws-cdk": "^2.1146.1",
+    "aws-cdk": "^2.1147.0",
     "cross-env": "10.1.0",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.15",
