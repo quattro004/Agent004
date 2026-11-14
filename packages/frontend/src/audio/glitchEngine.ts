@@ -18,8 +18,8 @@ export const GlitchEffect = { Pitch: 1, Replay: 2, Wobble: 4 } as const;
 const ALL_EFFECTS = GlitchEffect.Pitch | GlitchEffect.Replay | GlitchEffect.Wobble;
 
 export const GLITCH_CONFIG = {
-  glitchSpellSeconds: [6, 10],
-  cleanGapSeconds: [5, 10],
+  glitchSpellSeconds: [6, 13],
+  cleanGapSeconds: [3, 7],
   pitchJump: {
     perSecond: 1.2,
     downChance: 0.4,
