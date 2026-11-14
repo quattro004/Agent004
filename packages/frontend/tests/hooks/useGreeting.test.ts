@@ -415,6 +415,33 @@ describe('useGreeting', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it('should finish the greeting when the glitched audio ends, not at the manifest duration', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(mockAudioChain.play).mockReturnValue(2600);
+      const { createUseGreeting } = await import('../../src/hooks/useGreeting');
+      const greeting = createUseGreeting(mockAudioChain);
+
+      const result = await greeting.playGreeting({
+        id: 'g-012',
+        text: 'Stretched by replays.',
+        audioBuffer: {} as AudioBuffer,
+        durationMs: 1800,
+      });
+      let finished = false;
+      void result?.completion?.then(() => {
+        finished = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(1800);
+      expect(finished).toBe(false);
+      await vi.advanceTimersByTimeAsync(800);
+      expect(finished).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('should return a completion promise for browser TTS fallback', async () => {
     const { createUseGreeting } = await import('../../src/hooks/useGreeting');
 

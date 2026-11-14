@@ -167,12 +167,13 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
       if (greeting.audioBuffer) {
         useVoiceStore.getState().setSpeaking(true);
         useVoiceStore.getState().setGreeting(true);
-        audioChain.play(greeting.audioBuffer);
+        const playedMs = audioChain.play(greeting.audioBuffer);
         startMouthPolling();
         return {
           id: greeting.id,
           text: greeting.text,
-          completion: finalizePlayback(delay(greeting.durationMs)),
+          // Glitches change the clip's length; the manifest covers a chain that isn't ready.
+          completion: finalizePlayback(delay(playedMs || greeting.durationMs)),
         };
       }
 

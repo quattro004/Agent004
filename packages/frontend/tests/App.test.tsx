@@ -251,15 +251,15 @@ describe('App — TV Power Lifecycle', () => {
     expect(screen.queryByTestId('broadcast-text')).not.toBeInTheDocument();
   });
 
-  it('starts at audible volume step 2 with its indicator at 18% of the arc', async () => {
+  it('starts at audible volume step 6 with its indicator at 55% of the arc', async () => {
     const { App } = await import('../src/App');
     const { container } = render(<App />);
     const volume = screen.getByRole('group', { name: 'Volume' });
     const indicator = container.querySelector<HTMLElement>('.volume-knob-indicator');
     const initialAngle = Number.parseFloat(indicator?.style.getPropertyValue('--knob-angle') ?? '');
 
-    expect(volume).toHaveAttribute('aria-valuenow', '2');
-    expect(initialAngle).toBeCloseTo(-235 + (2 / 11) * 280);
+    expect(volume).toHaveAttribute('aria-valuenow', '6');
+    expect(initialAngle).toBeCloseTo(-235 + (6 / 11) * 280);
   });
 
   it('should render TvKnob in the control panel when TV is off', async () => {
@@ -268,7 +268,7 @@ describe('App — TV Power Lifecycle', () => {
     expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
   });
 
-  it('passes directional volume changes through to the audio chain', async () => {
+  it('passes volume changes through to the audio chain and preserves them across power cycles', async () => {
     const { App } = await import('../src/App');
     render(<App />);
 
@@ -280,8 +280,19 @@ describe('App — TV Power Lifecycle', () => {
     mockAudioSetVolume.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Volume up' }));
     await vi.waitFor(() => {
-      expect(mockAudioSetVolume).toHaveBeenLastCalledWith(3 / 11);
+      expect(mockAudioSetVolume).toHaveBeenLastCalledWith(7 / 11);
     });
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).toHaveAttribute('data-is-on', 'false');
+    });
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).toHaveAttribute('data-is-on', 'true');
+    });
+    expect(screen.getByRole('group', { name: 'Volume' })).toHaveAttribute('aria-valuenow', '7');
   });
 
   it('should not render session state overlays when TV is off', async () => {
