@@ -205,8 +205,9 @@ explicitly. The `gap5` profile and `--pace-experiment` harness remain only as
 the record of that rejected trial; `pace-gap-5ms` output lives in
 `packages/frontend/.greeting-experiment/pace-gap-5ms/audio/`.
 
-**No production audio or manifest duration has been regenerated.** Do that with
-the full-pool command, validating each measured duration rather than clamping.
+**Production audio was regenerated on 2026-11-07** (`f2c769d`) with the
+full-pool command on Neural Matthew: all 16 MP3s, with manifest durations of
+8424 to 14736 ms, inside the 1000 to 15000 ms bounds and not clamped.
 
 ### Generator switched to Polly Standard (2026-11-14)
 
@@ -425,3 +426,4 @@ Two corrections surfaced during generation:
 7. **audio-driven-timing** — Phase 4 tail-buffer timing refinement + tests.
 8. **verify-volume** — Phase 4 verify volume knob (optional localStorage persistence).
 9. **validate-finalize** — Phase 5 `pnpm run validate` + docs update.
+10. **regenerate-standard** — regenerate the full pool on Polly Standard Matthew (T158, amendment A6), listen, record the verdict in spec 003 research.md § Q1, and update `voiceConfig.engine`. Deferred until after the first deploy; see § Generator switched to Polly Standard.
