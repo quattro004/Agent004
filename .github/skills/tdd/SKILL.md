@@ -292,8 +292,10 @@ Follow existing test patterns in the project:
   ```
 - **Run a specific test:**
   ```bash
-  cd packages/infra && npx jest --verbose -t "test name pattern"
+  cd packages/infra && pnpm test -- -t "test name pattern"
   ```
+  (Not `npx jest`: the package is ESM and its `test` script supplies the
+  `--experimental-vm-modules` flag that Jest needs.)
 
 ### E2E / Playwright Tests
 
