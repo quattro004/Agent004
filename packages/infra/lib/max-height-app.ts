@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { LogRetention14Days } from './aspects/log-retention.js';
 import { CertificateStack } from './certificate-stack.js';
+import { DataStack } from './data-stack.js';
 import { CognitoStack } from './cognito-stack.js';
 import { BudgetStack } from './budget-stack.js';
 import { AgentStack } from './agent-stack.js';
@@ -25,6 +26,8 @@ export function buildMaxHeightApp(app: cdk.App): void {
     env: { region: 'us-east-1' },
     domainName: SITE_DOMAIN,
   });
+
+  new DataStack(app, 'MaxHeight-Data', { env });
 
   const cognito = new CognitoStack(app, 'MaxHeight-Cognito', { env, agentRuntimeArn });
 

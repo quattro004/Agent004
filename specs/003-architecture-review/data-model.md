@@ -13,7 +13,7 @@ Hard numbers below are cited. None is introduced here.
 
 ### Control table (DynamoDB, one table)
 
-The partition key is `pk` (string) and there is no sort key. The TTL attribute is `ttl` (epoch seconds). Provisioned capacity stays within the Always Free offer (human-read required, R-cost). The table name and ARN reach code only through configuration ([contracts/runtime-config.md](./contracts/runtime-config.md)).
+The partition key is `pk` (string) and there is no sort key. The TTL attribute is `ttl` (epoch seconds). Billing is on demand, as research § R-cost's F line prices it (about $0.01 a month; deviation C14). The table name and ARN reach code only through configuration ([contracts/runtime-config.md](./contracts/runtime-config.md)).
 
 | Item (`pk`) | Attributes | Written by | Read by |
 | --- | --- | --- | --- |

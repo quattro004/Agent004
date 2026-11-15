@@ -40,7 +40,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 
 **Storage**:
 
-- **DynamoDB control table**: provisioned capacity within the Always Free offer (verify, R-cost). It holds the allowlist, the counted sessions, the rate-limit windows, the breaker tally, the halt flag, and each friend's `lastSeenAt` ([data-model.md](./data-model.md)).
+- **DynamoDB control table**: on-demand billing, as research § R-cost's F line prices it (deviation C14). It holds the allowlist, the counted sessions, the rate-limit windows, the breaker tally, the halt flag, and each friend's `lastSeenAt` ([data-model.md](./data-model.md)).
 - **AgentCore Memory**: built-in long-term strategies. Short-term events expire after 7 days; long-term records are pruned 30 days after `lastSeenAt` (constitution `:236`).
 - **Cognito User Pool**: Lite feature plan.
 - **S3**: the static site and greeting audio, as today.
