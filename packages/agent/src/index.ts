@@ -1,4 +1,4 @@
-import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Agent } from '@strands-agents/sdk';
 import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
@@ -286,9 +286,8 @@ async function warmBedrockClient(): Promise<void> {
 }
 
 /**
- * Explicit async initialization. Until this resolves, `/ping` reports
- * unhealthy and the listener is not accepting connections, so AgentCore
- * cannot snapshot a half-built process.
+ * Explicit async initialization. Until this resolves, `/ping` answers 503,
+ * so AgentCore cannot snapshot a half-built process.
  *
  * Failure is surfaced, never retried silently — a snapshot taken from a
  * degraded process would be inherited by every later instance.
@@ -324,15 +323,22 @@ export async function initialize(): Promise<void> {
 // for port 8080 and fail with EADDRINUSE.
 const isTestEnvironment = process.env.VITEST !== undefined || process.env.NODE_ENV === 'test';
 
-if (!isTestEnvironment) {
-  initialize()
-    .then(() => {
-      server.listen(PORT, () => {
-        console.log(`Max Height agent listening on port ${PORT}`);
-      });
-    })
-    .catch((err: unknown) => {
-      console.error('Agent initialization failed; refusing to serve traffic:', err);
-      process.exit(1);
-    });
+export function start(options: { port?: number; exit?: (code: number) => void } = {}): {
+  server: Server;
+  ready: Promise<void>;
+} {
+  const { port = PORT, exit = (code: number) => process.exit(code) } = options;
+  // Listen first so AgentCore's health checks get 503, not a refused
+  // connection, while initialization runs (T015).
+  server.listen(port, () => {
+    console.log(`Max Height agent listening on port ${port}`);
+  });
+  const ready = initialize().catch((err: unknown) => {
+    console.error('Agent initialization failed; refusing to serve traffic:', err);
+    server.close();
+    exit(1);
+  });
+  return { server, ready };
 }
+
+if (!isTestEnvironment) start();

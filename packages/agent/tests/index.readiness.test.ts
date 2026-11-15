@@ -357,3 +357,52 @@ describe('runtime configuration at startup (spec 003 T015)', () => {
     expect(sdk.__sendMock).not.toHaveBeenCalled();
   });
 });
+
+describe('startup sequence (spec 003 T015, deviation C17)', () => {
+  async function httpPing(server: import('node:http').Server): Promise<number> {
+    await vi.waitFor(() => expect(server.listening).toBe(true));
+    const { port } = server.address() as import('node:net').AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${port}/ping`);
+    await response.text();
+    return response.status;
+  }
+
+  it('accepts connections and answers /ping with 503 while initialization is still running', async () => {
+    const mod = await freshModule();
+    const sdk = await bedrockSdk();
+    let release!: () => void;
+    sdk.__sendMock.mockReturnValueOnce(
+      new Promise<object>((resolve) => (release = () => resolve({}))),
+    );
+    const exit = vi.fn();
+
+    const { server, ready } = mod.start({ port: 0, exit });
+    try {
+      expect(await httpPing(server)).toBe(503);
+      release();
+      await ready;
+      expect(await httpPing(server)).toBe(200);
+      expect(exit).not.toHaveBeenCalled();
+    } finally {
+      server.close();
+    }
+  });
+
+  it('exits with status 1 and stops listening when initialization fails', async () => {
+    vi.stubEnv('MODEL_ID', undefined);
+    const mod = await freshModule();
+    const exit = vi.fn();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { server, ready } = mod.start({ port: 0, exit });
+    try {
+      await ready;
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(String(error.mock.calls.flat())).toContain('MODEL_ID');
+      await vi.waitFor(() => expect(server.listening).toBe(false));
+    } finally {
+      error.mockRestore();
+      if (server.listening) server.close();
+    }
+  });
+});
