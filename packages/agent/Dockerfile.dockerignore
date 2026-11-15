@@ -1,0 +1,11 @@
+# Build context is the repository root (see Dockerfile). Send only what the
+# agent image needs: never node_modules, the wiki clone, or other packages.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!.pnpmfile.cjs
+!packages/agent/package.json
+!packages/agent/tsconfig.json
+!packages/agent/src/**
