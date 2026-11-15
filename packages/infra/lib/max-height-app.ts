@@ -4,7 +4,6 @@ import { CertificateStack } from './certificate-stack.js';
 import { DataStack } from './data-stack.js';
 import { CognitoStack } from './cognito-stack.js';
 import { BudgetStack } from './budget-stack.js';
-import { AgentStack } from './agent-stack.js';
 import { FrontendStack } from './frontend-stack.js';
 
 /** FR-031: every stack except the us-east-1 certificate stack. */
@@ -39,7 +38,8 @@ export function buildMaxHeightApp(app: cdk.App): void {
     alertEmail: app.node.tryGetContext('budgetAlertEmail'),
   });
 
-  new AgentStack(app, 'MaxHeight-Agent', { env });
+  // MaxHeight-Agent needs the user pool and app client, which arrive with T058
+  // (deviation C15).
   new FrontendStack(app, 'MaxHeight-Frontend', { env });
 
   // research § R-deploy: the one cost-allocation tag.

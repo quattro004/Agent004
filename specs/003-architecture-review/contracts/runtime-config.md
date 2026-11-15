@@ -15,13 +15,13 @@ Every value a deployment needs is listed here with its source. A value marked **
 | Variable | Value | Source |
 | --- | --- | --- |
 | `AWS_REGION` | `us-west-2`. If the platform already sets it, the startup check asserts the value instead of setting it. | FR-031; `bin/app.ts` pins it |
-| `MODEL_ID` | The model adopted under Q2: an in-Region ID, `anthropic.claude-haiku-5-5` or `amazon.nova-lite-v1:0` as S0 decides ([s0-probe-matrix.md](./s0-probe-matrix.md)) | Research Q0 and Q2; S0 |
+| `MODEL_ID` | The route adopted under Q2: `global.anthropic.claude-haiku-4-5-20251001-v1:0`, the Haiku 4.5 global inference profile (T144). The post-upgrade review (T152) may change it | Research Q0 and Q2; S0; T102 |
 | `MAX_OUTPUT_TOKENS` | `250` | `index.ts:97` (kept, Q2) |
 | `CONTROL_TABLE_NAME` | Table name from the Data stack | [data-model.md](../data-model.md) |
 | `MEMORY_ID` | `CfnMemory` ID from the Data stack | [memory-api.md](./memory-api.md) |
 | `MEMORY_TOP_K` | `10` | `memory/memoryAdapter.ts` (existing) |
 | `POLLY_VOICE_ID` | `Matthew` | Spec 001 `contracts/polly-tts.md:23` |
-| `POLLY_ENGINE` | `neural` | Spec 001 `contracts/polly-tts.md:24` |
+| `POLLY_ENGINE` | `standard` | Amendment A6 (2026-11-13; spec 001 `contracts/polly-tts.md:24` had `neural`) |
 | `POLLY_SAMPLE_RATE` | `24000` | Spec 001 `contracts/polly-tts.md:27` |
 | `SESSION_MAX_TURNS` | `50` | Spec 001 FR-010 |
 | `SESSION_MAX_TOKENS` | `20000` (conversational, P-09) | Spec 001 FR-010 |
@@ -41,7 +41,7 @@ Every value a deployment needs is listed here with its source. A value marked **
 | `PRICE_RUNTIME_PER_TURN_MICRO_USD` | **Derived**: R-cost's per-session Runtime V2 estimate ÷ spec 001's turns per session | R-cost |
 | `SSM_PARAM_WEATHER_KEY` | `/max-height/weather-api-key` | `agent-stack.ts` (existing parameter) |
 | `SSM_PARAM_NEWS_KEY` | `/max-height/news-api-key` | Same |
-| `SSM_PARAM_SEARCH_KEY`, `SSM_PARAM_SEARCH_ENGINE_ID` | New SecureString names under `/max-height/` | `webSearchTool.ts:30,35` read them from the environment today |
+| `SSM_PARAM_SEARCH_KEY`, `SSM_PARAM_SEARCH_ENGINE_ID` | `/max-height/search-api-key` and `/max-height/search-engine-id` (new SecureStrings, tasks.md C15) | `webSearchTool.ts:30,35` read them from the environment today |
 
 That is 29 variables, under the limit of 50.
 
@@ -60,7 +60,7 @@ The breaker's estimate is a **floor**, not the bill: lines that are not per-turn
 | `platformVersion` | Runtime V2, typed property, pinned by a test | P-04; W17 refuted for 2.272.0 |
 | Container | ARM64, port 8080, `/ping` and `/invocations` | W24 |
 | Inbound auth | JWT: `discoveryUrl` = the user pool's OpenID configuration URL; `allowedClients` = [app client ID] | Research Q4; [auth-and-allowlist.md](./auth-and-allowlist.md) |
-| Request header allowlist | `Authorization` | Research Q4 |
+| Request header allowlist | `Authorization`. AgentCore refuses every other `x-amzn-` header except the `...-Runtime-Custom-` prefix, so the session ID header is not listed (tasks.md C15) | Research Q4; [runtime-header-allowlist](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-header-allowlist.html) |
 | Idle runtime session timeout | `1800` s | W25 (the default is 900 s) |
 | Maximum lifetime | `28800` s (8 hours) | W25 |
 | Network mode | Public | No VPC: a NAT gateway is a fixed cost (FR-052) |
@@ -69,7 +69,7 @@ The breaker's estimate is a **floor**, not the bill: lines that are not per-turn
 
 | Action | Resource |
 | --- | --- |
-| `bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream` | The adopted model's foundation-model ARN in `us-west-2` only. No inference-profile ARN (Q0). |
+| `bedrock:InvokeModel`, `bedrock:InvokeModelWithResponseStream` | AWS's documented pattern for a global inference profile, in three statements (research § Q2, "IAM for T140"; T140): the profile ARN in `us-west-2` with `aws:RequestedRegion = us-west-2`; the `us-west-2` foundation-model ARN with that Region and `bedrock:InferenceProfileArn` = the profile; and the Region-less `arn:aws:bedrock:::foundation-model/...` ARN with `aws:RequestedRegion = unspecified` and the same profile condition. **P11 exception**: the global route cannot be limited to `us-west-2`; the profile condition is the scoping that remains. |
 | `bedrock:ListAsyncInvokes` | `*`, unless the service authorization reference offers a resource type (checked at task time). The warm-up probe calls it, and its error stops initialization, so without this grant `/ping` never reports healthy (`bedrock/warmup.ts`; `index.ts:282-312`; W26). It runs no model and bills nothing. |
 | `polly:SynthesizeSpeech` | `*`, with `aws:RequestedRegion = us-west-2`. Neural and Matthew are application settings: AWS documents no `polly:Engine` or `polly:VoiceId` IAM keys ([service authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_polly.html), checked 2026-11-07). This corrects spec 001's frozen `contracts/polly-tts.md:202-210` example. |
 | `dynamodb:GetItem`, `PutItem`, `UpdateItem`, `DeleteItem` | The control table ARN |
