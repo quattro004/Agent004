@@ -11,6 +11,7 @@ import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
 import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
 import { startSpan, endSpan } from './handlers/observability.js';
 import { readModelUsage } from './spend/usage.js';
+import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js';
 import {
   createSession,
   checkSessionCaps,
@@ -27,6 +28,14 @@ const PORT = 8080;
  * client, so endpoint and credential resolution land inside the snapshot.
  */
 let isReady = false;
+
+/** Set by `initialize()`; nothing may serve traffic before it exists. */
+let runtimeConfig: RuntimeConfig | undefined;
+
+export function getRuntimeConfig(): RuntimeConfig {
+  if (!runtimeConfig) throw new Error('Runtime configuration read before initialize() resolved');
+  return runtimeConfig;
+}
 
 /** Initialization must fail loudly rather than retry past this deadline. */
 const INIT_DEADLINE_MS = 120_000;
@@ -296,7 +305,13 @@ export async function initialize(): Promise<void> {
   });
 
   try {
-    await Promise.race([warmBedrockClient(), deadline]);
+    await Promise.race([
+      (async () => {
+        runtimeConfig = await loadRuntimeConfig();
+        await warmBedrockClient();
+      })(),
+      deadline,
+    ]);
     isReady = true;
   } finally {
     if (timer) clearTimeout(timer);
