@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as cdk from 'aws-cdk-lib';
+import { IConstruct } from 'constructs';
+import { buildMaxHeightApp } from '../lib/max-height-app.js';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -53,5 +56,66 @@ describe('infra package dependency declarations', () => {
   test.each(imports)('$file declares a dependency on "$pkg"', ({ pkg }) => {
     const isDeclared = declared.has(pkg) || declared.has(`@types/${pkg}`);
     expect(isDeclared).toBe(true);
+  });
+});
+
+// research § R-deploy (Region, cost-allocation tag) and § R-obs (14-day logs).
+describe('Max Height app', () => {
+  const CERTIFICATE_STACK = 'MaxHeight-Certificate';
+  let app: cdk.App;
+  let stacks: cdk.Stack[];
+
+  beforeAll(() => {
+    app = new cdk.App({ context: { budgetAlertEmail: 'owner@example.com' } });
+    buildMaxHeightApp(app);
+    app.synth();
+    stacks = app.node.children.filter((c): c is cdk.Stack => cdk.Stack.isStack(c));
+  });
+
+  test('builds stacks to inspect', () => {
+    expect(stacks.length).toBeGreaterThan(0);
+  });
+
+  test('every stack except Certificate is pinned to us-west-2', () => {
+    const regions = stacks
+      .filter((s) => s.stackName !== CERTIFICATE_STACK)
+      .map((s) => ({ stack: s.stackName, region: s.region }));
+    expect(regions).toEqual(regions.map(({ stack }) => ({ stack, region: 'us-west-2' })));
+  });
+
+  test('every taggable resource carries project=max-height', () => {
+    const untagged = app.node
+      .findAll()
+      .filter((c: IConstruct) => cdk.CfnResource.isCfnResource(c))
+      .flatMap((c) => {
+        const manager = cdk.TagManager.isTaggable(c)
+          ? c.tags
+          : cdk.TagManager.isTaggableV2(c)
+            ? c.cdkTagManager
+            : undefined;
+        return manager && manager.tagValues().project !== 'max-height' ? [c.node.path] : [];
+      });
+    expect(untagged).toEqual([]);
+  });
+
+  // Lambda creates a missing /aws/lambda/<name> group on first invoke, and that
+  // group never expires. CDK's own provider Lambdas included (SC-011).
+  test('every Lambda function logs to a 14-day log group', () => {
+    const offenders = stacks.flatMap((stack) => {
+      const template = app.synth().getStackArtifact(stack.artifactId).template as {
+        Resources: Record<string, { Type: string; Properties?: Record<string, unknown> }>;
+      };
+      return Object.entries(template.Resources)
+        .filter(([, r]) => r.Type === 'AWS::Lambda::Function')
+        .flatMap(([id, r]) => {
+          const ref = (r.Properties?.LoggingConfig as { LogGroup?: { Ref?: string } } | undefined)
+            ?.LogGroup?.Ref;
+          const group = ref ? template.Resources[ref] : undefined;
+          const ok =
+            group?.Type === 'AWS::Logs::LogGroup' && group.Properties?.RetentionInDays === 14;
+          return ok ? [] : [`${stack.stackName}/${id}`];
+        });
+    });
+    expect(offenders).toEqual([]);
   });
 });
