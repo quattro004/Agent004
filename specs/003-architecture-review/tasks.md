@@ -71,8 +71,8 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 ### Certificate stack (csp-and-hosting.md)
 
-- [ ] T011 [P] RED: create `packages/infra/test/certificate-stack.test.ts`. The stack is in `us-east-1`, it has `crossRegionReferences: true`, and an `AWS::CertificateManager::Certificate` for `max.recipieces.com` uses DNS validation
-- [ ] T012 Create `packages/infra/lib/certificate-stack.ts` and add it to `packages/infra/bin/app.ts` until T011 passes
+- [x] T011 [P] RED: create `packages/infra/test/certificate-stack.test.ts`. The stack is in `us-east-1`, it has `crossRegionReferences: true`, and an `AWS::CertificateManager::Certificate` for `max.recipieces.com` uses DNS validation
+- [x] T012 Create `packages/infra/lib/certificate-stack.ts` and add it to `packages/infra/bin/app.ts` until T011 passes
 
 ### Data stack (data-model.md; memory-api.md § Resource)
 
