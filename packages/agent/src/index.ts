@@ -10,6 +10,7 @@ import { newsToolSchema, fetchNews } from './tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
 import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
 import { startSpan, endSpan } from './handlers/observability.js';
+import { readModelUsage } from './spend/usage.js';
 import {
   createSession,
   checkSessionCaps,
@@ -35,19 +36,9 @@ const INIT_DEADLINE_MS = 120_000;
 // acceptable.
 const sessions = new Map<string, Session>();
 
-/** Rough char→token estimate when the SDK does not report usage directly. */
-function estimateTokens(text: string): number {
+/** The friend's message is estimated at characters / 4 (spec 003 P-09). */
+function estimateMessageTokens(text: string): number {
   return Math.ceil(text.length / 4);
-}
-
-/** Extract token usage from a Strands result if the SDK reported it. */
-function extractUsage(result: unknown): number | null {
-  if (typeof result !== 'object' || result === null) return null;
-  const usage = (result as { usage?: { totalTokens?: number } }).usage;
-  if (usage && typeof usage.totalTokens === 'number') {
-    return usage.totalTokens;
-  }
-  return null;
 }
 
 // --- Tool Definitions ---
@@ -216,10 +207,11 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       firstTokenEmitted = true;
     }
 
-    // Account for this turn against the session caps. Prefer SDK-reported
-    // usage; fall back to a char-based estimate of input + output text.
-    const reportedTokens = extractUsage(result);
-    const tokensThisTurn = reportedTokens ?? estimateTokens((parsed.message ?? '') + text);
+    // Conversational tokens (spec 003 P-09): the reply's reported outputTokens
+    // plus the friend's message estimated. Missing usage throws rather than
+    // reading zero (research N1).
+    const usage = readModelUsage(result);
+    const tokensThisTurn = usage.outputTokens + estimateMessageTokens(parsed.message ?? '');
     sessions.set(sessionId, {
       ...session,
       turnCount: session.turnCount + 1,

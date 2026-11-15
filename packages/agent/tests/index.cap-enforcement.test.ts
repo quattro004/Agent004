@@ -15,6 +15,7 @@ vi.mock('@strands-agents/sdk', () => {
     lastMessage: {
       content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
     },
+    metrics: { accumulatedUsage: { inputTokens: 3000, outputTokens: 7, totalTokens: 3007 } },
   });
   const Agent = vi.fn(function () {
     return { invoke: invokeMock };
@@ -40,6 +41,9 @@ vi.mock('../src/personality/systemPrompt.js', () => ({
 }));
 
 const { __test } = await import('../src/index.js');
+const { __invokeMock: invokeMock } = (await import('@strands-agents/sdk')) as unknown as {
+  __invokeMock: ReturnType<typeof vi.fn>;
+};
 
 function makeReq(body: unknown): IncomingMessage {
   const stream = new PassThrough();
@@ -100,6 +104,30 @@ describe('handleInvocations — per-session cap enforcement', () => {
     expect(session).toBeDefined();
     expect(session!.turnCount).toBe(1);
     expect(session!.tokenCount).toBeGreaterThan(0);
+  });
+
+  it('counts conversational tokens as the reply outputTokens plus the message at chars/4', async () => {
+    // P-09 (spec 003 data-model.md § Counted Session): outputTokens comes from
+    // result.metrics.accumulatedUsage; the friend's message is estimated.
+    const { res, end } = makeRes();
+    await __test.handleInvocations(makeReq({ message: 'hello there', sessionId: 'sess-u' }), res);
+    await end;
+
+    expect(__test.sessions.get('sess-u')!.tokenCount).toBe(7 + Math.ceil('hello there'.length / 4));
+  });
+
+  it('fails the turn loudly, without counting it, when the result carries no usage', async () => {
+    invokeMock.mockResolvedValueOnce({
+      lastMessage: { content: [{ type: 'textBlock', text: 'Hi' }] },
+    });
+
+    const { res, end, body } = makeRes();
+    await __test.handleInvocations(makeReq({ message: 'hello', sessionId: 'sess-m' }), res);
+    await end;
+
+    expect(body()).toContain('"type":"error"');
+    expect(body()).toContain('metrics.accumulatedUsage');
+    expect(__test.sessions.get('sess-m')!.turnCount).toBe(0);
   });
 
   it('accumulates token and turn counts across invocations on the same sessionId', async () => {
