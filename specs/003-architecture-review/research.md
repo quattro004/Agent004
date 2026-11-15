@@ -402,6 +402,37 @@ Prices read 2026-10-11 from `aws.amazon.com/bedrock/agentcore/pricing` (rendered
 - **With Polly Standard (§ Q1, 2026-11-13), both cases pass with no mitigation.** Polly falls to $1.59 (average) and $3.20 (full), so the month is about **$7.58** average and **$9.32** full against $16. The measure-then-re-project step above still stands, because every input is an estimate. A planning F of about $2.79 still gives about $13.21 and $17.21 for T117.
 - **Human reads.** T005a asked the builder to read and date every human-read price. The F lines here were instead read from AWS's Price List files (`AGENTS.md` § External facts go stale), and together they total under $3. The builder approved T005a as presented, substitution included, on 2026-11-13 (§ Builder decisions).
 
+### Deployment-readiness follow-up (2026-11-15)
+
+The builder approved the proposed safety profile: "I'll go with your
+recommendations and review the code later". Spec.md's Session 2026-11-15
+records the exact limits and semantics; this authorizes code work, not AWS
+deployment, billable probes or wiki publication.
+
+The $5 non-chat allowance is a **budget allocation including uncertainty**,
+not a newly verified infrastructure price or a guarantee on the AWS invoice.
+The earlier F estimate remains about $2.79. Re-project the cost model for the
+bounded multi-call workload, history/tool input, retention and telemetry before
+setting deployable thresholds. The P2 amendment is authorized but not applied
+in the foundation batch. Memory now requires true 30-day data retention even
+for active friends; source/service timestamp handling remains research work.
+
+**Foundation batch, local and undeployed:** control reads now request strong
+consistency, and session writes are conditional create/compare-and-swap
+operations. The SDK's `ConditionalCheckFailedException` propagates so a stale
+writer cannot masquerade as success. Runtime identity/admission wiring remains
+T059/T090/T091 and T166/T167, not accomplished by this helper change.
+
+Usage now comes from the current request's `invocationContext.usage`, not
+lifetime `metrics.accumulatedUsage`. An offline regression exercised an
+actual Strands 1.24.0 Agent twice with mocked `ConverseStream` transport:
+the second reading was **500 instead of 250 output tokens before the fix**;
+both readings are 250 after it. No AWS requests were sent. Eleven additional
+RED cases exposed stale/unconditional controls and the usage boundary. All
+twelve failed for the intended reason before the implementation.
+Cancelled/error settlement, reservations and missing-usage recovery remain
+T030/T166/T167; this success-path usage fix is not a finished spend meter.
+
 ## R-obs — observability (FR-022, P9)
 
 - **Spans**: `invocation`, `first_token` (fixes #45), `reply.complete`, `audio.first_chunk`, `memory.retrieve`, `memory.create_event`, `breaker.check` and `session.open`. Contract: [transport-sse.md](./contracts/transport-sse.md).

@@ -10,10 +10,16 @@ import {
   PutItemCommand,
   UpdateItemCommand,
   TransactWriteItemsCommand,
+  ConditionalCheckFailedException,
   TransactionCanceledException,
   type AttributeValue,
+  type PutItemCommandInput,
 } from '@aws-sdk/client-dynamodb';
-import { ControlTable, type ControlTableOptions } from '../../src/session/controlTable.js';
+import {
+  ControlTable,
+  type ControlTableOptions,
+  type CountedSessionWrite,
+} from '../../src/session/controlTable.js';
 
 const ddb = mockClient(DynamoDBClient);
 
@@ -34,6 +40,22 @@ const epoch = (iso: string) => Date.parse(iso) / 1000;
 
 beforeEach(() => {
   ddb.reset();
+});
+
+describe('control reads', () => {
+  it.each([
+    ['allowlist', (t: ControlTable) => t.getAllow('friend@example.com')],
+    ['friend identity', (t: ControlTable) => t.getFriend('sub-1')],
+    ['session', (t: ControlTable) => t.getSession('sub-1')],
+    ['monthly spend', (t: ControlTable) => t.getSpend(new Date('2026-11-15'))],
+    ['HALT', (t: ControlTable) => t.getHalt()],
+  ])('reads %s with strong consistency', async (_name, read) => {
+    ddb.on(GetItemCommand).resolves({});
+
+    await read(table());
+
+    expect(ddb.commandCalls(GetItemCommand)[0]!.args[0].input.ConsistentRead).toBe(true);
+  });
 });
 
 describe('ALLOW#<email>', () => {
@@ -144,6 +166,132 @@ describe('FRIEND#<sub>', () => {
 
 describe('SESSION#<sub>', () => {
   const openedAt = '2026-11-15T08:00:00.000Z';
+  const initialSession: CountedSessionWrite = {
+    sessionId: 'counted-1',
+    state: 'Active',
+    openedAt,
+    turns: 0,
+    conversationalTokens: 0,
+  };
+
+  // Model the absence/expected-snapshot conditions against one stored item.
+  // The command assertions below pin the actual DynamoDB expression as well.
+  function useSessionStore(): void {
+    let stored: PutItemCommandInput['Item'];
+    ddb.on(GetItemCommand).callsFake(() => ({
+      Item: stored === undefined ? undefined : structuredClone(stored),
+    }));
+    ddb.on(PutItemCommand).callsFake((input: PutItemCommandInput) => {
+      if (input.ConditionExpression !== undefined) {
+        const expected = input.ExpressionAttributeValues;
+        const matches =
+          input.ConditionExpression === 'attribute_not_exists(pk)'
+            ? stored === undefined
+            : stored !== undefined &&
+              stored.sessionId?.S === expected?.[':expectedSessionId']?.S &&
+              stored.state?.S === expected?.[':expectedState']?.S &&
+              stored.openedAt?.S === expected?.[':expectedOpenedAt']?.S &&
+              stored.turns?.N === expected?.[':expectedTurns']?.N &&
+              stored.conversationalTokens?.N === expected?.[':expectedTokens']?.N;
+        if (!matches) {
+          throw new ConditionalCheckFailedException({ message: 'Session changed', $metadata: {} });
+        }
+      }
+      stored = structuredClone(input.Item);
+      return {};
+    });
+  }
+
+  it('allows only one creator when two requests open a session for the same friend', async () => {
+    useSessionStore();
+    const t = table();
+
+    const results = await Promise.allSettled([
+      t.putSession('sub-1', initialSession),
+      t.putSession('sub-1', { ...initialSession, sessionId: 'counted-2' }),
+    ]);
+
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
+    expect((await t.getSession('sub-1'))?.sessionId).toBe('counted-1');
+    expect(ddb.commandCalls(PutItemCommand)[0]!.args[0].input.ConditionExpression).toBe(
+      'attribute_not_exists(pk)',
+    );
+  });
+
+  it('rejects a stale counter update so a fresh snapshot can preserve both increments', async () => {
+    useSessionStore();
+    const t = table();
+    await t.putSession('sub-1', initialSession);
+
+    const results = await Promise.allSettled([
+      t.putSession(
+        'sub-1',
+        { ...initialSession, turns: 1, conversationalTokens: 10 },
+        initialSession,
+      ),
+      t.putSession(
+        'sub-1',
+        { ...initialSession, turns: 1, conversationalTokens: 20 },
+        initialSession,
+      ),
+    ]);
+
+    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
+    const current = (await t.getSession('sub-1'))!;
+    await t.putSession(
+      'sub-1',
+      {
+        ...current,
+        turns: current.turns + 1,
+        conversationalTokens: current.conversationalTokens + 20,
+      },
+      current,
+    );
+    expect(await t.getSession('sub-1')).toMatchObject({ turns: 2, conversationalTokens: 30 });
+
+    const input = ddb.commandCalls(PutItemCommand)[1]!.args[0].input;
+    expect(input.ConditionExpression).toBe(
+      '#sessionId = :expectedSessionId AND #state = :expectedState AND ' +
+        '#openedAt = :expectedOpenedAt AND #turns = :expectedTurns AND ' +
+        '#conversationalTokens = :expectedTokens',
+    );
+    expect(input.ExpressionAttributeNames).toEqual({
+      '#sessionId': 'sessionId',
+      '#state': 'state',
+      '#openedAt': 'openedAt',
+      '#turns': 'turns',
+      '#conversationalTokens': 'conversationalTokens',
+    });
+  });
+
+  it('does not let a stale completion resurrect a signed-off session', async () => {
+    useSessionStore();
+    const t = table();
+    await t.putSession('sub-1', initialSession);
+    await t.putSession('sub-1', { ...initialSession, state: 'SignedOff' }, initialSession);
+
+    await expect(
+      t.putSession(
+        'sub-1',
+        { ...initialSession, turns: 1, conversationalTokens: 10 },
+        initialSession,
+      ),
+    ).rejects.toBeInstanceOf(ConditionalCheckFailedException);
+    expect((await t.getSession('sub-1'))?.state).toBe('SignedOff');
+  });
+
+  it('replaces an ended session conditionally without letting its stale writers overwrite the new one', async () => {
+    useSessionStore();
+    const t = table();
+    const ended: CountedSessionWrite = { ...initialSession, state: 'Expired' };
+    await t.putSession('sub-1', ended);
+    await t.putSession('sub-1', { ...initialSession, sessionId: 'counted-2' }, ended);
+
+    await expect(t.putSession('sub-1', initialSession, ended)).rejects.toBeInstanceOf(
+      ConditionalCheckFailedException,
+    );
+    expect((await t.getSession('sub-1'))?.sessionId).toBe('counted-2');
+  });
 
   it('writes sessionId, state, openedAt, turns, conversationalTokens and ttl', async () => {
     ddb.on(PutItemCommand).resolves({});

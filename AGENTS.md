@@ -121,6 +121,14 @@ them.
 - Use TDD for production code: **RED → GREEN → REFACTOR**. Its subject is **behavior** — a change with no behavioral delta (removing an unimported dependency, a rename, formatting, docs) cannot have a RED test, so name that out loud and state the check replacing it rather than manufacturing one. See the `tdd` skill.
 - Add or update tests for any non-trivial behavior change.
 - Reuse existing patterns/helpers before introducing new abstractions.
+- Agent spend safety: provider `maxTokens` bounds one model call, not a tool
+  loop. SDK invocation limits are checked between turns and can overshoot;
+  do not claim a strict ceiling from those limits alone. Reused Agents report lifetime `accumulatedUsage`,
+  so prove per-invocation accounting before enabling reuse (see wiki
+  `Source-Agent-Infra-Deployment-Review`).
+- `ControlTable.putSession` creates only absent items. Updates/replacements must
+  pass the previously read snapshot; a condition conflict is not success and
+  must not replay model work that has already spent money.
 - Do not hide failures with broad catches or silent fallbacks; surface errors clearly.
 - Keep dependency hygiene strict: review new dependencies and keep `pnpm-lock.yaml` committed.
 

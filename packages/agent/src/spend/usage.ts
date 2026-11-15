@@ -1,9 +1,8 @@
 /**
  * Per-turn usage and its spend estimate (spec 003 data-model.md § Turn Usage).
  *
- * Strands 1.24.0 reports model usage on `AgentResult.metrics?.accumulatedUsage`
- * (`types/agent.d.ts:422`, `telemetry/meter.d.ts:149`, `Usage` at
- * `models/streaming.d.ts:379-401`). There is no `result.usage` (research.md N1).
+ * Request usage comes from `AgentResult.invocationContext.usage`. The Agent's
+ * `metrics.accumulatedUsage` includes earlier invocations when it is reused.
  */
 
 /** The model reported no usable usage; reading zero would blind the caps and breaker. */
@@ -50,10 +49,10 @@ export interface TurnUsage extends ModelUsage {
 const PER_MILLION = 1_000_000;
 
 export function readModelUsage(result: unknown): ModelUsage {
-  const usage = (result as { metrics?: { accumulatedUsage?: unknown } } | null | undefined)?.metrics
-    ?.accumulatedUsage;
+  const usage = (result as { invocationContext?: { usage?: unknown } } | null | undefined)
+    ?.invocationContext?.usage;
   if (typeof usage !== 'object' || usage === null) {
-    throw new MissingUsageError('Agent result has no metrics.accumulatedUsage');
+    throw new MissingUsageError('Agent result has no invocationContext.usage');
   }
   const raw = usage as Record<string, unknown>;
   const read: ModelUsage = {
@@ -106,7 +105,7 @@ export function computeTurnUsage(counts: TurnCounts, rates: UsageRates): TurnUsa
 function count(raw: Record<string, unknown>, name: string): number {
   const value = raw[name];
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    throw new MissingUsageError(`accumulatedUsage.${name} is not a count: ${String(value)}`);
+    throw new MissingUsageError(`invocationContext.usage.${name} is not a count: ${String(value)}`);
   }
   return value;
 }

@@ -18,7 +18,7 @@ vi.mock('@strands-agents/sdk', () => {
     lastMessage: {
       content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
     },
-    metrics: { accumulatedUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+    invocationContext: { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
   });
   const Agent = vi.fn(function () {
     return { invoke: invokeMock };

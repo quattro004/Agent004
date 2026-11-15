@@ -4,6 +4,15 @@ Decision: research Q6. Signals: [data-model.md](../data-model.md) § Spend Signa
 
 There are four layers, from cheapest and earliest to last resort:
 
+**Approved follow-up (2026-11-15):** spec.md's Session 2026-11-15 supersedes
+the read-before/add-after admission design with conservative, atomic
+pre-spend reservations, exactly-once settlement and retained uncertain
+capacity. The new monthly non-chat allowance is $5, with application
+soft-degrade/refusal at $11/$15. P2's required amendment and the reconciled
+cost model are still pending (T165); the earlier tables and pseudocode below
+must be reconciled before implementation of T167 or deployment. No change to
+the existing $10/$16 gross emails or delayed $20 hard stop is authorized here.
+
 | Layer | Reads | Fires at | Acts within | Effect |
 | --- | --- | --- | --- | --- |
 | Alerts | Budgets (gross) | P2: $10 and $16 | Budgets refresh (up to 3 times a day, D7) | Email only |

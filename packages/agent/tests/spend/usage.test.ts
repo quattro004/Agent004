@@ -1,10 +1,8 @@
-/**
- * T018 (spec 003, data-model.md § Turn Usage; research.md N1): usage is read
- * from `result.metrics.accumulatedUsage` (Strands 1.24.0 `AgentResult.metrics`,
- * `types/agent.d.ts:422`; `AgentMetrics.accumulatedUsage`,
- * `telemetry/meter.d.ts:149`; `Usage`, `models/streaming.d.ts:379-401`).
- */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
+import { Agent } from '@strands-agents/sdk';
+import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
+import { BedrockRuntimeClient, ConverseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
+import { mockClient } from 'aws-sdk-client-mock';
 import {
   readModelUsage,
   computeTurnUsage,
@@ -23,10 +21,35 @@ const RATES: UsageRates = {
 };
 
 describe('readModelUsage', () => {
-  it('reads every count from result.metrics.accumulatedUsage', () => {
+  it('reads request usage instead of lifetime metrics', () => {
     const result = {
+      invocationContext: {
+        usage: { inputTokens: 3000, outputTokens: 120, totalTokens: 3120 },
+      },
       metrics: {
-        accumulatedUsage: {
+        accumulatedUsage: { inputTokens: 9000, outputTokens: 500, totalTokens: 9500 },
+      },
+    };
+
+    expect(readModelUsage(result)).toEqual({
+      inputTokens: 3000,
+      outputTokens: 120,
+      totalTokens: 3120,
+    });
+  });
+
+  it('refuses lifetime metrics when request usage is missing', () => {
+    expect(() =>
+      readModelUsage({
+        metrics: { accumulatedUsage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 } },
+      }),
+    ).toThrow(MissingUsageError);
+  });
+
+  it('reads every count from result.invocationContext.usage', () => {
+    const result = {
+      invocationContext: {
+        usage: {
           inputTokens: 3000,
           outputTokens: 120,
           totalTokens: 3120,
@@ -45,21 +68,55 @@ describe('readModelUsage', () => {
     });
   });
 
+  describe('usage across actual SDK Agent reuse', () => {
+    const bedrock = mockClient(BedrockRuntimeClient);
+    afterAll(() => bedrock.restore());
+
+    it('counts two reused-Agent replies once each without calling AWS', async () => {
+      bedrock.on(ConverseStreamCommand).callsFake(() => ({
+        stream: (async function* () {
+          yield { messageStart: { role: 'assistant' as const } };
+          yield { contentBlockDelta: { contentBlockIndex: 0, delta: { text: 'done' } } };
+          yield { contentBlockStop: { contentBlockIndex: 0 } };
+          yield { messageStop: { stopReason: 'end_turn' as const } };
+          yield {
+            metadata: {
+              usage: { inputTokens: 10, outputTokens: 250, totalTokens: 260 },
+              metrics: { latencyMs: 1 },
+            },
+          };
+        })(),
+      }));
+      const agent = new Agent({
+        model: new BedrockModel({ modelId: 'test-model', region: 'us-west-2' }),
+        printer: false,
+      });
+
+      const first = readModelUsage(await agent.invoke('first'));
+      const second = readModelUsage(await agent.invoke('second'));
+
+      expect(first.outputTokens).toBe(250);
+      expect(second.outputTokens).toBe(250);
+      expect(first.outputTokens + second.outputTokens).toBe(500);
+      expect(bedrock.commandCalls(ConverseStreamCommand)).toHaveLength(2);
+    });
+  });
+
   it('leaves the optional cache counts undefined when the model reports none', () => {
     const usage = readModelUsage({
-      metrics: { accumulatedUsage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 } },
+      invocationContext: { usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 } },
     });
 
     expect(usage).toEqual({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
   });
 
   it.each([
-    ['no metrics object', {}],
-    ['metrics without accumulatedUsage', { metrics: {} }],
+    ['no invocation context', {}],
+    ['context without usage', { invocationContext: {} }],
     ['the pre-N1 result.usage shape', { usage: { totalTokens: 10 } }],
     [
       'a non-numeric count',
-      { metrics: { accumulatedUsage: { inputTokens: 1, outputTokens: 'x', totalTokens: 1 } } },
+      { invocationContext: { usage: { inputTokens: 1, outputTokens: 'x', totalTokens: 1 } } },
     ],
   ])('fails loud on %s rather than reading zero', (_label, result) => {
     expect(() => readModelUsage(result)).toThrow(MissingUsageError);

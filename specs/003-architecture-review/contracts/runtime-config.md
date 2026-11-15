@@ -4,6 +4,14 @@ Every value a deployment needs is listed here with its source. A value marked **
 
 ## Rules
 
+**Approved safety follow-up (2026-11-15):** spec.md's Session 2026-11-15
+records the turn/input/concurrency bounds, 15-minute session cleanup grace
+and $5 monthly non-chat allowance. New consumers/CDK variables are implemented
+under T163-T167, not silently defaulted in this foundation batch. The $11/$15
+application thresholds require the authorized but still unapplied P2 amendment
+and a reconciled cost model. Existing F-only threshold rows below describe the
+earlier target; they are not current approval for a deployment.
+
 - **CDK is the only writer.** Each value is set in a stack and asserted in that stack's test (A1, CDK-only).
 - **Fail loud.** Every consumer reads its configuration once at startup. A missing or unparseable value throws at initialization, so the runtime fails its readiness check and the Lambda errors. Neither silently no-ops (the #61 lesson; AGENTS.md "Do not hide failures").
 - **No secrets in environment variables.** `CfnRuntime.environmentVariables` and Lambda `environment` values are plaintext in the synthesized template. Secrets stay in SSM SecureString and are read at startup by name.

@@ -15,7 +15,7 @@ vi.mock('@strands-agents/sdk', () => {
     lastMessage: {
       content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
     },
-    metrics: { accumulatedUsage: { inputTokens: 3000, outputTokens: 7, totalTokens: 3007 } },
+    invocationContext: { usage: { inputTokens: 3000, outputTokens: 7, totalTokens: 3007 } },
   });
   const Agent = vi.fn(function () {
     return { invoke: invokeMock };
@@ -108,7 +108,7 @@ describe('handleInvocations — per-session cap enforcement', () => {
 
   it('counts conversational tokens as the reply outputTokens plus the message at chars/4', async () => {
     // P-09 (spec 003 data-model.md § Counted Session): outputTokens comes from
-    // result.metrics.accumulatedUsage; the friend's message is estimated.
+    // result.invocationContext.usage; the friend's message is estimated.
     const { res, end } = makeRes();
     await __test.handleInvocations(makeReq({ message: 'hello there', sessionId: 'sess-u' }), res);
     await end;
@@ -126,7 +126,7 @@ describe('handleInvocations — per-session cap enforcement', () => {
     await end;
 
     expect(body()).toContain('"type":"error"');
-    expect(body()).toContain('metrics.accumulatedUsage');
+    expect(body()).toContain('invocationContext.usage');
     expect(__test.sessions.get('sess-m')!.turnCount).toBe(0);
   });
 

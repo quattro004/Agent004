@@ -15,7 +15,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 - **Voice (Q1).** Polly Standard, voice Matthew (amendment A6, 2026-11-13), runs server-side in the runtime, and its audio streams alongside the reply text. The browser holds no AWS credentials, so the Identity Pool is removed. Speech marks are dropped.
 - **Spend (Q6, Q7).** Three layers protect the budget:
   - Budgets measures gross spend, with credits excluded.
-  - An in-path circuit breaker tallies real model usage from `result.metrics.accumulatedUsage`. The current `extractUsage` reads a field that does not exist.
+  - An in-path circuit breaker tallies real per-request model usage from `result.invocationContext.usage`. `readModelUsage` now uses this request boundary; enforcement wiring remains unfinished. Lifetime Agent metrics are not per-turn charges.
   - A redesigned hard stop fails loudly if its target is missing, and a person recovers it manually.
 
   Soft-degrade turns voice off at $16 − F, leaving text only.

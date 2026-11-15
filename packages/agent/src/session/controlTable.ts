@@ -117,9 +117,37 @@ export class ControlTable {
     );
   }
 
-  async putSession(sub: string, session: CountedSessionWrite): Promise<void> {
+  /** Create only if absent, or replace only the exact session snapshot the caller read. */
+  async putSession(
+    sub: string,
+    session: CountedSessionWrite,
+    expected?: CountedSessionWrite,
+  ): Promise<void> {
     const { sessionMaxMinutes, sessionTtlGraceMinutes } = this.options;
     const ttl = epochSeconds(session.openedAt) + (sessionMaxMinutes + sessionTtlGraceMinutes) * 60;
+    const condition =
+      expected === undefined
+        ? { ConditionExpression: 'attribute_not_exists(pk)' }
+        : {
+            ConditionExpression:
+              '#sessionId = :expectedSessionId AND #state = :expectedState AND ' +
+              '#openedAt = :expectedOpenedAt AND #turns = :expectedTurns AND ' +
+              '#conversationalTokens = :expectedTokens',
+            ExpressionAttributeNames: {
+              '#sessionId': 'sessionId',
+              '#state': 'state',
+              '#openedAt': 'openedAt',
+              '#turns': 'turns',
+              '#conversationalTokens': 'conversationalTokens',
+            },
+            ExpressionAttributeValues: {
+              ':expectedSessionId': { S: expected.sessionId },
+              ':expectedState': { S: expected.state },
+              ':expectedOpenedAt': { S: expected.openedAt },
+              ':expectedTurns': { N: String(expected.turns) },
+              ':expectedTokens': { N: String(expected.conversationalTokens) },
+            },
+          };
     await this.options.client.send(
       new PutItemCommand({
         TableName: this.options.tableName,
@@ -132,6 +160,7 @@ export class ControlTable {
           conversationalTokens: { N: String(session.conversationalTokens) },
           ttl: { N: String(ttl) },
         },
+        ...condition,
       }),
     );
   }
@@ -243,7 +272,11 @@ export class ControlTable {
 
   private async get(pk: string): Promise<Item | undefined> {
     const { Item } = await this.options.client.send(
-      new GetItemCommand({ TableName: this.options.tableName, Key: { pk: { S: pk } } }),
+      new GetItemCommand({
+        TableName: this.options.tableName,
+        Key: { pk: { S: pk } },
+        ConsistentRead: true,
+      }),
     );
     return Item;
   }

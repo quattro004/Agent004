@@ -28,9 +28,10 @@ Validation rules:
 
 - **`email`** is lowercased and trimmed before any write or lookup. Only an email whose provider marks it verified is ever matched (FR-043).
 - **`sub`** comes only from the token the runtime authorizer validated, or from the Cognito trigger event. It never comes from a request body (FR-010, #55).
+- **Control reads** are strongly consistent. `putSession` creates only an absent item; an update or replacement supplies the previously read session snapshot and conditionally matches its ID, state, opening time and counters. A conflicting write throws; callers must not silently overwrite it or replay already-spent work.
 - **`microUsd`** is an integer, so repeated `ADD`s never drift.
 - **`RATE#…` windows** are fixed UTC hour and day windows with spec 001's limits: 60 messages an hour and 500 a day (`contracts/websocket-api.md:207-208`). `ttl` is the window end plus one window, so DynamoDB removes stale counters. A refused message is not counted.
-- **`SESSION#<sub>.ttl`** is `openedAt` plus spec 001's 30-minute cap plus a grace window, for cleanup only. Expiry is evaluated in code, not by TTL, because TTL deletion is not immediate.
+- **`SESSION#<sub>.ttl`** is `openedAt` plus spec 001's 30-minute cap plus the approved 15-minute grace (spec.md Session 2026-11-15), for cleanup only. Expiry is evaluated in code, not by TTL, because TTL deletion is not immediate.
 
 ### Invited Friend
 
@@ -74,7 +75,7 @@ stateDiagram-v2
     Expired --> Active: next message opens a new session
 ```
 
-- **`conversationalTokens`** is the reply's `outputTokens`, measured from `result.metrics.accumulatedUsage`, plus the friend's message estimated at characters / 4 (P-09). A message is at most 2,000 characters (P-08).
+- **`conversationalTokens`** is this invocation's `outputTokens`, measured from `result.invocationContext.usage`, plus the friend's message estimated at characters / 4 (P-09). Lifetime `metrics.accumulatedUsage` must not be added as per-turn usage when an Agent is reused. A message is at most 2,000 characters (P-08).
 - **A dropout** (runtime restart, redeploy or reclaim) does not change state. The friend's next message continues the same counted session under a new runtime session ID (strict continuity, P-05). In-session history is lost; long-term memories remain.
 - **`HALT`** refuses every request in every state without changing state.
 
@@ -95,7 +96,7 @@ Computed per turn. It never comes from the client.
 
 | Field | Source |
 | --- | --- |
-| `inputTokens`, `outputTokens`, `totalTokens` and the optional cache-read and cache-write counts | `result.metrics.accumulatedUsage` (`telemetry/meter.d.ts:141,149`; `Usage` at `models/streaming.d.ts:379-401`) |
+| `inputTokens`, `outputTokens`, `totalTokens` and the optional cache-read and cache-write counts | `result.invocationContext.usage` (Strands 1.24.0 `types/agent.d.ts:424-432`, `agent/invocation-context.d.ts:19-26`); a copied snapshot of the current request, never lifetime metrics |
 | `pollyCharacters` | Characters sent to `SynthesizeSpeech`. Zero when voice is off. |
 | `memoryEvents`, `memoryRetrievals` | Calls made this turn |
 | `estimatedMicroUsd` | The sum of each count times its configured rate ([contracts/runtime-config.md](./contracts/runtime-config.md)), added to `SPEND#<yyyy-mm>` |
@@ -119,7 +120,7 @@ The spec's Spend Signal, made concrete in [contracts/spend-control.md](./contrac
 | Actor | `actorId` is the verified `sub` (FR-012) |
 | Namespace | Prefix `/max-height/{actorId}/` (`memory/memoryAdapter.ts:57-59`), with per-strategy sub-paths `facts/`, `preferences/` and `summaries/{sessionId}/` ([contracts/memory-api.md](./contracts/memory-api.md)) |
 | Short-term event | `actorId` and `sessionId` (the counted session); a conversational payload of the friend's message and Max's reply; `eventExpiryDuration` of 7 days (the service minimum) |
-| Long-term record | `memoryRecordId`, `namespace`, content text, `createdAt`, strategy. There is no service expiry, so the pruner removes it 30 days after `FRIEND#<sub>.lastSeenAt` and then sets `memoryPrunedAt` |
+| Long-term record | `memoryRecordId`, `namespace`, content text, strategy and available service/source timestamps. There is no service expiry. The approved target is true 30-day data retention even for active friends, not `lastSeenAt`-only inactivity pruning; timestamp/consolidation semantics must be verified under T172 before implementation |
 | Ownership rule | Every list, export, delete or wipe resolves the namespace from the verified `sub`. A record whose namespace is outside that prefix is never touched (FR-013; fixes N3) |
 
 ## Review entities (documentation records)

@@ -216,9 +216,8 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       firstTokenEmitted = true;
     }
 
-    // Conversational tokens (spec 003 P-09): the reply's reported outputTokens
-    // plus the friend's message estimated. Missing usage throws rather than
-    // reading zero (research N1).
+    // Conversational tokens: this invocation's outputTokens plus the estimated
+    // message, not the reused Agent's lifetime usage.
     const usage = readModelUsage(result);
     const tokensThisTurn = usage.outputTokens + estimateMessageTokens(parsed.message ?? '');
     sessions.set(sessionId, {
