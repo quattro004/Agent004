@@ -8,9 +8,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { makeReq } from './fixtures/http.js';
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -68,12 +68,6 @@ interface ToolRegistration {
   callback: (input: unknown, context?: { cancelSignal: AbortSignal }) => Promise<unknown>;
 }
 const toolRegistrations = toolMock.mock.calls.map((call) => call[0] as ToolRegistration);
-
-function makeReq(body: unknown): IncomingMessage {
-  const stream = new PassThrough();
-  stream.end(JSON.stringify(body));
-  return stream as unknown as IncomingMessage;
-}
 
 /**
  * A response double that is an EventEmitter, because the disconnect signal we

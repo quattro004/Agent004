@@ -9,10 +9,10 @@
  * those conditions; a cryptographic one does not.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { makeReq } from './fixtures/http.js';
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -46,12 +46,6 @@ vi.mock('../src/personality/systemPrompt.js', () => ({
 }));
 
 const { __test } = await import('../src/index.js');
-
-function makeReq(body: unknown): IncomingMessage {
-  const stream = new PassThrough();
-  stream.end(JSON.stringify(body));
-  return stream as unknown as IncomingMessage;
-}
 
 function makeRes(): { res: ServerResponse; body: () => string; end: Promise<void> } {
   const chunks: string[] = [];

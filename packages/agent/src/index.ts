@@ -11,6 +11,7 @@ import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
 import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
 import { startSpan, endSpan } from './handlers/observability.js';
 import { readModelUsage } from './spend/usage.js';
+import { readVerifiedClaims, InvalidTokenError } from './identity/jwtClaims.js';
 import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js';
 import {
   readBoundedBody,
@@ -148,6 +149,21 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
   const config = getRuntimeConfig();
   const { limits } = config;
 
+  // Identity first: it is free to check, and an unauthenticated caller should
+  // not get us to buffer a body at all. The inbound JWT authorizer has already
+  // validated the signature, so a request arriving without a usable subject is
+  // a misconfiguration, not a friend to be served anonymously (#55, FR-010).
+  let sub: string;
+  try {
+    sub = readVerifiedClaims(req.headers).sub;
+  } catch (err) {
+    if (!(err instanceof InvalidTokenError)) throw err;
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'unauthenticated' }));
+    endSpan('session.cold_start', { refused: 'unauthenticated' });
+    return;
+  }
+
   // The size gate runs while reading, before anything is parsed, so an
   // oversized payload cannot make us buffer or deserialize it.
   let body: string;
@@ -163,11 +179,12 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     throw err;
   }
 
+  // `actorId` is deliberately absent: identity comes from the token, and a
+  // field we never read should not look like one we might.
   let parsed: {
     message?: string;
     displayAlias?: string;
     sessionId?: string;
-    actorId?: string;
     greetingId?: string;
   };
   try {
@@ -187,16 +204,22 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     return;
   }
 
-  // Get-or-create the per-session record. We key off sessionId from the
-  // request; if missing, we mint one and surface it back to the client so
-  // subsequent turns share the same token/turn budget. The identifier gates
-  // that budget, so it comes from a cryptographic source — a Math.random()
-  // id is guessable, which would let a caller ride someone else's session.
+  // Get-or-create the per-session record. The identifier is the client's, but
+  // the budget behind it belongs to a subject: binding the session to the
+  // token's `sub` is what stops one caller presenting another's identifier and
+  // spending their turn and token allowance. A minted identifier comes from a
+  // cryptographic source, because a Math.random() one is guessable.
   const sessionId = parsed.sessionId ?? `s-${randomUUID()}`;
   let session = sessions.get(sessionId);
+  if (session && session.actorId !== sub) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'session_mismatch', sessionId }));
+    endSpan('session.cold_start', { refused: 'session_mismatch' });
+    return;
+  }
   if (!session) {
     session = createSession({
-      actorId: parsed.actorId ?? 'anonymous',
+      actorId: sub,
       greetingId: parsed.greetingId ?? 'default',
     });
     session = { ...session, sessionId };

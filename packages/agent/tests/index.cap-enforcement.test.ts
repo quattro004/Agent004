@@ -6,10 +6,10 @@
  * exercise the per-session token-cap gate (constitution P2 / FR-010).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { makeReq, TEST_SUB } from './fixtures/http.js';
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -46,12 +46,6 @@ const { __test } = await import('../src/index.js');
 const { __invokeMock: invokeMock } = (await import('@strands-agents/sdk')) as unknown as {
   __invokeMock: ReturnType<typeof vi.fn>;
 };
-
-function makeReq(body: unknown): IncomingMessage {
-  const stream = new PassThrough();
-  stream.end(JSON.stringify(body));
-  return stream as unknown as IncomingMessage;
-}
 
 function makeRes(): {
   res: ServerResponse;
@@ -150,7 +144,7 @@ describe('handleInvocations — per-session cap enforcement', () => {
     // Pre-seed a session that has already exhausted its 20k-token budget.
     __test.sessions.set('sess-3', {
       sessionId: 'sess-3',
-      actorId: 'guest',
+      actorId: TEST_SUB,
       greetingId: 'g',
       state: 'ACTIVE',
       turnCount: 5,
@@ -186,7 +180,7 @@ describe('handleInvocations — per-session cap enforcement', () => {
   it('rejects when the turn cap is exceeded', async () => {
     __test.sessions.set('sess-4', {
       sessionId: 'sess-4',
-      actorId: 'guest',
+      actorId: TEST_SUB,
       greetingId: 'g',
       state: 'ACTIVE',
       turnCount: 60,

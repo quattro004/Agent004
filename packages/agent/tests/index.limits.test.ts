@@ -8,10 +8,10 @@
  * presented to the friend as a complete reply.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { makeReq } from './fixtures/http.js';
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -46,12 +46,6 @@ const { __test } = await import('../src/index.js');
 const { __invokeMock: invokeMock } = (await import('@strands-agents/sdk')) as unknown as {
   __invokeMock: ReturnType<typeof vi.fn>;
 };
-
-function makeReq(body: unknown): IncomingMessage {
-  const stream = new PassThrough();
-  stream.end(typeof body === 'string' ? body : JSON.stringify(body));
-  return stream as unknown as IncomingMessage;
-}
 
 function makeRes(): {
   res: ServerResponse;
