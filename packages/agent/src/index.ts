@@ -16,7 +16,7 @@ import { checkBreaker, recordTurnSpend, BreakerReadError } from './spend/breaker
 import { ControlTable } from './session/controlTable.js';
 import { readVerifiedClaims, InvalidTokenError } from './identity/jwtClaims.js';
 import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js';
-import { SseStream, type SessionLifecycleState } from './transport/sse.js';
+import { SseStream, type SessionLifecycleState, type SseErrorCode } from './transport/sse.js';
 import { AgentRegistry } from './session/agentRegistry.js';
 import { synthesizeToAudioEvents, PollySynthesisError } from './voice/pollyStream.js';
 import {
@@ -97,6 +97,8 @@ export interface InvocationControlTable {
   getHalt: ControlTable['getHalt'];
   getSpend: ControlTable['getSpend'];
   addSpend: ControlTable['addSpend'];
+  getFriend: ControlTable['getFriend'];
+  getAllow: ControlTable['getAllow'];
 }
 
 let control: InvocationControlTable | undefined;
@@ -122,6 +124,32 @@ function controlTable(config: RuntimeConfig): InvocationControlTable {
 /** The friend's message is estimated at characters / 4 (spec 003 P-09). */
 function estimateMessageTokens(text: string): number {
   return Math.ceil(text.length / 4);
+}
+
+/**
+ * Whether a counted session may open for this subject (FR-042;
+ * contracts/auth-and-allowlist.md § Runtime check).
+ *
+ * `FRIEND#<sub>` is read first because the bearer is a Cognito *access* token
+ * and carries no email claim (deviation C16), so the friend record is the only
+ * way to learn which allow item to look for. Either one missing is the same
+ * answer, and so is a read that fails: an allowlist we cannot read is one we
+ * must assume excludes the caller.
+ */
+async function admitToNewSession(
+  table: InvocationControlTable,
+  sub: string,
+): Promise<SseErrorCode | undefined> {
+  try {
+    const friend = await table.getFriend(sub);
+    if (!friend) return 'not_allowlisted';
+    const allow = await table.getAllow(friend.email);
+    if (!allow) return 'not_allowlisted';
+    return undefined;
+  } catch (err) {
+    console.error('Could not read the allowlist:', err);
+    return 'internal';
+  }
 }
 
 /**
@@ -332,7 +360,21 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       existing ?? createSession({ actorId: sub, greetingId: parsed.greetingId ?? 'default' });
     let session = session0;
     const opened = existing === undefined;
-    if (opened) sessions.set(sub, session);
+
+    if (opened) {
+      // FR-042: the second gate. Cognito's triggers refuse a stranger at
+      // sign-in and at every refresh, but an access token stays valid for an
+      // hour after the builder removes someone, so a *new* conversation is
+      // checked against the list here. A conversation already underway is not
+      // re-checked; spec 001's 30-minute cap ends it
+      // (contracts/auth-and-allowlist.md § Revocation timeline).
+      const refusal = await admitToNewSession(table, sub);
+      if (refusal) {
+        outcome = sse.fail(refusal);
+        return;
+      }
+      sessions.set(sub, session);
+    }
     countedSessionId = session.sessionId;
 
     // Constitution P2 / FR-010: enforce the per-session hard caps before

@@ -50,7 +50,9 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 | C29 | T065 deletes `cognitoAuth.ts` and its `@aws-sdk/client-cognito-identity` dependency, and is listed under US2's infra work, but nothing in the browser imported it once T062's `auth.ts` landed. | Done in the same commit as T081, which performs the identical move for `@aws-sdk/client-polly`. Neither deletion has a behavioral delta; the check is that the suite, `typecheck` and `typecheck:scripts` stay green, and that the browser bundle ships neither SDK. |
 | C30 | spend-control.md § Operations alarms leaves the AgentCore Runtime server-error metric as "exact name checked at task time". AWS documents the metric only by its console display name, "System Errors", in the `AWS/Bedrock-AgentCore` namespace, and documents dimensions for the resource-usage metrics only ([observability-runtime-metrics](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-runtime-metrics.html), read 2026-11-17). | The alarm uses `SystemErrors` in `AWS/Bedrock-AgentCore` with **no dimensions**, which is the account-wide aggregate. The account runs one runtime, so the aggregate is the runtime. Guessing an undocumented dimension name would produce an alarm that silently never fires. The name and the data must be confirmed against a live account during deployment validation, and the alarm treated as unproven until then. |
 | C31 | spend-control.md names a `BreakerWriteFailures` runtime custom metric but no namespace, and the agent has no metrics client. | The breaker emits CloudWatch **embedded metric format** on stdout under namespace `MaxHeight`, which AgentCore's log pipeline turns into a metric without any new dependency. `ops-stack.ts` exports `RUNTIME_METRIC_NAMESPACE` and alarms on the same pair, and `breaker.test.ts` pins the emitted envelope. |
-| C32 | T076 says to add the ops stack to the app "after Data and Agent". It cannot be wired yet: it needs the runtime execution role from `AgentStack`, which is still deferred pending T058, and the pruner function from `DataStack`, which arrives with T093. | `ops-stack.ts` and its tests are complete and take both as props. The wiring is the last line of T058's and T093's work, and the stack is unreachable until then — which is safe, because nothing can spend before anyone can sign in (spend-control.md § Stack split says the same). |
+| C32 | T076 says to add the ops stack to the app "after Data and Agent". It cannot be wired yet: it needs the runtime execution role from `AgentStack` and the pruner function from `DataStack`, which arrives with T093. | `ops-stack.ts` and its tests are complete and take both as props. `AgentStack` is now wired (T058), so only the T093 pruner is outstanding, and the stack is unreachable until then — which is safe, because nothing can spend before anyone can sign in (spend-control.md § Stack split says the same). |
+| C33 | `auth-and-allowlist.md` § Cognito resources and quickstart rows 8–9 treat the Cognito domain prefix and the Google OAuth client ID as constants committed to `cognito-stack.ts` once the builder chooses and registers them. Neither value exists, and the builder was unavailable for the whole of this session. | Both arrive as CDK context (`-c cognitoDomainPrefix=… -c googleClientId=…`), matching the existing `budgetAlertEmail` pattern. A missing one throws from the `CognitoStack` constructor, naming the context key and the quickstart row. Committing invented values was rejected: a domain prefix is globally visible on the sign-in page and a wrong client ID fails at the Google consent screen, both after a deploy. When the builder supplies real values they become constants in one line. `test/deploy-context.ts` holds the fixture every whole-app test now needs. |
+| C34 | T049/T059 say a counted session opens only when `ALLOW#<email>` exists. An AgentCore bearer is a Cognito *access* token and carries no `email` claim (deviation C16), so the runtime has no email to look the allow item up by. | The check reads `FRIEND#<sub>` first — written by the pre-token-generation trigger at every sign-in and refresh — and uses its `email` for the `ALLOW#<email>` read. Either item missing is `not_allowlisted`; a read that throws is `internal`, because an allowlist we cannot read is one we must assume excludes the caller. |
 
 ## Path Conventions
 
@@ -176,16 +178,16 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 ### Tests for User Story 2 ⚠️ write first, confirm they FAIL
 
-- [ ] T045 [P] [US2] RED: rewrite `packages/infra/test/cognito-stack.test.ts`. It covers these:
+- [x] T045 [P] [US2] RED: rewrite `packages/infra/test/cognito-stack.test.ts`. It covers these:
   - a user pool on the Lite feature plan, whose only IdP is Google with scopes `openid email`
   - a Cognito prefix domain using the committed prefix constant (quickstart prerequisite 8)
   - a public app client with no secret, using the authorization-code grant with PKCE, and `https://max.recipieces.com` callback and sign-out URLs, none of them `localhost`
   - pre sign-up and pre token generation triggers with read access to the control table
   - no `AWS::Cognito::IdentityPool`, and no unauth role
-- [ ] T046 [P] [US2] RED: create `packages/infra/test/pre-sign-up.test.ts`. It denies an email with no `ALLOW#<email>` item, and an unverified email. It allows a listed, verified Google email (lowercased and trimmed). It fails closed when DynamoDB errors
-- [ ] T047 [P] [US2] RED: create `packages/infra/test/pre-token-generation.test.ts`. It denies when `CONTROL#HALT` exists or `ALLOW#<email>` is missing, and writes `FRIEND#<sub>` (`email`, `provider`, `createdAt`) on success. It fails closed when DynamoDB errors
-- [ ] T048 [P] [US2] RED: create `packages/infra/test/idp-secret.test.ts`. The custom resource reads `/max-height/google-client-secret` (SecureString) and applies it to the Google IdP. A missing parameter fails the deploy with a message naming it, and the secret never appears in the template or in logs
-- [ ] T049 [P] [US2] RED: in `packages/agent/tests/index.test.ts`, a counted session opens only when `ALLOW#<email>` exists. Otherwise the reply is `not_allowlisted`, and an already-open session continues until it ends (the revocation timeline in auth-and-allowlist.md)
+- [x] T046 [P] [US2] RED: create `packages/infra/test/pre-sign-up.test.ts`. It denies an email with no `ALLOW#<email>` item, and an unverified email. It allows a listed, verified Google email (lowercased and trimmed). It fails closed when DynamoDB errors
+- [x] T047 [P] [US2] RED: create `packages/infra/test/pre-token-generation.test.ts`. It denies when `CONTROL#HALT` exists or `ALLOW#<email>` is missing, and writes `FRIEND#<sub>` (`email`, `provider`, `createdAt`) on success. It fails closed when DynamoDB errors
+- [x] T048 [P] [US2] RED: create `packages/infra/test/idp-secret.test.ts`. The custom resource reads `/max-height/google-client-secret` (SecureString) and applies it to the Google IdP. A missing parameter fails the deploy with a message naming it, and the secret never appears in the template or in logs
+- [x] T049 [P] [US2] RED: in `packages/agent/tests/index.test.ts`, a counted session opens only when `ALLOW#<email>` exists. Otherwise the reply is `not_allowlisted`, and an already-open session continues until it ends (the revocation timeline in auth-and-allowlist.md)
 - [ ] T050 [P] [US2] RED: in `packages/infra/test/frontend-stack.test.ts`, the distribution has these settings:
   - no `errorResponses`; the alias `max.recipieces.com` with the Certificate-stack certificate; viewer protocol `redirect-to-https`
   - a CSP whose `connect-src` is `'self'` plus the exact Cognito host, with no `wss:` and no `cognito-identity`, and `form-action 'self'`, `base-uri 'self'` and `frame-ancestors 'none'`
@@ -204,11 +206,11 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 ### Implementation for User Story 2
 
-- [ ] T055 [P] [US2] Implement `packages/infra/lib/handlers/pre-sign-up.ts` until T046 passes
-- [ ] T056 [P] [US2] Implement `packages/infra/lib/handlers/pre-token-generation.ts` until T047 passes
-- [ ] T057 [P] [US2] Implement `packages/infra/lib/handlers/idp-secret.ts` until T048 passes (SSM SecureString, per T005)
-- [ ] T058 [US2] Rewrite `packages/infra/lib/cognito-stack.ts`, removing the Identity Pool and the unauth role, until T045 passes. Remove the stale `CognitoUnauthRoleDefaultPolicy` reference from `packages/infra/lib/budget-stack.ts` at the same time; T068 replaces the hard stop it fed
-- [ ] T059 [US2] Add the session-open allowlist check to `packages/agent/src/index.ts` until T049 passes
+- [x] T055 [P] [US2] Implement `packages/infra/lib/handlers/pre-sign-up.ts` until T046 passes
+- [x] T056 [P] [US2] Implement `packages/infra/lib/handlers/pre-token-generation.ts` until T047 passes
+- [x] T057 [P] [US2] Implement `packages/infra/lib/handlers/idp-secret.ts` until T048 passes (SSM SecureString, per T005)
+- [x] T058 [US2] Rewrite `packages/infra/lib/cognito-stack.ts`, removing the Identity Pool and the unauth role, until T045 passes. Remove the stale `CognitoUnauthRoleDefaultPolicy` reference from `packages/infra/lib/budget-stack.ts` at the same time; T068 replaces the hard stop it fed
+- [x] T059 [US2] Add the session-open allowlist check to `packages/agent/src/index.ts` until T049 passes
 - [ ] T060 [P] [US2] Create `packages/infra/lib/functions/spa-rewrite.js` until T051 passes
 - [ ] T061 [US2] Change `packages/infra/lib/frontend-stack.ts` (custom domain, certificate, CSP, the SPA function in place of `errorResponses`, `BucketDeployment`) until T050 passes
 - [x] T062 [US2] Implement `packages/frontend/src/services/auth.ts` with no third-party auth library, until T052 passes

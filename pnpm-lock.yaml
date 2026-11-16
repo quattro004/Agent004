@@ -151,12 +151,18 @@ importers:
         specifier: ^10.8.1
         version: 10.8.1
     devDependencies:
+      '@aws-sdk/client-cognito-identity-provider':
+        specifier: ^3.1169.0
+        version: 3.1169.0
       '@aws-sdk/client-dynamodb':
-        specifier: 3.1167.0
-        version: 3.1167.0
+        specifier: ^3.1167.0
+        version: 3.1169.0
       '@aws-sdk/client-iam':
-        specifier: 3.1167.0
+        specifier: ^3.1167.0
         version: 3.1167.0
+      '@aws-sdk/client-ssm':
+        specifier: ^3.1169.0
+        version: 3.1169.0
       '@jest/globals':
         specifier: ^30.5.2
         version: 30.5.2(supports-color@8.1.1)
@@ -176,7 +182,7 @@ importers:
         specifier: 10.1.0
         version: 10.1.0
       esbuild:
-        specifier: 0.28.2
+        specifier: ^0.28.2
         version: 0.28.2
       jest:
         specifier: ^30.5.2
@@ -238,8 +244,8 @@ packages:
     resolution: {integrity: sha512-ez19ymqUXAtPX+f4X3FGVQSVydGzm+i2BT7zDog4KJFHn5yElEbjUwgRvVws7nVceMfFIeEzG2pJDgFGjqKQBw==}
     engines: {node: '>=20.0.0'}
 
-  '@aws-sdk/client-dynamodb@3.1167.0':
-    resolution: {integrity: sha512-wOpZaPZSyWZI1m7ckmFCSA0ZduqyuUdkeuRoElrvOJKsXteh/xWLfZ8Mg22bdaL2l4DMuQL3Sbu4hZT0p+7cBw==}
+  '@aws-sdk/client-cognito-identity-provider@3.1169.0':
+    resolution: {integrity: sha512-BDMuvX7FRc2gHsPNNje0w1bHp307XoaZQDZn02MqD4xNBxSQdpeABwBzGdxqTJEMB+IHbQCd5X5DO0M/6+rAKg==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/client-dynamodb@3.1169.0':
@@ -3617,12 +3623,10 @@ snapshots:
       '@smithy/types': 4.20.0
       tslib: 2.8.1
 
-  '@aws-sdk/client-dynamodb@3.1167.0':
+  '@aws-sdk/client-cognito-identity-provider@3.1169.0':
     dependencies:
       '@aws-sdk/core': 3.981.0
       '@aws-sdk/credential-provider-node': 3.972.97
-      '@aws-sdk/dynamodb-codec': 3.973.58
-      '@aws-sdk/middleware-endpoint-discovery': 3.972.39
       '@aws-sdk/types': 3.975.1
       '@smithy/core': 3.40.0
       '@smithy/fetch-http-handler': 5.8.1

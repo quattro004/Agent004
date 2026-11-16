@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
 import { buildMaxHeightApp } from '../lib/max-height-app.js';
+import { DEPLOY_CONTEXT } from './deploy-context.js';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -66,7 +67,7 @@ describe('Max Height app', () => {
   let stacks: cdk.Stack[];
 
   beforeAll(() => {
-    app = new cdk.App({ context: { budgetAlertEmail: 'owner@example.com' } });
+    app = new cdk.App({ context: DEPLOY_CONTEXT });
     buildMaxHeightApp(app);
     app.synth();
     stacks = app.node.children.filter((c): c is cdk.Stack => cdk.Stack.isStack(c));
