@@ -59,9 +59,8 @@ reservation remain T166/T167.
 | `PRICE_RUNTIME_PER_TURN_MICRO_USD` | `831`. **Derived**: R-cost's § F Runtime V2 lines, CPU $0.06 plus memory $0.60, over the average case's 795 turns = $0.00083019. The average case is the dearer per turn; the full case spreads $0.33 across 800 | R-cost § F |
 | `SSM_PARAM_WEATHER_KEY` | `/max-height/weather-api-key` | `agent-stack.ts` (existing parameter) |
 | `SSM_PARAM_NEWS_KEY` | `/max-height/news-api-key` | Same |
-| `SSM_PARAM_SEARCH_KEY`, `SSM_PARAM_SEARCH_ENGINE_ID` | `/max-height/search-api-key` and `/max-height/search-engine-id` (new SecureStrings, tasks.md C15) | `webSearchTool.ts:30,35` read them from the environment today |
 
-That is 38 variables, under the limit of 50.
+That is 36 variables, under the limit of 50. Web search has none: it is AgentCore's `InvokeWebSearch`, signed with the execution role (wiki `Decision-Web-Search-Provider`; tasks.md T178).
 
 No `PRICE_MEMORY_EXTRACTION_*` variable is needed. Built-in strategies include extraction in the long-term storage price (R-cost, resolved 2026-11-13 under T005a).
 
@@ -69,7 +68,7 @@ The breaker's estimate is a **floor**, not the bill: lines that are not per-turn
 
 ### Secrets loaded at startup
 
-`initialize()` reads each `SSM_PARAM_*` with `GetParameter` (`WithDecryption: true`) and passes the values to the tool factories. It does not write them back into `process.env`. A missing parameter **fails initialization**. The tools that read `process.env.*_API_KEY` today (`weatherTool.ts:24`, `newsTool.ts:29`, `webSearchTool.ts:30,35`) take their keys as arguments instead.
+`initialize()` reads each `SSM_PARAM_*` with `GetParameter` (`WithDecryption: true`) and passes the values to the tool factories. It does not write them back into `process.env`. A missing parameter **fails initialization**. The tools that read `process.env.*_API_KEY` today (`weatherTool.ts:24`, `newsTool.ts:29`) take their keys as arguments instead. The web search tool takes no key at all.
 
 ### Runtime resource settings
 
@@ -92,6 +91,7 @@ The breaker's estimate is a **floor**, not the bill: lines that are not per-turn
 | `polly:SynthesizeSpeech` | `*`, with `aws:RequestedRegion = us-west-2`. Neural and Matthew are application settings: AWS documents no `polly:Engine` or `polly:VoiceId` IAM keys ([service authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_polly.html), checked 2026-11-07). This corrects spec 001's frozen `contracts/polly-tts.md:202-210` example. |
 | `dynamodb:GetItem`, `PutItem`, `UpdateItem`, `DeleteItem` | The control table ARN |
 | `bedrock-agentcore:CreateEvent`, `ListSessions`, `ListEvents`, `DeleteEvent`, `RetrieveMemoryRecords`, `ListMemoryRecords`, `GetMemoryRecord`, `DeleteMemoryRecord`, `BatchDeleteMemoryRecords` | The one memory ARN ([memory-api.md](./memory-api.md)). Action names are checked against the service authorization reference at task time. The pruner role gets only the list and delete actions. |
+| `bedrock-agentcore:InvokeWebSearch` | `arn:aws:bedrock-agentcore:us-west-2:aws:tool/web-search.v1`, the AWS-managed tool. The account field is the literal `aws`, not ours ([web-search-api](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/web-search-api.html), read 2026-11-16). The first 5,000 queries a month are free, then $7 per 1,000 |
 | `ssm:GetParameter` | The `SSM_PARAM_*` parameter ARNs only |
 | `kms:Decrypt` | The AWS-managed `aws/ssm` key, with the condition `kms:ViaService = ssm.us-west-2.amazonaws.com` |
 | Logs, X-Ray and ECR pull | As the AgentCore Runtime documentation requires |

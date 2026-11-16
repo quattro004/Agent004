@@ -445,6 +445,14 @@ Polly IAM supports no `polly:Engine` or `polly:VoiceId` condition keys. Scope
 settings, not IAM restrictions. Check the service authorization reference
 before copying condition-key examples, including P11's illustrative examples.
 
+Every IAM action granted to the runtime role that can bill (a model, voice,
+memory or search call) must also be in `DENIED_ACTIONS` in
+`packages/infra/lib/handlers/hard-stop.ts`, with a test in `hard-stop.test.ts`.
+The hard stop only denies what it lists, so an unlisted action keeps spending
+after the cap. Web search is `bedrock-agentcore:InvokeWebSearch`: IAM only, no
+key (wiki `Decision-Web-Search-Provider`). AWS's terms require showing a
+result's source link, so a result with no URL is dropped.
+
 - User-facing/project-facing name is **Max Height**.
 - Do not use **Max Headroom** in product/UI copy (README/About inspiration references are acceptable).
 - No Matt Frewer voice cloning or exact visual replica.

@@ -71,6 +71,7 @@ This is an inline `Deny` of every spend-bearing action the runtime role is allow
 - the Bedrock model-invoke actions
 - `polly:SynthesizeSpeech`
 - the `bedrock-agentcore` memory actions
+- `bedrock-agentcore:InvokeWebSearch`, which bills once the 5,000 free monthly queries run out
 
 DynamoDB, CloudWatch Logs and X-Ray stay allowed, so the container can still read HALT, refuse with `halted` and log the refusal. `bedrock:ListAsyncInvokes` also stays allowed: it bills nothing, and denying it would stop a container that restarts during a hard stop from initializing at all ([runtime-config.md](./runtime-config.md) § Execution role). Explicit deny overrides the role's allows.
 

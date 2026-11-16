@@ -288,7 +288,7 @@ pnpm run test:e2e                   # Playwright
 | `VITE_MOCK_AGENT` | `true` for local UI dev without backend | Frontend (dev) |
 | `NEWS_API_KEY` | API key for news provider (selected in research.md §R7) | Agent |
 | `WEATHER_API_KEY` | API key for weather provider (selected in research.md §R7) | Agent |
-| `WEB_SEARCH_API_KEY` | API key for web search provider (if required, TBD) | Agent |
+| _(none for web search)_ | The web search tool uses AgentCore `InvokeWebSearch` over IAM and needs no key (spec 003 C46) | Agent |
 
 CDK deploy outputs the WebSocket endpoint and Cognito pool ID. Copy these to `.env.local` in `packages/frontend/`.
 
