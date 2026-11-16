@@ -18,7 +18,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
   - An in-path circuit breaker tallies real per-request model usage from `result.invocationContext.usage`. `readModelUsage` now uses this request boundary; enforcement wiring remains unfinished. Lifetime Agent metrics are not per-turn charges.
   - A redesigned hard stop fails loudly if its target is missing, and a person recovers it manually.
 
-  Soft-degrade turns voice off at $16 − F, leaving text only.
+  Soft-degrade turns voice off at $11 (A7; formerly $16 − F, superseded, C43), leaving text only.
 - **Conversation state (Q8, builder 2026-10-11).**
   - **In-session history.** One Strands `Agent` lives per counted session inside the runtime session's microVM, using the SDK's default 40-message sliding window.
   - **Long-term memory is un-deferred.** AgentCore Memory, with a 30-day rolling window that a scheduled pruner enforces, ships in the first deployment. This reverses the 2026-10-03 clarification and FR-014 (spec patch P-03).
