@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { missingCredential, type ToolCallOptions } from './toolCall.js';
 
 export const newsToolSchema = z.object({
   topic: z.string().optional(),
@@ -18,17 +19,11 @@ export interface NewsResult {
   error?: string;
 }
 
-type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
-
-export async function fetchNews(
-  input: NewsInput,
-  fetchFn: FetchFn = globalThis.fetch,
-  signal?: AbortSignal,
-): Promise<NewsResult> {
+export async function fetchNews(input: NewsInput, options: ToolCallOptions): Promise<NewsResult> {
   const topic = input.topic ?? 'general';
-  const apiKey = process.env.NEWS_API_KEY;
+  const { apiKey, fetch: fetchFn = globalThis.fetch, signal } = options;
   if (!apiKey) {
-    return { success: false, error: 'NEWS_API_KEY is not configured' };
+    return missingCredential('NEWS_API_KEY');
   }
   const url = `https://newsapi.org/v2/top-headlines?category=${encodeURIComponent(topic)}&country=us&pageSize=5&apiKey=${apiKey}`;
 

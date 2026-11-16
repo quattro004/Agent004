@@ -111,7 +111,10 @@ const newsTool = tool({
     'Fetch current news headlines. Use when the user asks about news, current events, or what is happening in the world. Returns real headlines — never fabricate news.',
   inputSchema: newsToolSchema,
   callback: async (input, context) => {
-    const result = await fetchNews(input, undefined, context?.cancelSignal);
+    const result = await fetchNews(input, {
+      apiKey: getRuntimeConfig().secrets.newsApiKey,
+      signal: context?.cancelSignal,
+    });
     return result as unknown as JSONValue;
   },
 });
@@ -122,7 +125,10 @@ const weatherTool = tool({
     'Fetch current weather for a location. Use when the user asks about weather, temperature, or conditions in a specific city or region. Returns real weather data — never fabricate weather.',
   inputSchema: weatherToolSchema,
   callback: async (input, context) => {
-    const result = await fetchWeather(input, undefined, context?.cancelSignal);
+    const result = await fetchWeather(input, {
+      apiKey: getRuntimeConfig().secrets.weatherApiKey,
+      signal: context?.cancelSignal,
+    });
     return result as unknown as JSONValue;
   },
 });
@@ -133,7 +139,12 @@ const webSearchTool = tool({
     'Search the web for current information. Use when the user asks about recent events, facts you are unsure about, or anything requiring up-to-date information beyond your training data. Returns real search results — never fabricate URLs or content.',
   inputSchema: webSearchToolSchema,
   callback: async (input, context) => {
-    const result = await fetchWebSearch(input, undefined, context?.cancelSignal);
+    const config = getRuntimeConfig();
+    const result = await fetchWebSearch(input, {
+      apiKey: config.secrets.searchApiKey,
+      engineId: config.secrets.searchEngineId,
+      signal: context?.cancelSignal,
+    });
     return result as unknown as JSONValue;
   },
 });

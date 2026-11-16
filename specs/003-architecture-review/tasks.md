@@ -150,7 +150,7 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 - [x] T035 [US1] Implement `packages/agent/src/session/agentRegistry.ts` until T028 passes — wired into the handler by T037
 - [x] T036 [US1] Implement `packages/agent/src/voice/pollyStream.ts` with `@aws-sdk/client-polly` until T029 passes — wired into the handler by T037
 - [x] T037 [US1] Rewrite `/invocations` in `packages/agent/src/index.ts` to stream SSE with identity from `jwtClaims.ts`, the registry, `pollyStream.ts` and `usage.ts`, until T027 and T030 pass
-- [ ] T038 [P] [US1] Change `packages/agent/src/tools/weatherTool.ts`, `newsTool.ts` and `webSearchTool.ts` to take their API keys as arguments from `runtimeConfig.ts` rather than reading the environment, keeping `context.cancelSignal` forwarding. Update `packages/agent/tests/tools/tools.test.ts` and `webSearchTool.test.ts` RED first
+- [x] T038 [P] [US1] Change `packages/agent/src/tools/weatherTool.ts`, `newsTool.ts` and `webSearchTool.ts` to take their API keys as arguments from `runtimeConfig.ts` rather than reading the environment, keeping `context.cancelSignal` forwarding. Update `packages/agent/tests/tools/tools.test.ts` and `webSearchTool.test.ts` RED first
 - [ ] T039 [US1] Implement `packages/frontend/src/hooks/useAgentStream.ts` until T031 passes
 - [ ] T040 [US1] Implement the build-time `VITE_*` check in `packages/frontend/vite.config.ts` until T032 passes, The variables are already documented in runtime-config.md § Frontend build and quickstart.md § Deploy order step 8, so no new example file is added
 - [ ] T041 [US1] Change `packages/frontend/src/hooks/useAudio.ts` to play server `audio` events until T033 passes

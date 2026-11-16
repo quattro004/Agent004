@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { webSearchToolSchema, fetchWebSearch } from '../../src/tools/webSearchTool.js';
 
 describe('webSearchTool', () => {
@@ -20,16 +20,6 @@ describe('webSearchTool', () => {
   });
 
   describe('fetchWebSearch', () => {
-    beforeEach(() => {
-      process.env.SEARCH_API_KEY = 'test-search-key';
-      process.env.SEARCH_ENGINE_ID = 'test-engine-id';
-    });
-
-    afterEach(() => {
-      delete process.env.SEARCH_API_KEY;
-      delete process.env.SEARCH_ENGINE_ID;
-    });
-
     it('returns search results on success', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -49,7 +39,10 @@ describe('webSearchTool', () => {
         }),
       });
 
-      const result = await fetchWebSearch({ query: 'AI news 2026' }, mockFetch);
+      const result = await fetchWebSearch(
+        { query: 'AI news 2026' },
+        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+      );
 
       expect(result.success).toBe(true);
       expect(result.results).toHaveLength(2);
@@ -58,19 +51,15 @@ describe('webSearchTool', () => {
       expect(result.results![0].url).toBe('https://example.com/ai');
     });
 
-    it('returns error when SEARCH_API_KEY is missing', async () => {
-      delete process.env.SEARCH_API_KEY;
-
-      const result = await fetchWebSearch({ query: 'test' });
+    it('returns error when the search API key is missing', async () => {
+      const result = await fetchWebSearch({ query: 'test' }, { apiKey: '', engineId: 'e' });
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('SEARCH_API_KEY');
     });
 
-    it('returns error when SEARCH_ENGINE_ID is missing', async () => {
-      delete process.env.SEARCH_ENGINE_ID;
-
-      const result = await fetchWebSearch({ query: 'test' });
+    it('returns error when the search engine ID is missing', async () => {
+      const result = await fetchWebSearch({ query: 'test' }, { apiKey: 'k', engineId: '' });
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('SEARCH_ENGINE_ID');
@@ -83,7 +72,10 @@ describe('webSearchTool', () => {
         statusText: 'Too Many Requests',
       });
 
-      const result = await fetchWebSearch({ query: 'test' }, mockFetch);
+      const result = await fetchWebSearch(
+        { query: 'test' },
+        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+      );
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('429');
@@ -92,7 +84,10 @@ describe('webSearchTool', () => {
     it('handles network errors', async () => {
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network timeout'));
 
-      const result = await fetchWebSearch({ query: 'test' }, mockFetch);
+      const result = await fetchWebSearch(
+        { query: 'test' },
+        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+      );
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Network timeout');
@@ -104,7 +99,10 @@ describe('webSearchTool', () => {
         json: async () => ({ items: [] }),
       });
 
-      const result = await fetchWebSearch({ query: 'obscure query' }, mockFetch);
+      const result = await fetchWebSearch(
+        { query: 'obscure query' },
+        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+      );
 
       expect(result.success).toBe(true);
       expect(result.results).toEqual([]);
@@ -116,7 +114,10 @@ describe('webSearchTool', () => {
         json: async () => ({}),
       });
 
-      const result = await fetchWebSearch({ query: 'test' }, mockFetch);
+      const result = await fetchWebSearch(
+        { query: 'test' },
+        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+      );
 
       expect(result.success).toBe(true);
       expect(result.results).toEqual([]);
@@ -134,7 +135,10 @@ describe('webSearchTool', () => {
         json: async () => ({ items }),
       });
 
-      const result = await fetchWebSearch({ query: 'test' }, mockFetch);
+      const result = await fetchWebSearch(
+        { query: 'test' },
+        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+      );
 
       expect(result.success).toBe(true);
       expect(result.results!.length).toBeLessThanOrEqual(5);

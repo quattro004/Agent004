@@ -179,6 +179,10 @@ describe('handleInvocations — cancellation on client disconnect', () => {
 describe('tool callbacks — cancel signal forwarding', () => {
   // Cancelling the model turn is only half the saving: a tool already in flight
   // holds an outbound HTTP request open unless the signal reaches it too.
+  beforeEach(() => {
+    __test.setRuntimeConfig(testRuntimeConfig());
+  });
+
   function callbackFor(name: string) {
     const cfg = toolRegistrations.find((c) => c.name === name);
     if (!cfg) throw new Error(`no tool registered named ${name}`);
@@ -202,6 +206,25 @@ describe('tool callbacks — cancel signal forwarding', () => {
       },
     );
 
-    expect(fetcher.mock.calls[0]?.[2]).toBe(controller.signal);
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
   });
+
+  it.each([
+    ['get_news', () => fetchNews, 'news-key'],
+    ['get_weather', () => fetchWeather, 'weather-key'],
+    ['web_search', () => fetchWebSearch, 'search-key'],
+  ])(
+    '%s takes its API key from the runtime config, not the environment',
+    async (toolName, getFetcher, apiKey) => {
+      // T038: the container reads its secrets from SSM at startup, so a tool
+      // reading `process.env` would use whatever the process inherited.
+      const fetcher = getFetcher();
+      fetcher.mockReset();
+      fetcher.mockResolvedValue({ success: true });
+
+      await callbackFor(toolName as string)({ query: 'q', topic: 'q', location: 'q' }, undefined);
+
+      expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ apiKey });
+    },
+  );
 });

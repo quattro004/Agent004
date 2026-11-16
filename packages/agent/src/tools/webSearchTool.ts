@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { missingCredential, type ToolCallOptions } from './toolCall.js';
 
 export const webSearchToolSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
@@ -20,21 +21,22 @@ export interface WebSearchResult {
 
 const MAX_RESULTS = 5;
 
-type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
+/** Google Custom Search needs a programmable-search engine ID as well as a key. */
+export interface WebSearchOptions extends ToolCallOptions {
+  engineId: string;
+}
 
 export async function fetchWebSearch(
   input: WebSearchInput,
-  fetchFn: FetchFn = globalThis.fetch,
-  signal?: AbortSignal,
+  options: WebSearchOptions,
 ): Promise<WebSearchResult> {
-  const apiKey = process.env.SEARCH_API_KEY;
+  const { apiKey, engineId, fetch: fetchFn = globalThis.fetch, signal } = options;
   if (!apiKey) {
-    return { success: false, error: 'SEARCH_API_KEY is not configured' };
+    return missingCredential('SEARCH_API_KEY');
   }
 
-  const engineId = process.env.SEARCH_ENGINE_ID;
   if (!engineId) {
-    return { success: false, error: 'SEARCH_ENGINE_ID is not configured' };
+    return missingCredential('SEARCH_ENGINE_ID');
   }
 
   const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${engineId}&q=${encodeURIComponent(input.query)}&num=${MAX_RESULTS}`;

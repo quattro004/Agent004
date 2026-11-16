@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { missingCredential, type ToolCallOptions } from './toolCall.js';
 
 export const weatherToolSchema = z.object({
   location: z.string(),
@@ -14,16 +15,13 @@ export interface WeatherResult {
   error?: string;
 }
 
-type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
-
 export async function fetchWeather(
   input: WeatherInput,
-  fetchFn: FetchFn = globalThis.fetch,
-  signal?: AbortSignal,
+  options: ToolCallOptions,
 ): Promise<WeatherResult> {
-  const apiKey = process.env.WEATHER_API_KEY;
+  const { apiKey, fetch: fetchFn = globalThis.fetch, signal } = options;
   if (!apiKey) {
-    return { success: false, error: 'WEATHER_API_KEY is not configured' };
+    return missingCredential('WEATHER_API_KEY');
   }
   const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(input.location)}&units=imperial&appid=${apiKey}`;
 
