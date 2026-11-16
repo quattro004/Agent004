@@ -50,6 +50,24 @@ export interface SendInput {
   memoryRecordId?: string;
 }
 
+/** A memory action (memory.list, memory.export, memory.delete, memory.forget). */
+export interface ActionInput {
+  action: string;
+  memoryRecordId?: string;
+}
+
+/**
+ * How an action ended. 	ransport covers a platform status, a dropped stream
+ * and a stream that closed without a result; signed_out means there was no
+ * usable token. Neither is ever reported as success.
+ */
+export type ActionOutcome =
+  { ok: true; data: unknown } | { ok: false; code: SseErrorCode | 'transport' | 'signed_out' };
+
+interface ActionCapture {
+  outcome: ActionOutcome | null;
+}
+
 export interface AgentStreamDeps {
   runtimeArn: string;
   getAccessToken: () => Promise<string | null>;
@@ -61,6 +79,8 @@ export interface AgentStreamDeps {
 
 export interface AgentStream {
   send: (input: SendInput) => Promise<void>;
+  /** Runs a memory action on its own request: it never cancels a streaming turn or edits the conversation. */
+  runAction: (input: ActionInput) => Promise<ActionOutcome>;
   cancel: () => void;
 }
 
@@ -205,7 +225,17 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
     });
   }
 
-  async function attempt(input: SendInput, token: string, signal: AbortSignal): Promise<Attempt> {
+  async function attempt(
+    input: SendInput,
+    token: string,
+    signal: AbortSignal,
+    capture?: ActionCapture,
+  ): Promise<Attempt> {
+    // An action is its own request: a failure of it says nothing about the chat
+    // connection, so it must not move the session state.
+    const setState = (state: SessionState) => {
+      if (!capture) connection().setSessionState(state);
+    };
     let response: Response;
     try {
       response = await doFetch(buildInvocationPath(deps.runtimeArn), {
@@ -221,24 +251,29 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
       });
     } catch (error) {
       if (isAbort(error) || signal.aborted) return 'ok';
-      connection().setSessionState('SIGNAL_LOST');
+      setState('SIGNAL_LOST');
       return 'failed';
     }
 
     if (response.status === 401 || response.status === 403) return 'retry-auth';
     if (response.status === 429) {
-      connection().setSessionState('RATE_LIMITED');
+      if (capture) capture.outcome = { ok: false, code: 'rate_limited' };
+      setState('RATE_LIMITED');
       return 'failed';
     }
     if (!response.ok || !response.body) {
-      connection().setSessionState('SIGNAL_LOST');
+      setState('SIGNAL_LOST');
       return 'failed';
     }
 
-    return consume(response.body, signal);
+    return consume(response.body, signal, capture);
   }
 
-  async function consume(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<Attempt> {
+  async function consume(
+    body: ReadableStream<Uint8Array>,
+    signal: AbortSignal,
+    capture?: ActionCapture,
+  ): Promise<Attempt> {
     let terminal = false;
     let streamed = false;
     let outcome: Attempt = 'ok';
@@ -273,24 +308,34 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
             break;
           case 'result':
             terminal = true;
+            if (capture) capture.outcome = { ok: true, data: event.data };
             break;
           case 'error':
             terminal = true;
-            outcome = applyError(event);
+            if (capture) {
+              capture.outcome = { ok: false, code: event.code };
+              outcome = outcomeForErrorCode(event.code).retryWithNewSessionId
+                ? (resetRuntimeSessionId(), 'retry-session')
+                : 'failed';
+            } else {
+              outcome = applyError(event);
+            }
             break;
         }
       }
     } catch (error) {
       if (isAbort(error) || signal.aborted) return 'ok';
-      connection().setSessionState('SIGNAL_LOST');
+      if (!capture) connection().setSessionState('SIGNAL_LOST');
       return 'failed';
     }
 
     if (!terminal && !signal.aborted) {
       // A stream that stops mid-reply is indistinguishable from a dropped
       // connection, so it degrades the same way (quickstart V-09).
-      if (streamed) conversation().setFullText(conversation().currentResponseText);
-      connection().setSessionState('SIGNAL_LOST');
+      if (!capture) {
+        if (streamed) conversation().setFullText(conversation().currentResponseText);
+        connection().setSessionState('SIGNAL_LOST');
+      }
       return 'failed';
     }
 
@@ -315,35 +360,39 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
     return 'failed';
   }
 
-  async function send(input: SendInput): Promise<void> {
-    controller?.abort();
-    const current = new AbortController();
-    controller = current;
-    const signal = current.signal;
+  async function exchange(
+    input: SendInput,
+    signal: AbortSignal,
+    capture?: ActionCapture,
+  ): Promise<void> {
+    const signedOut = () => {
+      if (capture) capture.outcome = { ok: false, code: 'signed_out' };
+      deps.onSignedOut?.();
+    };
 
     let token = await deps.getAccessToken();
     if (!token) {
-      deps.onSignedOut?.();
+      signedOut();
       return;
     }
 
-    conversation().setFullText('');
+    if (!capture) conversation().setFullText('');
 
     let refreshed = false;
     let resentWithNewSessionId = false;
 
     for (;;) {
-      const result = await attempt(input, token, signal);
+      const result = await attempt(input, token, signal, capture);
 
       if (result === 'retry-auth') {
         if (refreshed) {
-          deps.onSignedOut?.();
+          signedOut();
           return;
         }
         refreshed = true;
         const next = await deps.refreshAccessToken?.();
         if (!next) {
-          deps.onSignedOut?.();
+          signedOut();
           return;
         }
         token = next;
@@ -352,7 +401,7 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
 
       if (result === 'retry-session') {
         if (resentWithNewSessionId) {
-          connection().setSessionState('SIGNAL_LOST');
+          if (!capture) connection().setSessionState('SIGNAL_LOST');
           return;
         }
         resentWithNewSessionId = true;
@@ -363,8 +412,22 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
     }
   }
 
+  async function send(input: SendInput): Promise<void> {
+    controller?.abort();
+    const current = new AbortController();
+    controller = current;
+    await exchange(input, current.signal);
+  }
+
+  async function runAction(input: ActionInput): Promise<ActionOutcome> {
+    const capture: ActionCapture = { outcome: null };
+    await exchange(input, new AbortController().signal, capture);
+    return capture.outcome ?? { ok: false, code: 'transport' };
+  }
+
   return {
     send,
+    runAction,
     cancel() {
       controller?.abort();
     },

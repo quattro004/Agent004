@@ -1,8 +1,13 @@
 /**
- * Data manager service for FR-017 (Forget Me) and FR-018 (Export Data).
- * Clears all max-height-* localStorage and resets Zustand stores.
+ * What Max remembers (spec 001 FR-017 / FR-018; contracts/memory-api.md).
+ *
+ * Memory lives only in AgentCore Memory, so list, export, delete and forget-me
+ * go through the agent's memory actions (`useAgentStream().runAction`). There
+ * is deliberately no localStorage fallback: a copy kept in the browser could
+ * disagree with the service, and "forgotten" has to mean the service forgot.
  */
 
+import type { ActionOutcome, ActionInput } from '../hooks/useAgentStream';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useConnectionStore } from '../stores/connectionStore';
@@ -10,42 +15,94 @@ import { useVisitorStore } from '../stores/visitorStore';
 
 const STORAGE_PREFIX = 'max-height-';
 
-export function forgetMe(): void {
-  // Remove all max-height-* keys from localStorage
+export type ActionRunner = (input: ActionInput) => Promise<ActionOutcome>;
+
+export interface MemoryRecord {
+  id: string;
+  text: string;
+  kind: 'fact' | 'preference' | 'summary';
+  createdAt: string;
+}
+
+export interface ForgetResult {
+  recordsDeleted: number;
+  eventsDeleted: number;
+}
+
+/** `code` is the SSE error code, `transport`, `signed_out`, or `malformed` for an unusable reply. */
+export class MemoryActionError extends Error {
+  constructor(readonly code: string) {
+    super(`Memory action failed: ${code}`);
+    this.name = 'MemoryActionError';
+  }
+}
+
+async function runOrThrow(run: ActionRunner, input: ActionInput): Promise<unknown> {
+  const outcome = await run(input);
+  if (!outcome.ok) throw new MemoryActionError(outcome.code);
+  return outcome.data;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function recordsOf(data: unknown): MemoryRecord[] {
+  if (!isObject(data) || !Array.isArray(data.records)) throw new MemoryActionError('malformed');
+  return data.records as MemoryRecord[];
+}
+
+export async function listMemories(run: ActionRunner): Promise<MemoryRecord[]> {
+  return recordsOf(await runOrThrow(run, { action: 'memory.list' }));
+}
+
+/** Saves what the agent exports as a `.json` download; nothing is saved if the export fails. */
+export async function exportMemories(run: ActionRunner): Promise<void> {
+  const data = await runOrThrow(run, { action: 'memory.export' });
+  recordsOf(data);
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `max-height-memories-${Date.now()}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function deleteMemory(run: ActionRunner, memoryRecordId: string): Promise<void> {
+  await runOrThrow(run, { action: 'memory.delete', memoryRecordId });
+}
+
+/**
+ * Wipes the service's memory first and the browser's own state only once that
+ * succeeded, so a failed forget-me never looks like a finished one and the
+ * friend can retry (memory-api.md: all-or-error).
+ */
+export async function forgetMe(run: ActionRunner): Promise<ForgetResult> {
+  const data = await runOrThrow(run, { action: 'memory.forget' });
+  if (
+    !isObject(data) ||
+    typeof data.recordsDeleted !== 'number' ||
+    typeof data.eventsDeleted !== 'number'
+  ) {
+    throw new MemoryActionError('malformed');
+  }
+
+  clearLocalState();
+  return { recordsDeleted: data.recordsDeleted, eventsDeleted: data.eventsDeleted };
+}
+
+function clearLocalState(): void {
   const keysToRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key?.startsWith(STORAGE_PREFIX)) {
-      keysToRemove.push(key);
-    }
+    if (key?.startsWith(STORAGE_PREFIX)) keysToRemove.push(key);
   }
   keysToRemove.forEach((key) => localStorage.removeItem(key));
 
-  // Reset all Zustand stores
   useVoiceStore.getState().reset();
   useConversationStore.getState().reset();
   useConnectionStore.getState().reset();
   useVisitorStore.getState().reset();
-}
-
-export function exportData(): void {
-  const visitor = useVisitorStore.getState();
-
-  const payload = {
-    actorId: visitor.actorId,
-    displayAlias: visitor.displayAlias,
-    greetingHistory: visitor.greetingHistory,
-    exportedAt: new Date().toISOString(),
-  };
-
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: 'application/json',
-  });
-
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `max-height-data-${Date.now()}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }

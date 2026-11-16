@@ -413,6 +413,95 @@ describe('useAgentStream', () => {
     });
   });
 
+  describe('runAction', () => {
+    it('resolves with the result data and sends only the action and record id', async () => {
+      const fetchImpl = vi.fn(async () =>
+        sseResponse([{ type: 'result', action: 'memory.delete', data: { deleted: 1 } }]),
+      );
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      const outcome = await stream.runAction({ action: 'memory.delete', memoryRecordId: 'fact-1' });
+
+      expect(outcome).toEqual({ ok: true, data: { deleted: 1 } });
+      const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({
+        action: 'memory.delete',
+        memoryRecordId: 'fact-1',
+      });
+    });
+
+    it('resolves with the error code instead of rendering Max line over the conversation', async () => {
+      useConversationStore.getState().setFullText('Earlier reply');
+      const fetchImpl = vi.fn(async () =>
+        sseResponse([
+          {
+            type: 'error',
+            code: 'not_found',
+            retryable: false,
+            inCharacterMessage: 'Never heard of it.',
+          },
+        ]),
+      );
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      const outcome = await stream.runAction({ action: 'memory.delete', memoryRecordId: 'x' });
+
+      expect(outcome).toEqual({ ok: false, code: 'not_found' });
+      expect(useConversationStore.getState().currentResponseText).toBe('Earlier reply');
+    });
+
+    it('does not cancel a chat turn that is streaming', async () => {
+      let chatSignal: AbortSignal | undefined;
+      const fetchImpl = vi
+        .fn()
+        .mockImplementationOnce(async (_url: string, init: RequestInit) => {
+          chatSignal = init.signal ?? undefined;
+          return happyStream();
+        })
+        .mockImplementationOnce(async () =>
+          sseResponse([{ type: 'result', action: 'memory.list', data: { records: [] } }]),
+        );
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      const chat = stream.send({ message: 'hi' });
+      await stream.runAction({ action: 'memory.list' });
+      await chat;
+
+      expect(chatSignal?.aborted).toBe(false);
+    });
+
+    it('reports a platform failure as a transport failure, never as success', async () => {
+      const fetchImpl = vi.fn(async () => sseResponse([], 502));
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      await expect(stream.runAction({ action: 'memory.list' })).resolves.toEqual({
+        ok: false,
+        code: 'transport',
+      });
+    });
+
+    it('reports a stream that ends without a result as a transport failure', async () => {
+      const fetchImpl = vi.fn(async () => sseResponse([]));
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      await expect(stream.runAction({ action: 'memory.forget' })).resolves.toEqual({
+        ok: false,
+        code: 'transport',
+      });
+    });
+
+    it('resolves signed_out when there is no token', async () => {
+      const onSignedOut = vi.fn();
+      const { stream, fetchImpl } = makeStream({ getAccessToken: async () => null, onSignedOut });
+
+      await expect(stream.runAction({ action: 'memory.list' })).resolves.toEqual({
+        ok: false,
+        code: 'signed_out',
+      });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
   describe('the hook', () => {
     it('exposes a stable send across renders', () => {
       const { result, rerender } = renderHook(() =>

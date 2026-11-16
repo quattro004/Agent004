@@ -288,7 +288,7 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
   - A session opening calls `RetrieveMemoryRecords` with top-k 10, and each turn calls `CreateEvent` once.
 - [x] T087 [P] [US4] RED: create `packages/infra/test/memory-pruner.test.ts`. It deletes the records and events of each friend whose `lastSeenAt` is more than 30 days ago, then sets `memoryPrunedAt`. It has a single-friend mode, `{ sub }`. It keeps going after one friend fails and throws at the end
 - [x] T088 [P] [US4] RED: in `packages/infra/test/data-stack.test.ts`, assert the pruner Lambda, its daily EventBridge schedule, and IAM scoped to the memory and the control table
-- [ ] T089 [P] [US4] RED: update `packages/frontend/tests/services/dataManager.test.ts`. "What Max remembers" lists, exports as a `.json` download, deletes and "forgets me" through the memory actions on `useAgentStream`, with no `localStorage` fallback
+- [x] T089 [P] [US4] RED: update `packages/frontend/tests/services/dataManager.test.ts`. "What Max remembers" lists, exports as a `.json` download, deletes and "forgets me" through the memory actions on `useAgentStream`, with no `localStorage` fallback
 
 ### Implementation for User Story 4
 
