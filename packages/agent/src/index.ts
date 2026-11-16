@@ -99,6 +99,8 @@ export interface InvocationControlTable {
   addSpend: ControlTable['addSpend'];
   getFriend: ControlTable['getFriend'];
   getAllow: ControlTable['getAllow'];
+  consumeRate: ControlTable['consumeRate'];
+  recordFriendSeen: ControlTable['recordFriendSeen'];
 }
 
 let control: InvocationControlTable | undefined;
@@ -374,8 +376,35 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
         return;
       }
       sessions.set(sub, session);
+
+      // The pruner reads this stamp to decide whose memory has gone cold
+      // (FR-056). Losing one write only delays that, so it must not cost a
+      // friend their conversation — but it is never swallowed silently.
+      try {
+        await table.recordFriendSeen(sub, new Date());
+      } catch (err) {
+        console.error('Could not stamp lastSeenAt:', err);
+      }
     }
     countedSessionId = session.sessionId;
+
+    // FR-012: the windows bound the friend, where the caps below bound one
+    // conversation. A friend who ends a session gets fresh caps; they do not
+    // get a fresh hour. The write is conditional inside `consumeRate`, so a
+    // message refused here is not counted against the window
+    // (contracts/transport-sse.md § Refusal order, step 4).
+    let rate;
+    try {
+      rate = await table.consumeRate(sub, new Date());
+    } catch (err) {
+      console.error('Could not read the rate-limit windows:', err);
+      outcome = sse.fail('internal');
+      return;
+    }
+    if (!rate.allowed) {
+      outcome = sse.fail('rate_limited');
+      return;
+    }
 
     // Constitution P2 / FR-010: enforce the per-session hard caps before
     // invoking the model. Without this gate one friend could blow past the

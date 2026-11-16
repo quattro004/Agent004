@@ -1,5 +1,11 @@
 import { vi } from 'vitest';
-import type { AllowEntry, Friend, Halt, Spend } from '../../src/session/controlTable.js';
+import type {
+  AllowEntry,
+  Friend,
+  Halt,
+  RateDecision,
+  Spend,
+} from '../../src/session/controlTable.js';
 
 /**
  * An in-memory stand-in for the parts of `ControlTable` the invocation path
@@ -13,6 +19,8 @@ export interface FakeControlTable {
   addSpend: ReturnType<typeof vi.fn<(microUsd: number, now: Date) => Promise<void>>>;
   getFriend: ReturnType<typeof vi.fn<(sub: string) => Promise<Friend | undefined>>>;
   getAllow: ReturnType<typeof vi.fn<(email: string) => Promise<AllowEntry | undefined>>>;
+  consumeRate: ReturnType<typeof vi.fn<(sub: string, now: Date) => Promise<RateDecision>>>;
+  recordFriendSeen: ReturnType<typeof vi.fn<(sub: string, at: Date) => Promise<void>>>;
 }
 
 /** The friend every invocation test is, unless it says otherwise. */
@@ -54,5 +62,7 @@ export function fakeControlTable(
     addSpend: vi.fn(async () => {}),
     getFriend: vi.fn(async () => friend),
     getAllow: vi.fn(async () => allow),
+    consumeRate: vi.fn(async () => ({ allowed: true }) as RateDecision),
+    recordFriendSeen: vi.fn(async () => {}),
   };
 }
