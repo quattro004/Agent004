@@ -6,6 +6,7 @@
  * the HTTP layer and call `handleInvocations` directly with doubles.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BedrockAgentCoreClient } from '@aws-sdk/client-bedrock-agentcore';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
 import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, TEST_SUB } from './fixtures/http.js';
@@ -219,7 +220,6 @@ describe('tool callbacks — cancel signal forwarding', () => {
   it.each([
     ['get_news', () => fetchNews, 'news-key'],
     ['get_weather', () => fetchWeather, 'weather-key'],
-    ['web_search', () => fetchWebSearch, 'search-key'],
   ])(
     '%s takes its API key from the runtime config, not the environment',
     async (toolName, getFetcher, apiKey) => {
@@ -234,4 +234,18 @@ describe('tool callbacks — cancel signal forwarding', () => {
       expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ apiKey });
     },
   );
+
+  it('web_search gives its fetcher an AgentCore client for the runtime Region, not a key', async () => {
+    fetchWebSearch.mockReset();
+    fetchWebSearch.mockResolvedValue({ success: true });
+
+    await callbackFor('web_search')({ query: 'q' }, undefined);
+
+    const options = fetchWebSearch.mock.calls[0]?.[1] as { client: unknown; apiKey?: unknown };
+    expect(options.client).toBeInstanceOf(BedrockAgentCoreClient);
+    expect(options.apiKey).toBeUndefined();
+    await expect((options.client as BedrockAgentCoreClient).config.region()).resolves.toBe(
+      testRuntimeConfig().awsRegion,
+    );
+  });
 });

@@ -49,8 +49,6 @@ vi.mock('@aws-sdk/client-ssm', () => {
   const parameters = new Map<string, string>([
     ['/max-height/weather-api-key', 'weather-secret'],
     ['/max-height/news-api-key', 'news-secret'],
-    ['/max-height/search-api-key', 'search-secret'],
-    ['/max-height/search-engine-id', 'engine-secret'],
   ]);
   const sendMock = vi.fn(async (command: { input: { Name: string } }) => {
     const value = parameters.get(command.input.Name);
@@ -132,8 +130,6 @@ const RUNTIME_ENV: Record<string, string> = {
   PRICE_RUNTIME_PER_TURN_MICRO_USD: '300',
   SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
   SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
-  SSM_PARAM_SEARCH_KEY: '/max-height/search-api-key',
-  SSM_PARAM_SEARCH_ENGINE_ID: '/max-height/search-engine-id',
 };
 
 beforeEach(() => {
@@ -268,8 +264,8 @@ describe('initialization warm-up', () => {
 });
 
 describe('runtime configuration at startup (spec 003 T015)', () => {
-  it('lists all 38 runtime variables from contracts/runtime-config.md', () => {
-    expect(Object.keys(RUNTIME_ENV)).toHaveLength(38);
+  it('lists all 36 runtime variables from contracts/runtime-config.md', () => {
+    expect(Object.keys(RUNTIME_ENV)).toHaveLength(36);
   });
 
   it.each(Object.keys(RUNTIME_ENV))(
@@ -310,24 +306,22 @@ describe('runtime configuration at startup (spec 003 T015)', () => {
     expect(ping(mod).status).toBe(503);
   });
 
-  it.each([
-    '/max-height/weather-api-key',
-    '/max-height/news-api-key',
-    '/max-height/search-api-key',
-    '/max-height/search-engine-id',
-  ])('fails initialize() naming SSM parameter %s when it is missing', async (parameter) => {
-    const mod = await freshModule();
-    const { __parameters: parameters } = await ssmSdk();
-    const value = parameters.get(parameter)!;
-    parameters.delete(parameter);
+  it.each(['/max-height/weather-api-key', '/max-height/news-api-key'])(
+    'fails initialize() naming SSM parameter %s when it is missing',
+    async (parameter) => {
+      const mod = await freshModule();
+      const { __parameters: parameters } = await ssmSdk();
+      const value = parameters.get(parameter)!;
+      parameters.delete(parameter);
 
-    try {
-      await expect(mod.initialize()).rejects.toThrow(parameter);
-      expect(ping(mod).status).toBe(503);
-    } finally {
-      parameters.set(parameter, value);
-    }
-  });
+      try {
+        await expect(mod.initialize()).rejects.toThrow(parameter);
+        expect(ping(mod).status).toBe(503);
+      } finally {
+        parameters.set(parameter, value);
+      }
+    },
+  );
 
   it('reads every SSM parameter as a decrypted SecureString before warming Bedrock', async () => {
     const mod = await freshModule();
@@ -336,14 +330,10 @@ describe('runtime configuration at startup (spec 003 T015)', () => {
     await mod.initialize();
 
     expect(ssm.GetParameterCommand.mock.calls.map(([input]) => input)).toEqual(
-      expect.arrayContaining(
-        [
-          '/max-height/weather-api-key',
-          '/max-height/news-api-key',
-          '/max-height/search-api-key',
-          '/max-height/search-engine-id',
-        ].map((Name) => ({ Name, WithDecryption: true })),
-      ),
+      ['/max-height/weather-api-key', '/max-height/news-api-key'].map((Name) => ({
+        Name,
+        WithDecryption: true,
+      })),
     );
   });
 
@@ -353,7 +343,7 @@ describe('runtime configuration at startup (spec 003 T015)', () => {
     await mod.initialize();
 
     const values = Object.values(process.env);
-    for (const secret of ['weather-secret', 'news-secret', 'search-secret', 'engine-secret']) {
+    for (const secret of ['weather-secret', 'news-secret']) {
       expect(values).not.toContain(secret);
     }
   });

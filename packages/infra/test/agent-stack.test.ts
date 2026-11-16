@@ -148,8 +148,6 @@ describe('AgentStack (AgentCore Runtime, T024)', () => {
       PRICE_MEMORY_RETRIEVAL_MICRO_USD: '500',
       SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
       SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
-      SSM_PARAM_SEARCH_KEY: '/max-height/search-api-key',
-      SSM_PARAM_SEARCH_ENGINE_ID: '/max-height/search-engine-id',
     });
     expect(JSON.stringify(vars.CONTROL_TABLE_NAME)).toContain('Control');
   });
@@ -249,13 +247,20 @@ describe('AgentStack (AgentCore Runtime, T024)', () => {
     );
   });
 
-  test('reads only the four SSM parameters, decrypting through SSM', () => {
+  test('reads only the two SSM parameters, decrypting through SSM', () => {
     const [ssm] = statementsWith('ssm:GetParameter');
-    expect(ssm.Resource).toHaveLength(4);
+    expect(ssm.Resource).toHaveLength(2);
     const [kms] = statementsWith('kms:Decrypt');
     expect(kms.Condition?.StringEquals).toEqual({
       'kms:ViaService': 'ssm.us-west-2.amazonaws.com',
     });
+  });
+
+  test('may call only the AWS-managed web search tool, which needs no key', () => {
+    const [search] = statementsWith('bedrock-agentcore:InvokeWebSearch');
+    expect(search.Action).toBe('bedrock-agentcore:InvokeWebSearch');
+    // The account field of an AWS-managed tool ARN is the literal "aws".
+    expect(search.Resource).toBe('arn:aws:bedrock-agentcore:us-west-2:aws:tool/web-search.v1');
   });
 
   test('has no API Gateway, Lambda or WebSocket resources', () => {

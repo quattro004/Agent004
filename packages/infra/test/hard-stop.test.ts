@@ -113,6 +113,9 @@ describe('hard-stop handler', () => {
     expect(document.Statement[0].Action).toEqual(
       expect.arrayContaining(['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream']),
     );
+    // A search bills once the 5,000 free monthly queries run out, so a hard
+    // stop that left it open would keep spending after the cap.
+    expect(document.Statement[0].Action).toContain('bedrock-agentcore:InvokeWebSearch');
     expect(document.Statement[0].Resource).toBe('*');
   });
 

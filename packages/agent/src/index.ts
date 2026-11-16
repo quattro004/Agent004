@@ -4,6 +4,7 @@ import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { tool } from '@strands-agents/sdk';
 import type { JSONValue } from '@strands-agents/sdk';
 import { PollyClient } from '@aws-sdk/client-polly';
+import { BedrockAgentCoreClient } from '@aws-sdk/client-bedrock-agentcore';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { buildSystemPrompt } from './personality/systemPrompt.js';
 import { probeBedrockRuntime } from './bedrock/warmup.js';
@@ -89,6 +90,14 @@ let polly: PollyClient | undefined;
 function pollyClient(config: RuntimeConfig): PollyClient {
   polly ??= new PollyClient({ region: config.awsRegion });
   return polly;
+}
+
+/** One AgentCore data-plane client for web search, built on first use like Polly's. */
+let webSearchClient: BedrockAgentCoreClient | undefined;
+
+function agentCoreWebSearchClient(config: RuntimeConfig): BedrockAgentCoreClient {
+  webSearchClient ??= new BedrockAgentCoreClient({ region: config.awsRegion });
+  return webSearchClient;
 }
 
 /**
@@ -228,10 +237,8 @@ const webSearchTool = tool({
     'Search the web for current information. Use when the user asks about recent events, facts you are unsure about, or anything requiring up-to-date information beyond your training data. Returns real search results — never fabricate URLs or content.',
   inputSchema: webSearchToolSchema,
   callback: async (input, context) => {
-    const config = getRuntimeConfig();
     const result = await fetchWebSearch(input, {
-      apiKey: config.secrets.searchApiKey,
-      engineId: config.secrets.searchEngineId,
+      client: agentCoreWebSearchClient(getRuntimeConfig()),
       signal: context?.cancelSignal,
     });
     return result as unknown as JSONValue;

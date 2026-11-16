@@ -60,8 +60,6 @@ function validEnv(): Record<string, string> {
     GLOBAL_MAX_ACTIVE_REQUESTS: '2',
     SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
     SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
-    SSM_PARAM_SEARCH_KEY: '/max-height/search-api-key',
-    SSM_PARAM_SEARCH_ENGINE_ID: '/max-height/search-engine-id',
   };
 }
 
@@ -84,6 +82,13 @@ describe('loadRuntimeConfig — approved per-turn bounds', () => {
       maxBilledTokens: 64000,
       deadlineMs: 60000,
     });
+  });
+
+  it('loads only the weather and news keys: web search is IAM-signed and needs no secret', async () => {
+    const config = await loadRuntimeConfig(validEnv());
+
+    expect(config.secrets).toEqual({ weatherApiKey: 'secret', newsApiKey: 'secret' });
+    expect(sendMock).toHaveBeenCalledTimes(2);
   });
 
   it('reads the global active-request limit from the environment', async () => {

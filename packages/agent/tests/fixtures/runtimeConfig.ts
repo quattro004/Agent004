@@ -42,8 +42,6 @@ export function testRuntimeConfig(overrides: Partial<RuntimeConfig> = {}): Runti
     secrets: {
       weatherApiKey: 'weather-key',
       newsApiKey: 'news-key',
-      searchApiKey: 'search-key',
-      searchEngineId: 'search-engine',
     },
     ...overrides,
   };

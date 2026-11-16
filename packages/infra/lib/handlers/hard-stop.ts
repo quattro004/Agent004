@@ -34,6 +34,7 @@ const DENIED_ACTIONS = [
   'bedrock-agentcore:GetMemoryRecord',
   'bedrock-agentcore:DeleteMemoryRecord',
   'bedrock-agentcore:BatchDeleteMemoryRecords',
+  'bedrock-agentcore:InvokeWebSearch',
 ];
 
 const HALT_REASON = 'budget-100';

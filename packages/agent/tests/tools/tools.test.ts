@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { newsToolSchema, fetchNews } from '../../src/tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from '../../src/tools/weatherTool.js';
-import { fetchWebSearch } from '../../src/tools/webSearchTool.js';
 
 describe('newsTool', () => {
   describe('schema validation', () => {
@@ -172,16 +171,6 @@ describe('cancellation signal forwarding', () => {
     );
     expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
   });
-
-  it('fetchWebSearch forwards the signal to fetch', async () => {
-    const controller = new AbortController();
-    const mockFetch = vi.fn().mockResolvedValue(okResponse);
-    await fetchWebSearch(
-      { query: 'max height' },
-      { apiKey: 'k', engineId: 'e', fetch: mockFetch, signal: controller.signal },
-    );
-    expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
-  });
 });
 
 describe('tool credentials come from arguments, not the environment', () => {
@@ -194,15 +183,11 @@ describe('tool credentials come from arguments, not the environment', () => {
   beforeEach(() => {
     process.env.NEWS_API_KEY = 'stale-env-key';
     process.env.WEATHER_API_KEY = 'stale-env-key';
-    process.env.SEARCH_API_KEY = 'stale-env-key';
-    process.env.SEARCH_ENGINE_ID = 'stale-env-engine';
   });
 
   afterEach(() => {
     delete process.env.NEWS_API_KEY;
     delete process.env.WEATHER_API_KEY;
-    delete process.env.SEARCH_API_KEY;
-    delete process.env.SEARCH_ENGINE_ID;
   });
 
   it('fetchNews calls the API with the key it was given', async () => {
@@ -219,18 +204,5 @@ describe('tool credentials come from arguments, not the environment', () => {
 
     expect(String(mockFetch.mock.calls[0]![0])).toContain('appid=configured-key');
     expect(String(mockFetch.mock.calls[0]![0])).not.toContain('stale-env-key');
-  });
-
-  it('fetchWebSearch calls the API with the key and engine it was given', async () => {
-    const mockFetch = okJson({ items: [] });
-    await fetchWebSearch(
-      { query: 'q' },
-      { apiKey: 'configured-key', engineId: 'configured-engine', fetch: mockFetch },
-    );
-
-    const url = String(mockFetch.mock.calls[0]![0]);
-    expect(url).toContain('key=configured-key');
-    expect(url).toContain('cx=configured-engine');
-    expect(url).not.toContain('stale-env');
   });
 });

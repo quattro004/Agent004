@@ -1,5 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
+import { InvokeWebSearchCommand } from '@aws-sdk/client-bedrock-agentcore';
 import { webSearchToolSchema, fetchWebSearch } from '../../src/tools/webSearchTool.js';
+
+/**
+ * Web search is AgentCore's AWS-managed `InvokeWebSearch` operation, signed
+ * with the runtime role: no API key, no engine ID, nothing in SSM
+ * (wiki `Decision-Web-Search-Provider`). Google Custom Search closes on
+ * 2027-01-01.
+ */
+function clientReturning(response: unknown) {
+  return { send: vi.fn().mockResolvedValue(response) };
+}
 
 describe('webSearchTool', () => {
   describe('schema validation', () => {
@@ -17,131 +28,135 @@ describe('webSearchTool', () => {
       const result = webSearchToolSchema.safeParse({});
       expect(result.success).toBe(false);
     });
+
+    it('rejects a query over the 200 characters the API accepts', () => {
+      expect(webSearchToolSchema.safeParse({ query: 'q'.repeat(200) }).success).toBe(true);
+      expect(webSearchToolSchema.safeParse({ query: 'q'.repeat(201) }).success).toBe(false);
+    });
   });
 
   describe('fetchWebSearch', () => {
-    it('returns search results on success', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          items: [
-            {
-              title: 'AI breakthrough 2026',
-              snippet: 'Major advancement in artificial intelligence.',
-              link: 'https://example.com/ai',
-            },
-            {
-              title: 'Tech news today',
-              snippet: 'Latest in technology.',
-              link: 'https://example.com/tech',
-            },
-          ],
-        }),
+    it('asks the AWS-managed web search tool for the query, capped at five results', async () => {
+      const client = clientReturning({ results: [] });
+
+      await fetchWebSearch({ query: 'AI news 2026' }, { client });
+
+      const command = client.send.mock.calls[0]![0];
+      expect(command).toBeInstanceOf(InvokeWebSearchCommand);
+      expect(command.input).toEqual({
+        webSearchId: 'web-search.v1',
+        searchQuery: 'AI news 2026',
+        maxResults: 5,
+      });
+    });
+
+    it('returns title, url and the text extract as the snippet', async () => {
+      const client = clientReturning({
+        results: [
+          {
+            title: 'AI breakthrough 2026',
+            text: 'Major advancement in artificial intelligence.',
+            url: 'https://example.com/ai',
+            publishedAt: new Date('2026-11-01T00:00:00Z'),
+          },
+          { title: 'Tech news today', text: 'Latest in technology.', url: 'https://example.com/t' },
+        ],
       });
 
-      const result = await fetchWebSearch(
-        { query: 'AI news 2026' },
-        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
-      );
+      const result = await fetchWebSearch({ query: 'AI news 2026' }, { client });
 
-      expect(result.success).toBe(true);
-      expect(result.results).toHaveLength(2);
-      expect(result.results![0].title).toBe('AI breakthrough 2026');
-      expect(result.results![0].snippet).toContain('artificial intelligence');
-      expect(result.results![0].url).toBe('https://example.com/ai');
+      expect(result).toEqual({
+        success: true,
+        results: [
+          {
+            title: 'AI breakthrough 2026',
+            snippet: 'Major advancement in artificial intelligence.',
+            url: 'https://example.com/ai',
+          },
+          {
+            title: 'Tech news today',
+            snippet: 'Latest in technology.',
+            url: 'https://example.com/t',
+          },
+        ],
+      });
     });
 
-    it('returns error when the search API key is missing', async () => {
-      const result = await fetchWebSearch({ query: 'test' }, { apiKey: '', engineId: 'e' });
+    it('forwards the cancellation signal so a cancelled turn stops the search', async () => {
+      const controller = new AbortController();
+      const client = clientReturning({ results: [] });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('SEARCH_API_KEY');
+      await fetchWebSearch({ query: 'max height' }, { client, signal: controller.signal });
+
+      expect(client.send.mock.calls[0]![1]).toEqual({ abortSignal: controller.signal });
     });
 
-    it('returns error when the search engine ID is missing', async () => {
-      const result = await fetchWebSearch({ query: 'test' }, { apiKey: 'k', engineId: '' });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('SEARCH_ENGINE_ID');
-    });
-
-    it('handles API error responses', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 429,
-        statusText: 'Too Many Requests',
+    it('drops a result with no URL, since the persona must cite what it relays', async () => {
+      const client = clientReturning({
+        results: [
+          { title: 'No link', text: 'Cannot be attributed.' },
+          { title: 'Has link', text: 'Can be attributed.', url: 'https://example.com/ok' },
+        ],
       });
 
-      const result = await fetchWebSearch(
-        { query: 'test' },
-        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
-      );
+      const result = await fetchWebSearch({ query: 'test' }, { client });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('429');
+      expect(result.results).toEqual([
+        { title: 'Has link', snippet: 'Can be attributed.', url: 'https://example.com/ok' },
+      ]);
     });
 
-    it('handles network errors', async () => {
-      const mockFetch = vi.fn().mockRejectedValue(new Error('Network timeout'));
+    it('tolerates a result with no title', async () => {
+      const client = clientReturning({
+        results: [{ text: 'Body.', url: 'https://example.com/x' }],
+      });
 
-      const result = await fetchWebSearch(
-        { query: 'test' },
-        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
-      );
+      const result = await fetchWebSearch({ query: 'test' }, { client });
+
+      expect(result.results).toEqual([
+        { title: '', snippet: 'Body.', url: 'https://example.com/x' },
+      ]);
+    });
+
+    it('returns the service error message when the call fails', async () => {
+      const client = {
+        send: vi.fn().mockRejectedValue(new Error('ThrottlingException: slow down')),
+      };
+
+      const result = await fetchWebSearch({ query: 'test' }, { client });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Network timeout');
+      expect(result.error).toContain('ThrottlingException');
     });
 
     it('handles empty results', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ items: [] }),
-      });
-
       const result = await fetchWebSearch(
-        { query: 'obscure query' },
-        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+        { query: 'obscure' },
+        { client: clientReturning({ results: [] }) },
       );
 
-      expect(result.success).toBe(true);
-      expect(result.results).toEqual([]);
+      expect(result).toEqual({ success: true, results: [] });
     });
 
-    it('handles missing items field in response', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({}),
-      });
+    it('handles a response with no results field', async () => {
+      const result = await fetchWebSearch({ query: 'test' }, { client: clientReturning({}) });
 
-      const result = await fetchWebSearch(
-        { query: 'test' },
-        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.results).toEqual([]);
+      expect(result).toEqual({ success: true, results: [] });
     });
 
-    it('limits results to 5', async () => {
-      const items = Array.from({ length: 10 }, (_, i) => ({
+    it('never returns more than 5 results, whatever the service sends', async () => {
+      const results = Array.from({ length: 10 }, (_, i) => ({
         title: `Result ${i}`,
-        snippet: `Snippet ${i}`,
-        link: `https://example.com/${i}`,
+        text: `Text ${i}`,
+        url: `https://example.com/${i}`,
       }));
 
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ items }),
-      });
-
       const result = await fetchWebSearch(
         { query: 'test' },
-        { apiKey: 'test-search-key', engineId: 'test-engine-id', fetch: mockFetch },
+        { client: clientReturning({ results }) },
       );
 
-      expect(result.success).toBe(true);
-      expect(result.results!.length).toBeLessThanOrEqual(5);
+      expect(result.results).toHaveLength(5);
     });
   });
 });

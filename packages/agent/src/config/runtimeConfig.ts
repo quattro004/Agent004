@@ -39,8 +39,6 @@ export interface RuntimeConfig {
 export interface ToolSecrets {
   weatherApiKey: string;
   newsApiKey: string;
-  searchApiKey: string;
-  searchEngineId: string;
 }
 
 export class RuntimeConfigError extends Error {
@@ -122,8 +120,6 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
   const parameterNames = {
     weatherApiKey: text('SSM_PARAM_WEATHER_KEY'),
     newsApiKey: text('SSM_PARAM_NEWS_KEY'),
-    searchApiKey: text('SSM_PARAM_SEARCH_KEY'),
-    searchEngineId: text('SSM_PARAM_SEARCH_ENGINE_ID'),
   };
 
   const problems = [
@@ -157,12 +153,10 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
     return value;
   };
 
-  const [weatherApiKey, newsApiKey, searchApiKey, searchEngineId] = await Promise.all([
+  const [weatherApiKey, newsApiKey] = await Promise.all([
     read(parameterNames.weatherApiKey),
     read(parameterNames.newsApiKey),
-    read(parameterNames.searchApiKey),
-    read(parameterNames.searchEngineId),
   ]);
 
-  return { ...config, secrets: { weatherApiKey, newsApiKey, searchApiKey, searchEngineId } };
+  return { ...config, secrets: { weatherApiKey, newsApiKey } };
 }

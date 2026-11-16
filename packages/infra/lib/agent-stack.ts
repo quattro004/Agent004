@@ -25,8 +25,6 @@ const INFERENCE_PROFILE = `global.${FOUNDATION_MODEL}`;
 const SSM_PARAMS = {
   SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
   SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
-  SSM_PARAM_SEARCH_KEY: '/max-height/search-api-key',
-  SSM_PARAM_SEARCH_ENGINE_ID: '/max-height/search-engine-id',
 };
 
 // contracts/runtime-config.md § Agent runtime.
@@ -227,6 +225,16 @@ export class AgentStack extends cdk.Stack {
           'bedrock-agentcore:BatchDeleteMemoryRecords',
         ],
         resources: [props.memory.memoryArn],
+      }),
+    );
+
+    // AgentCore's AWS-managed web search needs no key; the account field of its
+    // ARN is the literal "aws". It is a different action from the memory ones,
+    // and the memory statement's resource would not match it.
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['bedrock-agentcore:InvokeWebSearch'],
+        resources: [`arn:aws:bedrock-agentcore:${this.region}:aws:tool/web-search.v1`],
       }),
     );
 
