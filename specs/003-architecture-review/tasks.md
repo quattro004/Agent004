@@ -136,7 +136,7 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 ### Tests for User Story 1 ⚠️ write first, confirm they FAIL
 
 - [ ] T027 [P] [US1] RED: in `packages/agent/tests/index.test.ts`, `POST /invocations` returns `text/event-stream`. Events are `session`, `text`, `audio` (mp3 base64 with `seq`), `done`, `result` and `error`, framed per transport-sse.md § Framing. A body with no `message` or an unknown action is `invalid_request`, and a message over 2,000 characters is `message_too_long` (P-08)
-- [ ] T028 [P] [US1] RED: create `packages/agent/tests/session/agentRegistry.test.ts`. One Strands `Agent` per counted session, keyed by runtime session ID (at least 33 characters), using `SlidingWindowConversationManager` with window 40 (N2). The `Agent` is rebuilt when `countedSessionId` changes. Entries record `lastUsedAt` for local eviction
+- [x] T028 [P] [US1] RED: create `packages/agent/tests/session/agentRegistry.test.ts`. One Strands `Agent` per counted session, keyed by runtime session ID (at least 33 characters), using `SlidingWindowConversationManager` with window 40 (N2). The `Agent` is rebuilt when `countedSessionId` changes. Entries record `lastUsedAt` for local eviction
 - [ ] T029 [P] [US1] RED: create `packages/agent/tests/voice/pollyStream.test.ts`. Server-side Polly Standard `Matthew` (`Engine: 'standard'`, amendment A6) at sample rate `24000`, mp3 segments emitted as `audio` events with increasing `seq`. When voice is off there are no `audio` events, and `pollyCharacters` is 0. There are no speech marks
 - [ ] T030 [P] [US1] RED: update `packages/agent/tests/index.cancellation.test.ts`. A client disconnect (`res.on('close')` guarded by `res.writableFinished`) cancels the turn, sets `cancelled` true on the `invocation` span, and the turn's usage is still counted (transport-sse § Cancellation)
 - [ ] T031 [P] [US1] RED: create `packages/frontend/tests/hooks/useAgentStream.test.ts`. It sends a fetch `POST` to `/runtimes/<encoded VITE_RUNTIME_ARN>/invocations?qualifier=DEFAULT` with `Authorization: Bearer`, `Accept: text/event-stream` and the session-ID header. It parses SSE framing, maps every status and error code in transport-sse § Response to its UI state, and treats a `5xx`, a network drop or a stream that ends without `done` as signal-lost
@@ -146,7 +146,7 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 
 ### Implementation for User Story 1
 
-- [ ] T035 [US1] Implement `packages/agent/src/session/agentRegistry.ts` until T028 passes
+- [x] T035 [US1] Implement `packages/agent/src/session/agentRegistry.ts` until T028 passes — the registry is built and tested but **not yet wired into the handler**; that is T037's SSE rewrite
 - [ ] T036 [US1] Implement `packages/agent/src/voice/pollyStream.ts` with `@aws-sdk/client-polly` until T029 passes
 - [ ] T037 [US1] Rewrite `/invocations` in `packages/agent/src/index.ts` to stream SSE with identity from `jwtClaims.ts`, the registry, `pollyStream.ts` and `usage.ts`, until T027 and T030 pass
 - [ ] T038 [P] [US1] Change `packages/agent/src/tools/weatherTool.ts`, `newsTool.ts` and `webSearchTool.ts` to take their API keys as arguments from `runtimeConfig.ts` rather than reading the environment, keeping `context.cancelSignal` forwarding. Update `packages/agent/tests/tools/tools.test.ts` and `webSearchTool.test.ts` RED first

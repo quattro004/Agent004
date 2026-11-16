@@ -1,6 +1,6 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { Agent } from '@strands-agents/sdk';
+import { Agent, SlidingWindowConversationManager } from '@strands-agents/sdk';
 import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { tool } from '@strands-agents/sdk';
 import type { JSONValue } from '@strands-agents/sdk';
@@ -122,6 +122,10 @@ export function createMaxHeightAgent(options?: { displayAlias?: string; config?:
     tools: [newsTool, weatherTool, webSearchTool],
     systemPrompt,
     printer: false,
+    // The SDK's current default is also a 40-message sliding window, so an
+    // omitted option looks identical today — and would change silently if the
+    // SDK's default ever moved. N2 chose 40; passing it makes it ours.
+    conversationManager: new SlidingWindowConversationManager({ windowSize: 40 }),
   });
 
   // `limits` bounds model calls and tokens, but the SDK has no tool-execution
@@ -373,6 +377,7 @@ export const __test = {
   sessions,
   requestHandler,
   handleInvocations,
+  createMaxHeightAgent,
   /** Seeds the config the handler would otherwise get from `initialize()`. */
   setRuntimeConfig(config: RuntimeConfig | undefined) {
     runtimeConfig = config;
