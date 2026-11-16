@@ -8,6 +8,7 @@ export type SessionState =
   | 'BUDGET_CAPPED'
   | 'RATE_LIMITED'
   | 'SIGNAL_LOST'
+  | 'DENIED'
   | 'ERROR';
 
 export type GreetingArchetype =
