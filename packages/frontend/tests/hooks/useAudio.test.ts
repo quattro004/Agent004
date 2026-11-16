@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AudioChain } from '../../src/audio/audioChain';
 import { createUseAudio } from '../../src/hooks/useAudio';
+import { createAgentStream } from '../../src/hooks/useAgentStream';
 import { useVoiceStore } from '../../src/stores/voiceStore';
 
 /**
@@ -129,6 +130,50 @@ describe('useAudio', () => {
 
     expect(audioChain.play).toHaveBeenCalledTimes(1);
     audio.dispose();
+  });
+
+  // The server numbers segments from 0 in every turn, so a later reply must
+  // not be mistaken for a replay of the first.
+  it('plays the voice of every turn, though each turn numbers its segments from 0', async () => {
+    const audio = createUseAudio(audioChain);
+    const encoder = new TextEncoder();
+    const turn = () =>
+      ({
+        ok: true,
+        status: 200,
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (const event of [
+              { type: 'session', countedSessionId: 'counted-1', opened: true, voice: 'on' },
+              { type: 'audio', seq: 0, format: 'mp3', data: 'AQID' },
+              { type: 'audio', seq: 1, format: 'mp3', data: 'AQID' },
+              { type: 'done', turnsUsed: 1, state: 'ACTIVE' },
+            ]) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            }
+            controller.close();
+          },
+        }),
+      }) as unknown as Response;
+    const stream = createAgentStream({
+      runtimeArn:
+        'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/max_height_agent-AbCdEf',
+      getAccessToken: async () => 'token-1',
+      fetchImpl: vi.fn(async () => turn()) as unknown as typeof fetch,
+    });
+
+    try {
+      await stream.send({ message: 'one' });
+      await vi.advanceTimersByTimeAsync(CLIP_MS * 2 + 10);
+      expect(audioChain.play).toHaveBeenCalledTimes(2);
+
+      await stream.send({ message: 'two' });
+      await vi.advanceTimersByTimeAsync(CLIP_MS * 2 + 10);
+
+      expect(audioChain.play).toHaveBeenCalledTimes(4);
+    } finally {
+      audio.dispose();
+    }
   });
 
   it('marks Max as speaking while clips play and stops when the queue drains', async () => {

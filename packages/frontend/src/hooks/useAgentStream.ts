@@ -376,7 +376,10 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
       return;
     }
 
-    if (!capture) conversation().setFullText('');
+    if (!capture) {
+      conversation().setFullText('');
+      voice().beginAudioTurn();
+    }
 
     let refreshed = false;
     let resentWithNewSessionId = false;

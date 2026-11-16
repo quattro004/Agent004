@@ -700,6 +700,94 @@ describe('App — Greeting Flow', () => {
   });
 });
 
+// Over SSE nothing sets the session state until a send has been answered, so the
+// store is still INITIALIZING when the friend types their first message.
+describe('App — sending before the stream has a session', () => {
+  async function submitWithSessionState(sessionState: string) {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    (
+      useConnectionStore as unknown as { _setState: (s: Record<string, unknown>) => void }
+    )._setState({ sessionState, sessionId: null, isStreamReady: false });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(knob.getAttribute('data-is-on')).toBe('true');
+    });
+
+    const input = screen.getByTestId('text-input');
+    fireEvent.change(input, { target: { value: 'hello Max' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    cleanup();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+    });
+  });
+
+  it('sends the first message while the session is still INITIALIZING', async () => {
+    await submitWithSessionState('INITIALIZING');
+
+    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ message: 'hello Max' }));
+  });
+
+  it('sends the next message after the signal was lost', async () => {
+    await submitWithSessionState('SIGNAL_LOST');
+
+    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({ message: 'hello Max' }));
+  });
+
+  it('does not send once the friend has been denied', async () => {
+    await submitWithSessionState('DENIED');
+
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+// Each createUseAudio() subscribes to the voice queue until it is disposed, and
+// only the instance App holds on to is ever disposed, so one built per render
+// leaks a competing player every time the screen updates.
+describe('App — the audio players', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    cleanup();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+    });
+  });
+
+  it('builds the audio chain, voice player and greeting player once, however often it re-renders', async () => {
+    const { createAudioChain } = await import('../src/audio/audioChain');
+    const { createUseAudio } = await import('../src/hooks/useAudio');
+    const { createUseGreeting } = await import('../src/hooks/useGreeting');
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    const knob = screen.getByTestId('tv-knob');
+    fireEvent.click(knob);
+    await vi.waitFor(() => {
+      expect(knob.getAttribute('data-is-on')).toBe('true');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Volume up' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Volume up' }));
+
+    expect(createAudioChain).toHaveBeenCalledTimes(1);
+    expect(createUseAudio).toHaveBeenCalledTimes(1);
+    expect(createUseGreeting).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('App — the gate in front of the broadcast', () => {
   beforeEach(() => {
     vi.clearAllMocks();

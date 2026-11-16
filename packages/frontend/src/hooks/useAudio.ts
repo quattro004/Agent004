@@ -31,6 +31,7 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
   let mouthPollTimer: ReturnType<typeof setInterval> | null = null;
   let draining = false;
   let disposed = false;
+  let lastPlayedTurn = -1;
   let lastPlayedSeq = -1;
 
   function startMouthPolling() {
@@ -76,6 +77,10 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
         if (disposed) return;
         const clip = voice().shiftAudio();
         if (!clip) return;
+        if (clip.turn !== lastPlayedTurn) {
+          lastPlayedTurn = clip.turn;
+          lastPlayedSeq = -1;
+        }
         if (clip.seq <= lastPlayedSeq) continue;
         lastPlayedSeq = clip.seq;
 

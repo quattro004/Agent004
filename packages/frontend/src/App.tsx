@@ -65,6 +65,17 @@ function readStoredThemeIndex(): number {
 }
 
 /** Map domain SessionState to the overlay subset (null if no overlay needed). */
+// Over SSE the session state is INITIALIZING until a send is answered, and
+// SIGNAL_LOST must let the next message open a fresh session (spec 003 FR-037),
+// so sending is blocked only by a refusal that retrying cannot change.
+const SEND_BLOCKED_STATES: SessionState[] = [
+  'ENDED',
+  'BUDGET_CAPPED',
+  'RATE_LIMITED',
+  'DENIED',
+  'ERROR',
+];
+
 function toOverlayState(state: SessionState, isGreetingDone: boolean): OverlayState {
   if (!isGreetingDone) return null;
   switch (state) {
@@ -104,9 +115,9 @@ export function App() {
   const [greetingText, setGreetingText] = useState<string | null>(null);
   const [greetingNonce, setGreetingNonce] = useState(0);
   const [isGreetingDone, setIsGreetingDone] = useState(false);
-  const audioChainRef = useRef(createAudioChain());
-  const audioRef = useRef(createUseAudio(audioChainRef.current));
-  const greetingRef = useRef(createUseGreeting(audioChainRef.current));
+  // `useRef(createX())` would build a new instance on every render.
+  const [audioChain] = useState(() => createAudioChain());
+  const [greeting] = useState(() => createUseGreeting(audioChain));
   const preloadedGreetingRef = useRef<PreloadedGreeting | null>(null);
   const powerSequenceIdRef = useRef(0);
   const powerOnAbortRef = useRef<AbortController | null>(null);
@@ -126,7 +137,7 @@ export function App() {
   const isGreeting = useVoiceStore((s) => s.isGreeting);
   const currentTheme = AVATAR_THEMES[themeIndex];
 
-  const isActive = sessionState === 'ACTIVE' || sessionState === 'GREETING';
+  const canSend = !SEND_BLOCKED_STATES.includes(sessionState);
 
   useEffect(() => {
     tvPowerRef.current = tvPower;
@@ -173,7 +184,7 @@ export function App() {
     preloadedGreetingRef.current = null;
     let cancelled = false;
 
-    void greetingRef.current.playGreeting(preloadedGreeting).then((result) => {
+    void greeting.playGreeting(preloadedGreeting).then((result) => {
       if (cancelled) return;
       if (!result?.text) {
         setIsGreetingDone(true);
@@ -194,7 +205,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [isTvOn, greetingNonce]);
+  }, [isTvOn, greetingNonce, greeting]);
 
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, String(themeIndex));
@@ -202,16 +213,19 @@ export function App() {
 
   // Apply volume changes to the audio chain (no-op until init resolves)
   useEffect(() => {
-    audioChainRef.current.setVolume(volume);
-  }, [volume]);
+    audioChain.setVolume(volume);
+  }, [volume, audioChain]);
 
+  // The voice player subscribes to the voice queue and cannot be revived once
+  // disposed, so StrictMode's simulated unmount needs a fresh one per mount.
   useEffect(() => {
+    const voicePlayer = createUseAudio(audioChain);
     return () => {
       powerOnAbortRef.current?.abort();
-      audioRef.current.dispose();
-      audioChainRef.current.dispose();
+      voicePlayer.dispose();
+      audioChain.dispose();
     };
-  }, []);
+  }, [audioChain]);
 
   // Drive the avatar through the tune-in glitch pattern while in `settling`.
   // Each step holds the frame for its configured duration, then advances.
@@ -237,11 +251,11 @@ export function App() {
   // Stop greeting audio on every transition to TV off
   useEffect(() => {
     if (prevTvPowerRef.current !== 'off' && tvPower === 'off') {
-      greetingRef.current.stopGreeting();
-      audioChainRef.current.stopStatic();
+      greeting.stopGreeting();
+      audioChain.stopStatic();
     }
     prevTvPowerRef.current = tvPower;
-  }, [tvPower]);
+  }, [tvPower, greeting, audioChain]);
 
   const handlePowerToggle = useCallback(() => {
     if (tvPower === 'off') {
@@ -263,7 +277,7 @@ export function App() {
 
       const minStaticPromise = (async () => {
         try {
-          await audioChainRef.current.init();
+          await audioChain.init();
         } catch (error) {
           console.error('[App] Failed to initialize tuning audio', error);
           await maxTuningPromise;
@@ -274,11 +288,11 @@ export function App() {
           return;
         }
 
-        audioChainRef.current.playStatic();
+        audioChain.playStatic();
         await delay(TUNING_MIN_MS);
       })();
 
-      const preloadPromise = greetingRef.current
+      const preloadPromise = greeting
         .preloadGreeting({ signal: abortController.signal })
         .then((preloaded) => {
           if (isCurrentSequence()) {
@@ -294,7 +308,7 @@ export function App() {
           return;
         }
 
-        audioChainRef.current.stopStatic();
+        audioChain.stopStatic();
         tvPowerRef.current = 'settling';
         setTvPower('settling');
 
@@ -315,18 +329,18 @@ export function App() {
       preloadedGreetingRef.current = null;
       // A turn still streaming is a turn still being paid for.
       stream.cancel();
-      audioChainRef.current.stopStatic();
+      audioChain.stopStatic();
       tvPowerRef.current = 'off';
       setTvPower('off');
       setIsGreetingDone(false);
       setGreetingText(null);
     }
-  }, [tvPower, stream]);
+  }, [tvPower, stream, audioChain, greeting]);
 
   const handleChannelChange = useCallback(() => {
     if (tvPower === 'off') return;
 
-    greetingRef.current.stopGreeting();
+    greeting.stopGreeting();
     preloadedGreetingRef.current = null;
     setIsGreetingDone(false);
     setGreetingText(null);
@@ -335,18 +349,18 @@ export function App() {
       return AVATAR_THEMES.indexOf(nextTheme(currentTheme));
     });
     setGreetingNonce((current) => current + 1);
-  }, [tvPower]);
+  }, [tvPower, greeting]);
 
   const handleSend = useCallback(
     (text: string) => {
-      if (!text.trim() || !isActive) return;
+      if (!text.trim() || !canSend) return;
       void stream.send({
         message: text,
         clientTimestamp: new Date().toISOString(),
         voice: 'on',
       });
     },
-    [isActive, stream],
+    [canSend, stream],
   );
 
   const controlPanel = (
