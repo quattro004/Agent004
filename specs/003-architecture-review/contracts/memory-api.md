@@ -48,7 +48,7 @@ When a counted session opens, the runtime calls `RetrieveMemoryRecords` with:
 
 The results are added to the system prompt of that session's `Agent`, as a delimited "what you remember about this friend" block. Continuing turns do not retrieve again.
 
-- **Namespace matching**: whether `RetrieveMemoryRecords` treats the namespace as a prefix is **unverified**. If it is exact-match only, the runtime makes one call per strategy namespace, three in all. That is checked against the API reference at task time, and R-cost counts retrievals either way.
+- **Namespace matching**: settled. `ListMemoryRecordsInput` and `RetrieveMemoryRecordsInput` both take **`namespacePath`**, documented as "use namespacePath for hierarchical retrievals — return all memory records where namespace falls under the same parent hierarchy" (`@aws-sdk/client-bedrock-agentcore` 3.1169.0, `models_1.d.ts:1084-1125`, `:1288-1323`). One call over `/max-height/<sub>/` therefore covers all three strategy namespaces; the three-calls-per-strategy fallback is not needed. The pruner already relies on this (`memory-pruner.ts`).
 - **On failure** (P8): the session continues with no memories, and the failure is loud: a warning log, a metric, and `failed` on the `memory.retrieve` span.
 
 ## Friend-facing operations
