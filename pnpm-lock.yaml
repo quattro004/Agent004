@@ -144,6 +144,9 @@ importers:
 
   packages/infra:
     dependencies:
+      '@aws-sdk/client-bedrock-agentcore':
+        specifier: ^3.1169.0
+        version: 3.1169.0
       aws-cdk-lib:
         specifier: ^2.276.0
         version: 2.276.0(constructs@10.8.1)
