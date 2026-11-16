@@ -34,6 +34,8 @@ const RECORD_EXPIRY = { recordExpiryDurationDays: RECORD_TTL_BACKSTOP_DAYS };
 export class DataStack extends cdk.Stack {
   readonly controlTable: dynamodb.ITable;
   readonly memory: agentcore.CfnMemory;
+  /** The Ops stack alarms on this function's failures. */
+  readonly prunerFunction: lambda.IFunction;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -76,8 +78,7 @@ export class DataStack extends cdk.Stack {
       ],
     });
 
-    this.addPruner(table);
-
+    this.prunerFunction = this.addPruner(table);
     new cdk.CfnOutput(this, 'ControlTableName', { value: table.tableName });
     new cdk.CfnOutput(this, 'ControlTableArn', { value: table.tableArn });
     new cdk.CfnOutput(this, 'MemoryId', { value: this.memory.attrMemoryId });
@@ -89,7 +90,7 @@ export class DataStack extends cdk.Stack {
    * Memory actions it needs and nothing that could write a record, and it can
    * stamp the control table but never delete from it.
    */
-  private addPruner(table: dynamodb.Table): void {
+  private addPruner(table: dynamodb.Table): lambda.IFunction {
     const pruner = new NodejsFunction(this, 'MemoryPruner', {
       entry: path.join(here, 'handlers', 'memory-pruner.ts'),
       handler: 'handler',
@@ -120,5 +121,7 @@ export class DataStack extends cdk.Stack {
       schedule: events.Schedule.rate(cdk.Duration.days(1)),
       targets: [new targets.LambdaFunction(pruner)],
     });
+
+    return pruner;
   }
 }

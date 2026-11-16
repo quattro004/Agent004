@@ -6,6 +6,7 @@ import { DataStack } from './data-stack.js';
 import { CognitoStack } from './cognito-stack.js';
 import { BudgetStack } from './budget-stack.js';
 import { FrontendStack } from './frontend-stack.js';
+import { OpsStack } from './ops-stack.js';
 import { SITE_DOMAIN } from './site-domain.js';
 
 /** FR-031: every stack except the us-east-1 certificate stack. */
@@ -35,7 +36,7 @@ export function buildMaxHeightApp(app: cdk.App): void {
     googleClientId: app.node.tryGetContext('googleClientId'),
   });
 
-  new AgentStack(app, 'MaxHeight-Agent', {
+  const agent = new AgentStack(app, 'MaxHeight-Agent', {
     env,
     controlTable: data.controlTable,
     memory: { memoryId: data.memory.attrMemoryId, memoryArn: data.memory.attrMemoryArn },
@@ -43,9 +44,21 @@ export function buildMaxHeightApp(app: cdk.App): void {
     userPoolClient: cognitoStack.userPoolClient,
   });
 
-  new BudgetStack(app, 'MaxHeight-Budget', {
+  const budget = new BudgetStack(app, 'MaxHeight-Budget', {
     env,
     // Never committed (public repo): cdk deploy -c budgetAlertEmail=<owner email>
+    alertEmail: app.node.tryGetContext('budgetAlertEmail'),
+  });
+
+  // Last, because it acts on the others' resources: it denies spend on the
+  // runtime role, writes HALT to the control table, and alarms on the pruner
+  // (contracts/spend-control.md § Stack split; deviation C32).
+  new OpsStack(app, 'MaxHeight-Ops', {
+    env,
+    hardStopTopic: budget.hardStopTopic,
+    controlTable: data.controlTable,
+    runtimeRole: agent.executionRole,
+    prunerFunction: data.prunerFunction,
     alertEmail: app.node.tryGetContext('budgetAlertEmail'),
   });
 

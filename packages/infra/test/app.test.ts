@@ -77,6 +77,29 @@ describe('Max Height app', () => {
     expect(stacks.length).toBeGreaterThan(0);
   });
 
+  // Deviation C32: Ops was unreachable until the pruner existed, which made
+  // the hard stop unreachable with it — the one thing that must be deployed
+  // before a friend can spend anything (contracts/spend-control.md).
+  test('includes every stack, Ops among them', () => {
+    expect(stacks.map((s) => s.stackName).sort()).toEqual([
+      'MaxHeight-Agent',
+      'MaxHeight-Budget',
+      'MaxHeight-Certificate',
+      'MaxHeight-Cognito',
+      'MaxHeight-Data',
+      'MaxHeight-Frontend',
+      'MaxHeight-Ops',
+    ]);
+  });
+
+  test('Ops deploys after the stacks whose resources it acts on', () => {
+    const ops = stacks.find((s) => s.stackName === 'MaxHeight-Ops');
+    const dependencies = ops!.dependencies.map((s) => s.stackName).sort();
+    expect(dependencies).toEqual(
+      expect.arrayContaining(['MaxHeight-Agent', 'MaxHeight-Budget', 'MaxHeight-Data']),
+    );
+  });
+
   test('every stack except Certificate is pinned to us-west-2', () => {
     const regions = stacks
       .filter((s) => s.stackName !== CERTIFICATE_STACK)
