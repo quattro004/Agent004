@@ -46,6 +46,17 @@ const RUNTIME_CONFIG: Record<string, string | undefined> = {
   RATE_LIMIT_PER_DAY: '500',
   MESSAGE_MAX_CHARS: '2000',
   HISTORY_WINDOW: '40',
+  // Spec 003 § Clarifications, Session 2026-11-15: the approved per-turn
+  // bounds. They are set here rather than defaulted in the runtime so a stack
+  // that forgot one fails at startup instead of spending more than approved.
+  REQUEST_BODY_MAX_BYTES: '16384',
+  MODEL_INPUT_MAX_BYTES: '32768',
+  TOOL_RESULT_MAX_BYTES: '8192',
+  TURN_MAX_MODEL_CALLS: '4',
+  TURN_MAX_TOOL_EXECUTIONS: '4',
+  TURN_MAX_GENERATED_TOKENS: '1000',
+  TURN_MAX_BILLED_TOKENS: '64000',
+  TURN_DEADLINE_MS: '60000',
   BREAKER_DEGRADE_MICRO_USD: undefined,
   BREAKER_TRIP_MICRO_USD: undefined,
   PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD: '1000000',

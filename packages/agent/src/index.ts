@@ -13,6 +13,12 @@ import { startSpan, endSpan } from './handlers/observability.js';
 import { readModelUsage } from './spend/usage.js';
 import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js';
 import {
+  readBoundedBody,
+  BodyTooLargeError,
+  invokeLimitsFor,
+  registerTurnLimits,
+} from './limits/turnLimits.js';
+import {
   createSession,
   checkSessionCaps,
   endSession,
@@ -49,6 +55,18 @@ const sessions = new Map<string, Session>();
 function estimateMessageTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
+
+/**
+ * SDK stop reasons that mean we hit an approved ceiling rather than finished.
+ * Limits are evaluated between turns, so the stopping call can overshoot —
+ * these are refusals to continue, not proof the ceiling held exactly.
+ */
+const LIMIT_STOP_REASONS: Record<string, string> = {
+  limitTurns: 'the per-turn model call ceiling was reached',
+  limitOutputTokens: 'the per-turn generated token ceiling was reached',
+  limitTotalTokens: 'the per-turn billed token ceiling was reached',
+  limitStructuredOutputAttempts: 'the structured output retry ceiling was reached',
+};
 
 // --- Tool Definitions ---
 
@@ -87,14 +105,15 @@ const webSearchTool = tool({
 
 // --- Agent Factory ---
 
-export function createMaxHeightAgent(options?: { displayAlias?: string }) {
+export function createMaxHeightAgent(options?: { displayAlias?: string; config?: RuntimeConfig }) {
+  const config = options?.config ?? getRuntimeConfig();
   const systemPrompt = buildSystemPrompt({
     displayAlias: options?.displayAlias,
   });
 
   const model = new BedrockModel({
-    modelId: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
-    maxTokens: 250,
+    modelId: config.modelId,
+    maxTokens: config.maxOutputTokens,
   });
 
   const agent = new Agent({
@@ -103,6 +122,10 @@ export function createMaxHeightAgent(options?: { displayAlias?: string }) {
     systemPrompt,
     printer: false,
   });
+
+  // `limits` bounds model calls and tokens, but the SDK has no tool-execution
+  // ceiling and no result size bound, so both are enforced with hooks.
+  registerTurnLimits(agent, config.limits);
 
   return agent;
 }
@@ -122,11 +145,23 @@ function handlePing(_req: IncomingMessage, res: ServerResponse): void {
 async function handleInvocations(req: IncomingMessage, res: ServerResponse): Promise<void> {
   startSpan('session.cold_start');
 
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(chunk as Buffer);
+  const config = getRuntimeConfig();
+  const { limits } = config;
+
+  // The size gate runs while reading, before anything is parsed, so an
+  // oversized payload cannot make us buffer or deserialize it.
+  let body: string;
+  try {
+    body = await readBoundedBody(req, limits.requestBodyMaxBytes);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'request_too_large', limitBytes: err.limitBytes }));
+      endSpan('session.cold_start', { refused: 'request_too_large' });
+      return;
+    }
+    throw err;
   }
-  const body = Buffer.concat(chunks).toString('utf-8');
 
   let parsed: {
     message?: string;
@@ -141,6 +176,14 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Invalid JSON' }));
     endSpan('session.cold_start');
+    return;
+  }
+
+  const message = parsed.message ?? 'Hello';
+  if (message.length > config.messageMaxChars) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'message_too_long', limitChars: config.messageMaxChars }));
+    endSpan('session.cold_start', { refused: 'message_too_long' });
     return;
   }
 
@@ -171,7 +214,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     res.end(
       JSON.stringify({
         error: 'session_cap_exceeded',
-        reason: capCheck.reason,
+        reason: capCheck.reason ?? 'unknown',
         sessionId,
       }),
     );
@@ -179,7 +222,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     return;
   }
 
-  const agent = createMaxHeightAgent({ displayAlias: parsed.displayAlias });
+  const agent = createMaxHeightAgent({ displayAlias: parsed.displayAlias, config });
 
   // A guest who closes the tab mid-turn must stop costing us tokens. The
   // response emitting 'close' before it has finished writing is Node's signal
@@ -188,6 +231,14 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
   res.on('close', () => {
     if (!res.writableFinished) cancellation.abort();
   });
+
+  // The turn deadline covers model, tool and voice work together. Reaching it
+  // is not successful completion, and the work already billed is still counted.
+  let deadlineExceeded = false;
+  const deadline = setTimeout(() => {
+    deadlineExceeded = true;
+    cancellation.abort();
+  }, limits.deadlineMs);
 
   // Stream the response
   res.writeHead(200, {
@@ -200,8 +251,10 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
   let firstTokenEmitted = false;
 
   try {
-    const result = await agent.invoke(parsed.message ?? 'Hello', {
+    const remainingGeneratedTokens = Math.max(0, config.sessionMaxTokens - session.tokenCount);
+    const result = await agent.invoke(message, {
       cancelSignal: cancellation.signal,
+      limits: invokeLimitsFor(limits, { remainingGeneratedTokens }),
     });
 
     // Extract text from the result
@@ -217,7 +270,9 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     }
 
     // Conversational tokens: this invocation's outputTokens plus the estimated
-    // message, not the reused Agent's lifetime usage.
+    // message, not the reused Agent's lifetime usage. This runs before the
+    // limit-stop check, because work that was billed is counted whether or not
+    // the turn produced a usable reply.
     const usage = readModelUsage(result);
     const tokensThisTurn = usage.outputTokens + estimateMessageTokens(parsed.message ?? '');
     sessions.set(sessionId, {
@@ -227,17 +282,47 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       state: 'ACTIVE',
     });
 
+    const limitStop = LIMIT_STOP_REASONS[(result as { stopReason?: string })?.stopReason ?? ''];
+    if (limitStop) {
+      // A truncated answer presented as a finished one is a lie to the friend
+      // and hides that we hit a spend ceiling.
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'error',
+          error: `Turn stopped on ${(result as { stopReason?: string }).stopReason}: ${limitStop}`,
+          sessionId,
+        })}\n\n`,
+      );
+      return;
+    }
+
     res.write(`data: ${JSON.stringify({ type: 'text', content: text, sessionId })}\n\n`);
     res.write(`data: ${JSON.stringify({ type: 'done', sessionId })}\n\n`);
   } catch (err) {
-    // An aborted turn is a guest who left, not a failure: there is no one to
-    // report it to and the socket is already gone.
-    if (!cancellation.signal.aborted) {
+    if (deadlineExceeded) {
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'error',
+          error: `Turn exceeded the ${limits.deadlineMs}ms deadline and was cancelled`,
+          sessionId,
+        })}\n\n`,
+      );
+    } else if (!cancellation.signal.aborted) {
+      // An aborted turn is a guest who left, not a failure: there is no one to
+      // report it to and the socket is already gone.
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage })}\n\n`);
     }
   } finally {
-    endSpan('session.cold_start', cancellation.signal.aborted ? { cancelled: 'true' } : undefined);
+    clearTimeout(deadline);
+    endSpan(
+      'session.cold_start',
+      deadlineExceeded
+        ? { deadlineExceeded: 'true' }
+        : cancellation.signal.aborted
+          ? { cancelled: 'true' }
+          : undefined,
+    );
     res.end();
   }
 }
@@ -265,6 +350,10 @@ export const __test = {
   sessions,
   requestHandler,
   handleInvocations,
+  /** Seeds the config the handler would otherwise get from `initialize()`. */
+  setRuntimeConfig(config: RuntimeConfig | undefined) {
+    runtimeConfig = config;
+  },
 };
 
 const server = createServer(requestHandler);

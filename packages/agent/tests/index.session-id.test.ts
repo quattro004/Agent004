@@ -12,8 +12,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PassThrough } from 'node:stream';
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
 
-vi.mock('@strands-agents/sdk', () => {
+vi.mock('@strands-agents/sdk', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const invokeMock = vi.fn().mockResolvedValue({
     lastMessage: {
       content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
@@ -21,10 +23,10 @@ vi.mock('@strands-agents/sdk', () => {
     invocationContext: { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
   });
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock };
+    return { invoke: invokeMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool, __invokeMock: invokeMock };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -94,6 +96,7 @@ async function mintSessionId(): Promise<string> {
 describe('handleInvocations — minted session identifiers', () => {
   beforeEach(() => {
     __test.sessions.clear();
+    __test.setRuntimeConfig(testRuntimeConfig());
     vi.clearAllMocks();
   });
 

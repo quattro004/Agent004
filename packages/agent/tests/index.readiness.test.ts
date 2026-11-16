@@ -10,15 +10,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-vi.mock('@strands-agents/sdk', () => {
+vi.mock('@strands-agents/sdk', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const invokeMock = vi.fn().mockResolvedValue({
     lastMessage: { content: [{ type: 'textBlock', text: 'ok' }] },
   });
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock };
+    return { invoke: invokeMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool, __invokeMock: invokeMock };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -113,6 +114,14 @@ const RUNTIME_ENV: Record<string, string> = {
   HISTORY_WINDOW: '40',
   BREAKER_DEGRADE_MICRO_USD: '15000000',
   BREAKER_TRIP_MICRO_USD: '19000000',
+  REQUEST_BODY_MAX_BYTES: '16384',
+  MODEL_INPUT_MAX_BYTES: '32768',
+  TOOL_RESULT_MAX_BYTES: '8192',
+  TURN_MAX_MODEL_CALLS: '4',
+  TURN_MAX_TOOL_EXECUTIONS: '4',
+  TURN_MAX_GENERATED_TOKENS: '1000',
+  TURN_MAX_BILLED_TOKENS: '64000',
+  TURN_DEADLINE_MS: '60000',
   PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD: '1000000',
   PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD: '5000000',
   PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD: '0',
@@ -258,8 +267,8 @@ describe('initialization warm-up', () => {
 });
 
 describe('runtime configuration at startup (spec 003 T015)', () => {
-  it('lists all 29 runtime variables from contracts/runtime-config.md', () => {
-    expect(Object.keys(RUNTIME_ENV)).toHaveLength(29);
+  it('lists all 37 runtime variables from contracts/runtime-config.md', () => {
+    expect(Object.keys(RUNTIME_ENV)).toHaveLength(37);
   });
 
   it.each(Object.keys(RUNTIME_ENV))(

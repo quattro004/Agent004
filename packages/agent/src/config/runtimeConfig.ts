@@ -1,5 +1,6 @@
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import type { UsageRates } from '../spend/usage.js';
+import type { TurnLimits } from '../limits/turnLimits.js';
 
 /**
  * Agent runtime configuration (spec 003 contracts/runtime-config.md § Agent
@@ -26,6 +27,8 @@ export interface RuntimeConfig {
   historyWindow: number;
   breakerDegradeMicroUsd: number;
   breakerTripMicroUsd: number;
+  /** Per-turn safety bounds approved 2026-11-15; every one is CDK-set. */
+  limits: TurnLimits;
   prices: UsageRates;
   secrets: ToolSecrets;
 }
@@ -93,6 +96,16 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
     historyWindow: integer('HISTORY_WINDOW'),
     breakerDegradeMicroUsd: integer('BREAKER_DEGRADE_MICRO_USD'),
     breakerTripMicroUsd: integer('BREAKER_TRIP_MICRO_USD'),
+    limits: {
+      requestBodyMaxBytes: integer('REQUEST_BODY_MAX_BYTES'),
+      modelInputMaxBytes: integer('MODEL_INPUT_MAX_BYTES'),
+      toolResultMaxBytes: integer('TOOL_RESULT_MAX_BYTES'),
+      maxModelCalls: integer('TURN_MAX_MODEL_CALLS'),
+      maxToolExecutions: integer('TURN_MAX_TOOL_EXECUTIONS'),
+      maxGeneratedTokens: integer('TURN_MAX_GENERATED_TOKENS'),
+      maxBilledTokens: integer('TURN_MAX_BILLED_TOKENS'),
+      deadlineMs: integer('TURN_DEADLINE_MS'),
+    },
     prices: {
       modelInputPerMTokMicroUsd: integer('PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD'),
       modelOutputPerMTokMicroUsd: integer('PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD'),

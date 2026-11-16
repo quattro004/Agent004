@@ -10,18 +10,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
 
-vi.mock('@strands-agents/sdk', () => {
+vi.mock('@strands-agents/sdk', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const invokeMock = vi.fn().mockResolvedValue({
     lastMessage: {
       content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
     },
   });
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock };
+    return { invoke: invokeMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool, __invokeMock: invokeMock };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -118,6 +120,7 @@ function makeRes(): {
 describe('handleInvocations — cancellation on client disconnect', () => {
   beforeEach(() => {
     __test.sessions.clear();
+    __test.setRuntimeConfig(testRuntimeConfig());
     invokeMock.mockReset();
     invokeMock.mockResolvedValue({
       lastMessage: { content: [{ type: 'textBlock', text: 'Hi there from Max!' }] },

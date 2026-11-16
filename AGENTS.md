@@ -216,6 +216,29 @@ deletion or a config edit, the test is often scaffolding. Delete it in REFACTOR
 and keep the reasoning in the PR or on the wiki. Never delete a test that pins
 behavior.
 
+## Code reviews are not artifacts — their findings are
+
+A code review is transient. The repo does **not** check review documents in,
+and `docs/reviews/` is not a place to put one. A review that produced nothing
+durable produced nothing.
+
+Before a review session ends, convert every finding that matters into something
+with an owner:
+
+- a task in the relevant `specs/NNN-*/tasks.md`,
+- a GitHub issue (ask first — see the issue-tracking rule),
+- or a wiki page, if the finding is durable project knowledge.
+
+**Never cite a review file as the source of a task.** Spec 003's Phase 15 cites
+`docs/reviews/2026-11-15-agent-infra-deployment-review.md`, which was never
+committed; a reader cannot check a Phase 15 task against what the review
+actually said (`tasks.md` deviation C21). Cite the clarification session, the
+spec section or the issue instead — all of which are in git.
+
+**A review finding is not implemented because a review happened.** Verify
+against the code before treating one as closed, exactly as with a `[x]` task
+below.
+
 ## Trust, but verify, task status and wiki claims
 
 A task marked `[x]` in `tasks.md` is a claim, not proof (the wiki's

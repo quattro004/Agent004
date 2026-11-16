@@ -130,6 +130,16 @@ describe('AgentStack (AgentCore Runtime, T024)', () => {
       RATE_LIMIT_PER_DAY: '500',
       MESSAGE_MAX_CHARS: '2000',
       HISTORY_WINDOW: '40',
+      // Spec 003 § Clarifications, Session 2026-11-15. These bound one turn's
+      // spend and ingest; the runtime refuses to start without them.
+      REQUEST_BODY_MAX_BYTES: '16384',
+      MODEL_INPUT_MAX_BYTES: '32768',
+      TOOL_RESULT_MAX_BYTES: '8192',
+      TURN_MAX_MODEL_CALLS: '4',
+      TURN_MAX_TOOL_EXECUTIONS: '4',
+      TURN_MAX_GENERATED_TOKENS: '1000',
+      TURN_MAX_BILLED_TOKENS: '64000',
+      TURN_DEADLINE_MS: '60000',
       PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD: '1000000',
       PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD: '5000000',
       PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD: '0',

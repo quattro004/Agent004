@@ -38,6 +38,14 @@ earlier target; they are not current approval for a deployment.
 | `RATE_LIMIT_PER_DAY` | `500` | Spec 001 `contracts/websocket-api.md:208` |
 | `MESSAGE_MAX_CHARS` | `2000` | P-08; spec 001 `contracts/websocket-api.md:209` |
 | `HISTORY_WINDOW` | `40` | Strands `SlidingWindowConversationManager` default (`agent.d.ts:113`) |
+| `REQUEST_BODY_MAX_BYTES` | `16384` (16 KiB, UTF-8). Refused **while reading**, before the body is parsed | Spec Session 2026-11-15; T163 |
+| `MODEL_INPUT_MAX_BYTES` | `32768` (32 KiB serialized). Oldest messages are dropped first; the current request never is | Same |
+| `TOOL_RESULT_MAX_BYTES` | `8192` (8 KiB per serialized tool result). Truncated results are marked so the model does not treat them as complete | Same |
+| `TURN_MAX_MODEL_CALLS` | `4` → SDK `InvokeLimits.turns` | Same |
+| `TURN_MAX_TOOL_EXECUTIONS` | `4`. The SDK has no tool-count limit; enforced with a `BeforeToolCallEvent` hook | Same |
+| `TURN_MAX_GENERATED_TOKENS` | `1000` → SDK `InvokeLimits.outputTokens`, lowered further by the session's remaining budget | Same |
+| `TURN_MAX_BILLED_TOKENS` | `64000` (input + output) → SDK `InvokeLimits.totalTokens`. Checked **between** calls, so the stopping call can overshoot | Same; `InvokeLimits` in the pinned SDK's `.d.ts` |
+| `TURN_DEADLINE_MS` | `60000`. Covers model, tool and voice work together. Reaching it is not success; billed work is still counted | Same |
 | `BREAKER_DEGRADE_MICRO_USD` | **Derived**: (16 − F) × 10⁶ | Research Q6; F from R-cost |
 | `BREAKER_TRIP_MICRO_USD` | **Derived**: (20 − F) × 10⁶ | Research Q6; F from R-cost |
 | `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` | **Derived** from the adopted model's human-read price | R-cost |
@@ -51,7 +59,7 @@ earlier target; they are not current approval for a deployment.
 | `SSM_PARAM_NEWS_KEY` | `/max-height/news-api-key` | Same |
 | `SSM_PARAM_SEARCH_KEY`, `SSM_PARAM_SEARCH_ENGINE_ID` | `/max-height/search-api-key` and `/max-height/search-engine-id` (new SecureStrings, tasks.md C15) | `webSearchTool.ts:30,35` read them from the environment today |
 
-That is 29 variables, under the limit of 50.
+That is 37 variables, under the limit of 50.
 
 No `PRICE_MEMORY_EXTRACTION_*` variable is needed. Built-in strategies include extraction in the long-term storage price (R-cost, resolved 2026-11-13 under T005a).
 
