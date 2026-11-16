@@ -120,7 +120,7 @@ The spec's Spend Signal, made concrete in [contracts/spend-control.md](./contrac
 | Actor | `actorId` is the verified `sub` (FR-012) |
 | Namespace | Prefix `/max-height/{actorId}/` (`memory/memoryAdapter.ts:57-59`), with per-strategy sub-paths `facts/`, `preferences/` and `summaries/{sessionId}/` ([contracts/memory-api.md](./contracts/memory-api.md)) |
 | Short-term event | `actorId` and `sessionId` (the counted session); a conversational payload of the friend's message and Max's reply; `eventExpiryDuration` of 7 days (the service minimum) |
-| Long-term record | `memoryRecordId`, `namespace`, content text, strategy and available service/source timestamps. There is no service expiry. The approved target is true 30-day data retention even for active friends, not `lastSeenAt`-only inactivity pruning. T172 verified the semantics on 2026-11-17 ([memory-api.md](./contracts/memory-api.md) § Pruner): the pruner ages a record by `timestamp ?? createdAt`, because the service TTL has a 31-day minimum, deletes days late and is reset by consolidation |
+| Long-term record | `memoryRecordId`, `namespace`, content text, strategy and available service/source timestamps. There is no service expiry. The approved target is true 30-day data retention even for active friends, not `lastSeenAt`-only inactivity pruning. T172's source verification is dated 2026-11-17 and remains pending as of 2026-11-16 (C36 in [tasks.md](./tasks.md)); see [memory-api.md](./contracts/memory-api.md) § Pruner |
 | Ownership rule | Every list, export, delete or wipe resolves the namespace from the verified `sub`. A record whose namespace is outside that prefix is never touched (FR-013; fixes N3) |
 
 ## Review entities (documentation records)

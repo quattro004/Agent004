@@ -19,6 +19,13 @@ import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js
 import { SseStream, type SessionLifecycleState, type SseErrorCode } from './transport/sse.js';
 import { AgentRegistry } from './session/agentRegistry.js';
 import { synthesizeToAudioEvents, PollySynthesisError } from './voice/pollyStream.js';
+import { createAgentCoreMemoryClient } from './memory/agentCoreMemoryClient.js';
+import {
+  createMemoryAdapter,
+  type MemoryAdapter,
+  type MemorySearchResult,
+} from './memory/memoryAdapter.js';
+import { handleDeleteMemory, handleForgetMe, handleListMemories } from './memory/memoryHandlers.js';
 import {
   readBoundedBody,
   BodyTooLargeError,
@@ -72,11 +79,11 @@ const runtimeSessionOwners = new Map<string, string>();
  * One `Agent` per runtime session, so a friend's conversation history is not
  * rebuilt on every turn and never leaks into another friend's reply.
  */
-let registry: AgentRegistry<Agent> | undefined;
+let registry: AgentRegistry<Agent, MemorySearchResult[]> | undefined;
 
-function agentRegistry(config: RuntimeConfig): AgentRegistry<Agent> {
-  registry ??= new AgentRegistry<Agent>({
-    create: () => createMaxHeightAgent({ config }),
+function agentRegistry(config: RuntimeConfig): AgentRegistry<Agent, MemorySearchResult[]> {
+  registry ??= new AgentRegistry<Agent, MemorySearchResult[]>({
+    create: (_countedSessionId, memories) => createMaxHeightAgent({ config, memories }),
   });
   return registry;
 }
@@ -121,6 +128,16 @@ function controlTable(config: RuntimeConfig): InvocationControlTable {
     rateLimitPerDay: config.rateLimitPerDay,
   });
   return control;
+}
+
+let memory: MemoryAdapter | undefined;
+
+function memoryAdapter(config: RuntimeConfig): MemoryAdapter {
+  memory ??= createMemoryAdapter({
+    memoryId: config.memoryId,
+    client: createAgentCoreMemoryClient({ region: config.awsRegion }),
+  });
+  return memory;
 }
 
 /** The friend's message is estimated at characters / 4 (spec 003 P-09). */
@@ -214,10 +231,15 @@ const webSearchTool = tool({
 
 // --- Agent Factory ---
 
-export function createMaxHeightAgent(options?: { displayAlias?: string; config?: RuntimeConfig }) {
+export function createMaxHeightAgent(options?: {
+  displayAlias?: string;
+  config?: RuntimeConfig;
+  memories?: MemorySearchResult[];
+}) {
   const config = options?.config ?? getRuntimeConfig();
   const systemPrompt = buildSystemPrompt({
     displayAlias: options?.displayAlias,
+    ...(options?.memories === undefined ? {} : { memories: options.memories }),
   });
 
   const model = new BedrockModel({
@@ -302,12 +324,18 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     let parsed: {
       message?: string;
       action?: string;
+      memoryRecordId?: string;
       displayAlias?: string;
       greetingId?: string;
       voice?: 'on' | 'off';
     };
     try {
-      parsed = JSON.parse(body);
+      const value: unknown = JSON.parse(body);
+      if (!isInvocationBody(value)) {
+        outcome = sse.fail('invalid_request');
+        return;
+      }
+      parsed = value;
     } catch {
       outcome = sse.fail('invalid_request');
       return;
@@ -333,7 +361,11 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     }
 
     if (parsed.action !== undefined) {
-      outcome = await handleAction(parsed.action, sse);
+      if (typeof parsed.action !== 'string') {
+        outcome = sse.fail('invalid_request');
+        return;
+      }
+      outcome = await handleAction(parsed.action, parsed.memoryRecordId, sub, table, config, sse);
       return;
     }
 
@@ -446,6 +478,21 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     // friend is spend with no listener. A degraded breaker is the second
     // reason to answer "off": the reply still arrives, as text.
     const voiceEnabled = parsed.voice !== 'off' && breaker.state !== 'degraded';
+    let memories: MemorySearchResult[] = [];
+    let memoryRetrievals = 0;
+    if (opened) {
+      memoryRetrievals = 1;
+      startSpan('memory.retrieve');
+      try {
+        memories = await memoryAdapter(config).retrieveMemories(sub, message, config.memoryTopK);
+        endSpan('memory.retrieve', { count: memories.length, failed: false });
+      } catch (error) {
+        emitMemoryFailureWarning('retrieve', error);
+        emitMemoryFailureMetric('MemoryRetrieveFailures');
+        endSpan('memory.retrieve', { count: 0, failed: true });
+      }
+    }
+
     sse.send({
       type: 'session',
       countedSessionId,
@@ -453,7 +500,11 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       voice: voiceEnabled ? 'on' : 'off',
     });
 
-    const agent = agentRegistry(config).acquire(runtimeSessionId, countedSessionId) as Agent;
+    const agent = agentRegistry(config).acquire(
+      runtimeSessionId,
+      countedSessionId,
+      memories,
+    ) as Agent;
     runtimeSessionOwners.set(runtimeSessionId, sub);
 
     // A friend who closes the tab mid-turn must stop costing us tokens. The
@@ -477,6 +528,8 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     let firstTokenSeen = false;
     let reply = '';
     let pollyCharacters = 0;
+    let memoryEvents = 0;
+    let turnDelivered = false;
     // Set the moment the model reports usage, so a turn that fails afterwards
     // is still counted: the tokens were billed either way.
     let modelUsage: ReturnType<typeof readModelUsage> | undefined;
@@ -557,6 +610,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
 
       outcome = 'done';
       sse.send({ type: 'done', turnsUsed: session.turnCount, state: lifecycleStateOf(session) });
+      turnDelivered = true;
     } catch (err) {
       cancelled = cancellation.signal.aborted;
       if (err instanceof PollySynthesisError) {
@@ -565,6 +619,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
         pollyCharacters = err.pollyCharacters;
         outcome = 'done';
         sse.send({ type: 'done', turnsUsed: session.turnCount, state: lifecycleStateOf(session) });
+        turnDelivered = true;
       } else if (deadlineExceeded) {
         console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
         outcome = sse.fail('session_cap_exceeded');
@@ -578,6 +633,25 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       }
     } finally {
       clearTimeout(deadline);
+      if (turnDelivered && !cancelled) {
+        memoryEvents = 1;
+        startSpan('memory.create_event');
+        try {
+          await memoryAdapter(config).createEvent(
+            sub,
+            countedSessionId,
+            message,
+            reply,
+            new Date(),
+          );
+          endSpan('memory.create_event', { failed: false });
+        } catch (error) {
+          emitMemoryFailureWarning('create_event', error);
+          emitMemoryFailureMetric('MemoryEventFailures');
+          endSpan('memory.create_event', { failed: true });
+        }
+      }
+
       // The breaker's other half: every turn that reached the model is added
       // to the month, whether it finished, failed or was abandoned. A failed
       // write is loud but does not fail the turn the friend already received.
@@ -586,12 +660,17 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
           {
             model: modelUsage,
             pollyCharacters,
-            memoryEvents: 0,
-            memoryRetrievals: 0,
+            memoryEvents,
+            memoryRetrievals,
           },
           config.prices,
         );
         await recordTurnSpend({ table, now: turnStartedAt }, turnUsage.estimatedMicroUsd);
+      } else if (memoryEvents > 0 || memoryRetrievals > 0) {
+        const memorySpend =
+          memoryEvents * config.prices.memoryEventMicroUsd +
+          memoryRetrievals * config.prices.memoryRetrievalMicroUsd;
+        await recordTurnSpend({ table, now: turnStartedAt }, memorySpend);
       }
       endSpan('reply.complete', {
         inputTokens: String(session.tokenCount),
@@ -605,16 +684,111 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
   }
 }
 
-/**
- * Actions are friend-facing memory operations, not chat turns. The dispatch
- * itself arrives with US4 (memory-api.md § Friend-facing operations); until
- * then a known action is refused honestly rather than reported as unknown.
- */
 const KNOWN_ACTIONS = new Set(['memory.list', 'memory.export', 'memory.delete', 'memory.forget']);
 
-async function handleAction(action: string, sse: SseStream): Promise<string> {
-  if (!KNOWN_ACTIONS.has(action)) return sse.fail('invalid_request');
-  return sse.fail('internal');
+async function handleAction(
+  action: string,
+  memoryRecordId: string | undefined,
+  sub: string,
+  table: InvocationControlTable,
+  config: RuntimeConfig,
+  sse: SseStream,
+): Promise<string> {
+  startSpan('memory.action', { action });
+  let failed = true;
+  let count = 0;
+  let memoryCallAttempted = false;
+
+  try {
+    if (!KNOWN_ACTIONS.has(action)) return sse.fail('invalid_request');
+    if (action === 'memory.delete' && !memoryRecordId) return sse.fail('invalid_request');
+
+    const refusal = await admitToNewSession(table, sub);
+    if (refusal) return sse.fail(refusal);
+
+    if (action !== 'memory.forget') {
+      let rate;
+      try {
+        rate = await table.consumeRate(sub, new Date());
+      } catch (error) {
+        console.error('Could not read the rate-limit windows for a memory action:', error);
+        return sse.fail('internal');
+      }
+      if (!rate.allowed) return sse.fail('rate_limited');
+    }
+
+    const adapter = memoryAdapter(config);
+    memoryCallAttempted = true;
+
+    if (action === 'memory.list' || action === 'memory.export') {
+      const result = await handleListMemories(adapter, sub);
+      if (!result.success) {
+        if (result.error) console.warn('AgentCore Memory list failed:', result.error);
+        return sse.fail(result.code ?? 'internal');
+      }
+
+      const records = result.memories ?? [];
+      count = records.length;
+      const data =
+        action === 'memory.export'
+          ? { exportedAt: new Date().toISOString(), records }
+          : { records };
+      sse.send({ type: 'result', action, data });
+      failed = false;
+      return 'done';
+    }
+
+    if (action === 'memory.delete') {
+      if (!memoryRecordId) return sse.fail('invalid_request');
+      const result = await handleDeleteMemory(adapter, sub, memoryRecordId);
+      if (!result.success) {
+        if (result.error) console.warn('AgentCore Memory delete failed:', result.error);
+        return sse.fail(result.code ?? 'internal');
+      }
+
+      count = result.deleted ?? 0;
+      sse.send({ type: 'result', action, data: { deleted: result.deleted } });
+      failed = false;
+      return 'done';
+    }
+
+    const result = await handleForgetMe(adapter, sub);
+    if (!result.success) {
+      if (result.error) console.warn('AgentCore Memory forget failed:', result.error);
+      return sse.fail(result.code ?? 'internal');
+    }
+
+    count = (result.recordsDeleted ?? 0) + (result.eventsDeleted ?? 0);
+    const session = sessions.get(sub);
+    if (session && session.state !== 'ENDED') {
+      sessions.set(sub, endSession(session, 'manual'));
+    }
+    for (const [runtimeSessionId, owner] of runtimeSessionOwners) {
+      if (owner !== sub) continue;
+      registry?.release(runtimeSessionId);
+      runtimeSessionOwners.delete(runtimeSessionId);
+    }
+
+    sse.send({
+      type: 'result',
+      action,
+      data: {
+        recordsDeleted: result.recordsDeleted ?? 0,
+        eventsDeleted: result.eventsDeleted ?? 0,
+      },
+    });
+    failed = false;
+    return 'done';
+  } catch (error) {
+    console.error('AgentCore Memory action failed:', error);
+    emitMemoryFailureMetric('MemoryActionFailures');
+    return sse.fail('internal');
+  } finally {
+    if (memoryCallAttempted) {
+      await recordTurnSpend({ table, now: new Date() }, config.prices.memoryRetrievalMicroUsd);
+    }
+    endSpan('memory.action', { count, failed });
+  }
 }
 
 /**
@@ -635,6 +809,56 @@ function textDeltaOf(event: unknown): string | undefined {
   if (wrapper.event?.type !== 'modelContentBlockDeltaEvent') return undefined;
   const delta = wrapper.event.delta as { type?: string; text?: string } | undefined;
   return delta?.type === 'textDelta' ? delta.text : undefined;
+}
+
+interface InvocationBody {
+  message?: string;
+  action?: string;
+  memoryRecordId?: string;
+  displayAlias?: string;
+  greetingId?: string;
+  voice?: 'on' | 'off';
+}
+
+function isInvocationBody(value: unknown): value is InvocationBody {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const body = value as Record<string, unknown>;
+  return (
+    (body.message === undefined || typeof body.message === 'string') &&
+    (body.action === undefined || typeof body.action === 'string') &&
+    (body.memoryRecordId === undefined || typeof body.memoryRecordId === 'string') &&
+    (body.displayAlias === undefined || typeof body.displayAlias === 'string') &&
+    (body.greetingId === undefined || typeof body.greetingId === 'string') &&
+    (body.voice === undefined || body.voice === 'on' || body.voice === 'off')
+  );
+}
+
+function emitMemoryFailureMetric(name: string): void {
+  const timestamp = Date.now();
+  console.log(
+    JSON.stringify({
+      _aws: {
+        Timestamp: timestamp,
+        CloudWatchMetrics: [
+          {
+            Namespace: 'MaxHeight',
+            Dimensions: [[]],
+            Metrics: [{ Name: name, Unit: 'Count' }],
+          },
+        ],
+      },
+      [name]: 1,
+    }),
+  );
+}
+
+function emitMemoryFailureWarning(operation: string, error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      event: `memory.${operation}.failed`,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+    }),
+  );
 }
 
 function runtimeSessionIdFrom(req: IncomingMessage): string {
@@ -677,6 +901,7 @@ export const __test = {
     registry = undefined;
     polly = undefined;
     control = undefined;
+    memory = undefined;
   },
   /** Supplies the control table, so no test reaches DynamoDB. */
   setControlTable(table: InvocationControlTable | undefined) {
@@ -689,6 +914,7 @@ export const __test = {
     // changes it must not keep the ones built from the old values.
     registry = undefined;
     polly = undefined;
+    memory = undefined;
   },
 };
 

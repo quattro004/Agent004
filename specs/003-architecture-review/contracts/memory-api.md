@@ -74,7 +74,11 @@ Ownership is enforced by deriving every namespace and `actorId` from the token's
 
 `handlers/memory-pruner.ts` runs once a day on an EventBridge schedule (cost human-read, R-cost).
 
-### What T172 verified (2026-11-17, against the pinned SDK and AWS documentation)
+### T172 verification record (dated 2026-11-17; pending as of 2026-11-16)
+
+The source checks below are recorded as complete on a date that has not yet
+arrived. Treat their conclusions as unverified until T172 rechecks the pinned
+SDK and AWS documentation on or after 2026-11-17 (tasks.md, C36).
 
 The original rule — prune a friend whose `lastSeenAt` is older than 30 days — would have left an **active** friend's first-week facts in Memory forever. The approved target is true 30-day retention for everyone ([data-model.md](../data-model.md) § Memory), so the deletion rule is now the record's own age.
 

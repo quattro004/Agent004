@@ -1,74 +1,76 @@
-/**
- * Memory HTTP handlers for Max Height agent.
- * Handles forget-me wipe, memory listing, and per-item deletion.
- */
+import {
+  MemoryRecordNotFoundError,
+  type MemoryAdapter,
+  type MemoryListItem,
+} from './memoryAdapter.js';
 
-import type { MemoryAdapter, MemoryListItem } from './memoryAdapter.js';
+export type MemoryActionErrorCode = 'invalid_request' | 'not_found' | 'internal';
 
 export interface ForgetMeResult {
   success: boolean;
-  deletedCount?: number;
+  recordsDeleted?: number;
+  eventsDeleted?: number;
+  code?: MemoryActionErrorCode;
   error?: string;
 }
 
 export interface ListMemoriesResult {
   success: boolean;
   memories?: MemoryListItem[];
+  code?: MemoryActionErrorCode;
   error?: string;
 }
 
 export interface DeleteMemoryResult {
   success: boolean;
+  deleted?: 1;
+  code?: MemoryActionErrorCode;
   error?: string;
 }
 
-export async function handleForgetMe(
-  adapter: MemoryAdapter,
-  actorId: string,
-): Promise<ForgetMeResult> {
-  if (!actorId) {
-    return { success: false, error: 'actorId is required' };
-  }
+export async function handleForgetMe(adapter: MemoryAdapter, sub: string): Promise<ForgetMeResult> {
+  if (!sub) return { success: false, code: 'invalid_request' };
 
   try {
-    const result = await adapter.wipeMemories(actorId);
-    return { success: true, deletedCount: result.deletedCount };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return { success: false, error: message };
+    const result = await adapter.wipeMemories(sub);
+    return { success: true, ...result };
+  } catch (error) {
+    return { success: false, code: 'internal', error: errorMessage(error) };
   }
 }
 
 export async function handleListMemories(
   adapter: MemoryAdapter,
-  actorId: string,
+  sub: string,
 ): Promise<ListMemoriesResult> {
-  if (!actorId) {
-    return { success: false, error: 'actorId is required' };
-  }
+  if (!sub) return { success: false, code: 'invalid_request' };
 
   try {
-    const memories = await adapter.listMemories(actorId);
+    const memories = await adapter.listMemories(sub);
     return { success: true, memories };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return { success: false, error: message };
+  } catch (error) {
+    return { success: false, code: 'internal', error: errorMessage(error) };
   }
 }
 
 export async function handleDeleteMemory(
   adapter: MemoryAdapter,
+  sub: string,
   memoryRecordId: string,
 ): Promise<DeleteMemoryResult> {
-  if (!memoryRecordId) {
-    return { success: false, error: 'memoryRecordId is required' };
-  }
+  if (!sub || !memoryRecordId) return { success: false, code: 'invalid_request' };
 
   try {
-    await adapter.deleteMemory(memoryRecordId);
-    return { success: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return { success: false, error: message };
+    await adapter.deleteMemory(sub, memoryRecordId);
+    return { success: true, deleted: 1 };
+  } catch (error) {
+    if (error instanceof MemoryRecordNotFoundError) {
+      return { success: false, code: 'not_found' };
+    }
+    return { success: false, code: 'internal', error: errorMessage(error) };
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

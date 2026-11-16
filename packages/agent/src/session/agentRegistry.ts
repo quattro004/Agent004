@@ -21,19 +21,19 @@ interface Entry<TAgent> {
   lastUsedAt: number;
 }
 
-export interface AgentRegistryOptions<TAgent> {
+export interface AgentRegistryOptions<TAgent, TContext = void> {
   /** Builds a fresh `Agent` for a counted session. */
-  create: (countedSessionId: string) => TAgent;
+  create: (countedSessionId: string, context?: TContext) => TAgent;
   /** Injectable clock, so eviction is testable without waiting. */
   now?: () => number;
 }
 
-export class AgentRegistry<TAgent = unknown> {
+export class AgentRegistry<TAgent = unknown, TContext = void> {
   readonly #entries = new Map<string, Entry<TAgent>>();
-  readonly #create: (countedSessionId: string) => TAgent;
+  readonly #create: (countedSessionId: string, context?: TContext) => TAgent;
   readonly #now: () => number;
 
-  constructor(options: AgentRegistryOptions<TAgent>) {
+  constructor(options: AgentRegistryOptions<TAgent, TContext>) {
     this.#create = options.create;
     this.#now = options.now ?? (() => Date.now());
   }
@@ -46,7 +46,7 @@ export class AgentRegistry<TAgent = unknown> {
    * Returns the agent for this runtime session, building one if it is new or
    * if the counted session behind it has changed.
    */
-  acquire(runtimeSessionId: string, countedSessionId: string): TAgent {
+  acquire(runtimeSessionId: string, countedSessionId: string, context?: TContext): TAgent {
     if (runtimeSessionId.length < RUNTIME_SESSION_ID_MIN_LENGTH) {
       throw new Error(
         `Runtime session ID must be at least ${RUNTIME_SESSION_ID_MIN_LENGTH} characters; got ${runtimeSessionId.length}`,
@@ -61,7 +61,10 @@ export class AgentRegistry<TAgent = unknown> {
       return existing.agent;
     }
 
-    const agent = this.#create(countedSessionId);
+    const agent =
+      context === undefined
+        ? this.#create(countedSessionId)
+        : this.#create(countedSessionId, context);
     this.#entries.set(runtimeSessionId, {
       agent,
       countedSessionId,
