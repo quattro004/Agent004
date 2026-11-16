@@ -1,7 +1,73 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.7.0 → 1.8.0 (amendment A1, 2026-11-13)
+  Version change : 1.8.0 → 1.9.0 (amendment A7, 2026-11-16)
+  Bump rationale : MINOR — P2 is materially expanded, not
+                   redefined. The $20/month hard cap, the
+                   $10/$16 gross AWS email alerts and the $20
+                   hard stop are all unchanged. What is added
+                   is a second, faster layer the application
+                   enforces on its own measured spend, and an
+                   honest statement of what that layer can and
+                   cannot promise.
+
+                   The need is a timing gap, not a new policy.
+                   AWS Budgets reads billing data that lags by
+                   hours, so by the time a $16 email arrives
+                   the money is already spent. P2's enforcement
+                   was therefore entirely after the fact. The
+                   application now meters its own spend as it
+                   commits it: soft-degrade at $11 and refuse
+                   new spend-bearing admission at $15, with $5
+                   reserved for non-chat lines (logs, spans,
+                   ECR, data transfer) and pricing uncertainty
+                   that the application never sees.
+
+                   Builder approval 2026-11-15 (spec 003
+                   spec.md § Clarifications, Session
+                   2026-11-15): "I'll go with your
+                   recommendations and review the code later",
+                   which explicitly authorized this amendment.
+                   The builder chose MINOR on the same reading
+                   used for A5: the meaning of the ceiling is
+                   unchanged and only the enforcement gains a
+                   layer.
+
+                   P2 now states plainly that this is not a
+                   guarantee an AWS invoice stays under $20.
+                   Saying so is the point: a cap that is
+                   claimed to be absolute and is not is worse
+                   than a cap with a documented limit.
+
+  Modified principles (A7): P2 Budget Ceiling.
+
+  Added (A7): None.
+
+  Modified sections (A7):
+    - Core Principles (P2).
+    - Quality Gates (gate #1, which now names the application
+      thresholds alongside the gross figure).
+
+  Amendment route (A7): committed on the
+    003-architecture-review branch and merged with that
+    branch's pull request, not in its own pull request — the
+    C9 route established for A5, A6 and A1.
+
+  Dependent artifacts reviewed (A7):
+    - specs/003-architecture-review/spec.md § Clarifications,
+      Session 2026-11-15 records the approval and the numbers.
+    - specs/003-architecture-review/contracts/runtime-config.md
+      BREAKER_DEGRADE_MICRO_USD and BREAKER_TRIP_MICRO_USD
+      change from the F-derived (16 − F) and (20 − F) formulas
+      to the approved $11 and $15 (T117).
+    - packages/infra/lib/budget-stack.ts keeps $10/$16/$20: the
+      gross AWS layer is unchanged by this amendment.
+    - specs/001-max-height-ai-character/ is frozen; spec 003
+      supersedes its threshold values.
+    - The wiki (Concept-Budget-Ceiling) must ingest this
+      amendment after the branch merges.
+
+  Previous change: 1.7.0 → 1.8.0 (amendment A1, 2026-11-13)
   Bump rationale : MINOR — the tech table's IaC row changes
                    from "AWS CDK (infrastructure) + AgentCore
                    CLI (agent deployment)" to "AWS CDK" alone.
@@ -109,17 +175,47 @@ debug.
 ### P2. Budget Ceiling — $20/Month Hard Cap
 
 The $20/month figure is a **rule**, not a target. Enforcement
-is automated and mandatory:
+is automated and mandatory, in two layers.
+
+**Gross AWS layer** — covers every charge, reacts slowly:
 
 - AWS Budgets email alarm MUST fire at $10 and $16.
 - Hard-stop mechanism MUST activate at $20 (e.g., revoking
   access to all spend-bearing paths).
-- Per-session token cap MUST be enforced.
+
+**Application layer** — covers only what the application
+itself commits, reacts immediately:
+
+- $5/month MUST be reserved for lines the application never
+  measures: logs, spans, ECR storage, data transfer, and
+  pricing uncertainty.
+- Application commitments MUST soft-degrade at $11 of measured
+  application spend.
+- The application MUST refuse to admit new spend-bearing work
+  at $15.
+- Spend MUST be reserved at a conservative maximum *before* a
+  call is made, not recorded after it returns.
+
+And in both layers:
+
+- Per-session and per-turn token caps MUST be enforced.
 - No feature ships without a documented cost model.
+
+**These layers do not guarantee that an AWS invoice stays
+under $20.** AWS billing data lags by hours, so the gross layer
+can only react after money is spent, and the application layer
+can only meter the spend it initiates. The second layer exists
+to make the first one rarely matter — not to replace it.
 
 **Rationale**: A personal fan project with no revenue MUST have
 an inviolable cost ceiling. Automated enforcement prevents
-"just this once" drift.
+"just this once" drift. The application layer was added
+(amendment A7, 2026-11-15) because enforcement that depends on
+delayed billing data is enforcement after the loss; reserving
+spend before committing it is the only check that can refuse
+the charge rather than report it. Stating the residual risk
+plainly is part of the principle: a cap claimed to be absolute
+and silently is not would be worse than this one.
 
 ### P3. Personality-First Build Order
 
@@ -302,8 +398,10 @@ The following gates MUST pass before work proceeds past them:
 
 1. **Cost model gate**: Every feature MUST include a cost
    estimate before implementation begins. Features that push
-   the projected monthly total above $16 MUST include a
-   mitigation plan.
+   the projected monthly total above $16 gross MUST include a
+   mitigation plan. A feature whose own measured application
+   spend would push the application total past $11 MUST state
+   how it degrades, per P2's application layer.
 
 2. **Personality gate**: The golden-set rubric (50 cases) MUST
    pass before any visual/audio polish ships. Evaluated offline
@@ -365,4 +463,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.8.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-13
+**Version**: 1.9.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-16

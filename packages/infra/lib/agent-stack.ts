@@ -29,9 +29,8 @@ const SSM_PARAMS = {
   SSM_PARAM_SEARCH_ENGINE_ID: '/max-height/search-engine-id',
 };
 
-// contracts/runtime-config.md § Agent runtime. Values not yet derived stay
-// undefined; each one blocks synthesis with an error naming the task that owns it.
-const RUNTIME_CONFIG: Record<string, string | undefined> = {
+// contracts/runtime-config.md § Agent runtime.
+const RUNTIME_CONFIG: Record<string, string> = {
   AWS_REGION: 'us-west-2',
   MODEL_ID: INFERENCE_PROFILE,
   MAX_OUTPUT_TOKENS: '250',
@@ -57,23 +56,30 @@ const RUNTIME_CONFIG: Record<string, string | undefined> = {
   TURN_MAX_GENERATED_TOKENS: '1000',
   TURN_MAX_BILLED_TOKENS: '64000',
   TURN_DEADLINE_MS: '60000',
-  BREAKER_DEGRADE_MICRO_USD: undefined,
-  BREAKER_TRIP_MICRO_USD: undefined,
+  // Constitution 1.9.0 P2's application layer (amendment A7, T117): the
+  // application soft-degrades at $11 of its own measured spend and refuses new
+  // spend-bearing work at $15, holding $5 back for lines it never meters. These
+  // are no longer the F-derived (16 − F)/(20 − F) figures; the reservation
+  // replaced the subtraction. The gross $10/$16/$20 AWS layer is unchanged.
+  BREAKER_DEGRADE_MICRO_USD: '11000000',
+  BREAKER_TRIP_MICRO_USD: '15000000',
   PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD: '1000000',
   PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD: '5000000',
   PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD: '0',
   PRICE_POLLY_PER_MCHAR_MICRO_USD: '4000000',
-  PRICE_MEMORY_EVENT_MICRO_USD: undefined,
+  // T082, research.md § R-cost: $1.00 per GB with a 12 KiB billing minimum.
+  // MESSAGE_MAX_CHARS (2,000) and MAX_OUTPUT_TOKENS (250) keep every event
+  // well under that minimum, so each one bills at it. 12 KiB of $1.00/GB is
+  // 11.44 µUSD read as GiB and 12.29 µUSD read as a decimal GB; 13 rounds the
+  // larger reading up, so the tally cannot undercount under either.
+  PRICE_MEMORY_EVENT_MICRO_USD: '13',
   PRICE_MEMORY_RETRIEVAL_MICRO_USD: '500',
-  PRICE_RUNTIME_PER_TURN_MICRO_USD: undefined,
+  // T082, research.md § F: Runtime V2 CPU ($0.06) plus memory ($0.60) over the
+  // average case's 795 turns is $0.00083019 a turn. The average case is used
+  // because it is the dearer of the two per turn — the full case spreads a
+  // longer session's billed memory across more turns ($0.33 over 800).
+  PRICE_RUNTIME_PER_TURN_MICRO_USD: '831',
   ...SSM_PARAMS,
-};
-
-const UNDERIVED_OWNER: Record<string, string> = {
-  BREAKER_DEGRADE_MICRO_USD: 'T117',
-  BREAKER_TRIP_MICRO_USD: 'T117',
-  PRICE_MEMORY_EVENT_MICRO_USD: 'T082',
-  PRICE_RUNTIME_PER_TURN_MICRO_USD: 'T082',
 };
 
 /** The agent image's build context is the repo root, filtered by the agent's own ignore file. */
@@ -115,16 +121,8 @@ export class AgentStack extends cdk.Stack {
     const environmentVariables: Record<string, string> = {
       CONTROL_TABLE_NAME: props.controlTable.tableName,
       MEMORY_ID: props.memory.memoryId,
+      ...RUNTIME_CONFIG,
     };
-    for (const [name, value] of Object.entries(RUNTIME_CONFIG)) {
-      if (value === undefined) {
-        cdk.Annotations.of(this).addError(
-          `${name} is not derived yet; ${UNDERIVED_OWNER[name]} sets it (contracts/runtime-config.md).`,
-        );
-      } else {
-        environmentVariables[name] = value;
-      }
-    }
 
     this.runtime = new bedrockagentcore.CfnRuntime(this, 'Runtime', {
       agentRuntimeName: 'MaxHeightAgent',

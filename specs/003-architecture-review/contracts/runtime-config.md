@@ -4,13 +4,14 @@ Every value a deployment needs is listed here with its source. A value marked **
 
 ## Rules
 
-**Approved safety follow-up (2026-11-15):** spec.md's Session 2026-11-15
-records the turn/input/concurrency bounds, 15-minute session cleanup grace
-and $5 monthly non-chat allowance. New consumers/CDK variables are implemented
-under T163-T167, not silently defaulted in this foundation batch. The $11/$15
-application thresholds require the authorized but still unapplied P2 amendment
-and a reconciled cost model. Existing F-only threshold rows below describe the
-earlier target; they are not current approval for a deployment.
+**Approved safety follow-up (2026-11-15), applied:** spec.md's Session
+2026-11-15 records the turn/input/concurrency bounds, 15-minute session
+cleanup grace and $5 monthly non-chat allowance. The turn and input bounds
+landed under T163/T164, and the $11/$15 application thresholds landed under
+T117 once constitution amendment **A7** was applied (1.8.0 → 1.9.0, T165).
+The earlier F-only threshold formulas, (16 − F) and (20 − F), are superseded:
+the flat $5 reservation replaced the subtraction. Admission control and
+reservation remain T166/T167.
 
 - **CDK is the only writer.** Each value is set in a stack and asserted in that stack's test (A1, CDK-only).
 - **Fail loud.** Every consumer reads its configuration once at startup. A missing or unparseable value throws at initialization, so the runtime fails its readiness check and the Lambda errors. Neither silently no-ops (the #61 lesson; AGENTS.md "Do not hide failures").
@@ -46,15 +47,15 @@ earlier target; they are not current approval for a deployment.
 | `TURN_MAX_GENERATED_TOKENS` | `1000` → SDK `InvokeLimits.outputTokens`, lowered further by the session's remaining budget | Same |
 | `TURN_MAX_BILLED_TOKENS` | `64000` (input + output) → SDK `InvokeLimits.totalTokens`. Checked **between** calls, so the stopping call can overshoot | Same; `InvokeLimits` in the pinned SDK's `.d.ts` |
 | `TURN_DEADLINE_MS` | `60000`. Covers model, tool and voice work together. Reaching it is not success; billed work is still counted | Same |
-| `BREAKER_DEGRADE_MICRO_USD` | **Derived**: (16 − F) × 10⁶ | Research Q6; F from R-cost |
-| `BREAKER_TRIP_MICRO_USD` | **Derived**: (20 − F) × 10⁶ | Research Q6; F from R-cost |
+| `BREAKER_DEGRADE_MICRO_USD` | `11000000`. Constitution 1.9.0 P2's application layer (amendment A7): soft-degrade at $11 of measured application spend | Research Q6; constitution P2 |
+| `BREAKER_TRIP_MICRO_USD` | `15000000`. Same layer: refuse new spend-bearing work at $15 | Research Q6; constitution P2 |
 | `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` | **Derived** from the adopted model's human-read price | R-cost |
 | `PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD` | Same | R-cost |
 | `PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD` | Same; `0` while caching is off (S2) | R-cost; #49 |
 | `PRICE_POLLY_PER_MCHAR_MICRO_USD` | **Derived** from the Polly Standard price, $4 per 1M → 4,000,000 (amendment A6, 2026-11-13; spec 001 R0 had Neural's $16) | R-cost |
-| `PRICE_MEMORY_EVENT_MICRO_USD` | **Derived**: $1.00 per GB × the event's billed size (12 KB minimum, 64 KB maximum) | R-cost (verified 2026-10-11) |
+| `PRICE_MEMORY_EVENT_MICRO_USD` | `13`. **Derived**: $1.00 per GB at the 12 KiB billing minimum (11.44 µUSD read as GiB, 12.29 µUSD read as a decimal GB; the larger is rounded up so the tally cannot undercount). `MESSAGE_MAX_CHARS` and `MAX_OUTPUT_TOKENS` keep every event under the minimum, so the 64 KB maximum is unreachable | R-cost (verified 2026-10-11) |
 | `PRICE_MEMORY_RETRIEVAL_MICRO_USD` | **Derived**: $0.50 per 1,000 → 500 | R-cost (verified) |
-| `PRICE_RUNTIME_PER_TURN_MICRO_USD` | **Derived**: R-cost's per-session Runtime V2 estimate ÷ spec 001's turns per session | R-cost |
+| `PRICE_RUNTIME_PER_TURN_MICRO_USD` | `831`. **Derived**: R-cost's § F Runtime V2 lines, CPU $0.06 plus memory $0.60, over the average case's 795 turns = $0.00083019. The average case is the dearer per turn; the full case spreads $0.33 across 800 | R-cost § F |
 | `SSM_PARAM_WEATHER_KEY` | `/max-height/weather-api-key` | `agent-stack.ts` (existing parameter) |
 | `SSM_PARAM_NEWS_KEY` | `/max-height/news-api-key` | Same |
 | `SSM_PARAM_SEARCH_KEY`, `SSM_PARAM_SEARCH_ENGINE_ID` | `/max-height/search-api-key` and `/max-height/search-engine-id` (new SecureStrings, tasks.md C15) | `webSearchTool.ts:30,35` read them from the environment today |
@@ -63,7 +64,7 @@ That is 37 variables, under the limit of 50.
 
 No `PRICE_MEMORY_EXTRACTION_*` variable is needed. Built-in strategies include extraction in the long-term storage price (R-cost, resolved 2026-11-13 under T005a).
 
-The breaker's estimate is a **floor**, not the bill: lines that are not per-turn, such as logs, spans and ECR, sit in F. That is why the limits are set below P2's dollar thresholds by F, rather than at them.
+The breaker's estimate is a **floor**, not the bill: lines that are not per-turn, such as logs, spans and ECR, sit in F. Constitution 1.9.0 P2 answers that with a flat $5 reservation rather than the earlier subtraction of a measured F, so the limits are $11 and $15 against P2's $16 and $20 gross figures. The $5 covers F **and** pricing uncertainty, and P2 states plainly that this does not guarantee an invoice under $20.
 
 ### Secrets loaded at startup
 

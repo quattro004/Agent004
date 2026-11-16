@@ -154,16 +154,22 @@ describe('AgentStack (AgentCore Runtime, T024)', () => {
   });
 
   test.each([
-    ['BREAKER_DEGRADE_MICRO_USD', 'T117'],
-    ['BREAKER_TRIP_MICRO_USD', 'T117'],
-    ['PRICE_MEMORY_EVENT_MICRO_USD', 'T082'],
-    ['PRICE_RUNTIME_PER_TURN_MICRO_USD', 'T082'],
-  ])('blocks synthesis until %s is derived (%s)', (name, task) => {
-    expect(runtimeProps().EnvironmentVariables).not.toHaveProperty(name);
-    Annotations.fromStack(stack).hasError(
-      '/TestAgentStack',
-      Match.stringLikeRegexp(`${name}.*${task}`),
-    );
+    // Constitution 1.9.0 P2's application layer (amendment A7): soft-degrade at
+    // $11 of measured application spend, refuse new spend-bearing work at $15,
+    // with $5 held back for lines the application never meters.
+    ['BREAKER_DEGRADE_MICRO_USD', '11000000'],
+    ['BREAKER_TRIP_MICRO_USD', '15000000'],
+    // research.md § R-cost: $1.00 per GB at the 12 KiB billing minimum, which
+    // MESSAGE_MAX_CHARS and MAX_OUTPUT_TOKENS keep every event under.
+    ['PRICE_MEMORY_EVENT_MICRO_USD', '13'],
+    // research.md § F: the average case's $0.66 of Runtime V2 over 795 turns.
+    ['PRICE_RUNTIME_PER_TURN_MICRO_USD', '831'],
+  ])('derives %s to %s', (name, value) => {
+    expect(runtimeProps().EnvironmentVariables).toHaveProperty(name, value);
+  });
+
+  test('synthesizes with no underived-value errors', () => {
+    Annotations.fromStack(stack).hasNoError('/TestAgentStack', Match.anyValue());
   });
 
   test('execution role trusts only AgentCore in this account', () => {
