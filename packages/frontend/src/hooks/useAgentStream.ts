@@ -12,6 +12,7 @@ import { useMemo, useRef } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useVoiceStore } from '../stores/voiceStore';
+import { createBudgetDegradation } from '../services/budgetDegradation';
 import type { SessionState } from '../types/domain';
 
 export const SSE_ERROR_CODES = [
@@ -184,6 +185,7 @@ type Attempt = 'ok' | 'retry-auth' | 'retry-session' | 'signed-out' | 'failed';
 export function createAgentStream(deps: AgentStreamDeps): AgentStream {
   const doFetch = deps.fetchImpl ?? globalThis.fetch.bind(globalThis);
   let controller: AbortController | null = null;
+  const degradation = createBudgetDegradation();
 
   const connection = () => useConnectionStore.getState();
   const conversation = () => useConversationStore.getState();
@@ -248,6 +250,11 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
           case 'session':
             connection().setConnected(event.countedSessionId, runtimeSessionId());
             connection().setSessionState('ACTIVE');
+            degradation.onSessionVoice(event.voice);
+            {
+              const announcement = degradation.takeAnnouncement();
+              if (announcement) conversation().appendToken(`${announcement}\n\n`);
+            }
             break;
           case 'text':
             conversation().appendToken(event.delta);
@@ -290,6 +297,9 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
 
   function applyError(event: Extract<AgentEvent, { type: 'error' }>): Attempt {
     const outcome = outcomeForErrorCode(event.code);
+    if (event.code === 'halted' || event.code === 'breaker_tripped') {
+      degradation.onHardStop();
+    }
     if (outcome.retryWithNewSessionId) {
       resetRuntimeSessionId();
       return 'retry-session';

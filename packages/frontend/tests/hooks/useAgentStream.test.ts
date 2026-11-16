@@ -430,3 +430,53 @@ describe('useAgentStream', () => {
     });
   });
 });
+
+describe('useAgentStream — the soft-degrade', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    useConnectionStore.getState().reset();
+    useConversationStore.getState().reset();
+    useVoiceStore.getState().reset();
+  });
+
+  function voiceOffStream(reply: string): Response {
+    return sseResponse([
+      { type: 'session', countedSessionId: 'counted-1', opened: true, voice: 'off' },
+      { type: 'text', delta: reply },
+      { type: 'done', turnsUsed: 1, state: 'ACTIVE' },
+    ]);
+  }
+
+  it('says the degrade line once, ahead of the reply, when the server turns voice off', async () => {
+    const { stream } = makeStream({
+      fetchImpl: (async () => voiceOffStream('Still here.')) as unknown as typeof fetch,
+    });
+
+    await stream.send({ message: 'hi', clientTimestamp: '2026-11-16T00:00:00.000Z' });
+
+    const text = useConversationStore.getState().currentResponseText;
+    expect(text.toLowerCase()).toContain('signal');
+    expect(text.endsWith('Still here.')).toBe(true);
+  });
+
+  it('does not repeat the degrade line on the next voice-off turn', async () => {
+    let reply = 'First.';
+    const { stream } = makeStream({
+      fetchImpl: (async () => voiceOffStream(reply)) as unknown as typeof fetch,
+    });
+
+    await stream.send({ message: 'one', clientTimestamp: '2026-11-16T00:00:00.000Z' });
+    reply = 'Second.';
+    await stream.send({ message: 'two', clientTimestamp: '2026-11-16T00:00:01.000Z' });
+
+    expect(useConversationStore.getState().currentResponseText).toBe('Second.');
+  });
+
+  it('leaves a normal turn untouched', async () => {
+    const { stream } = makeStream();
+
+    await stream.send({ message: 'hi', clientTimestamp: '2026-11-16T00:00:00.000Z' });
+
+    expect(useConversationStore.getState().currentResponseText).toBe('Hello friend.');
+  });
+});

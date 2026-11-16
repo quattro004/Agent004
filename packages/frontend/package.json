@@ -16,13 +16,12 @@
     "generate:greetings": "tsx scripts/generate-greetings.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-cognito-identity": "^3.1167.0",
-    "@aws-sdk/client-polly": "^3.1167.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-polly": "^3.1167.0",
     "@playwright/test": "^1.65.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
