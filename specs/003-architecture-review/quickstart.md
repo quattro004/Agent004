@@ -66,7 +66,7 @@ Each step finishes before the next. `cdk deploy <stack>` also deploys any depend
 5. **`MaxHeight-Cognito`.** It needs prerequisites 7 to 9. The `idp-secret` custom resource fails the deploy if the secret is missing.
 6. **`MaxHeight-Agent`.** It builds the ARM64 image locally (prerequisite 6) and creates the runtime. Run V-01.
 7. **`MaxHeight-Ops`.** Confirm the `OpsAlarmTopic` subscription email and check that the four alarms exist (spend-control § Operations alarms). Until this step, a 100% alert reaches no hard stop.
-8. **Build the frontend.** Write the `VITE_*` values ([runtime-config.md](./contracts/runtime-config.md) § Frontend build) from the outputs file into `packages/frontend/.env.production.local`, which `.gitignore` covers. Then run `pnpm --filter @max-height/frontend run build`. The build fails if any value is missing.
+8. **Build the frontend.** Write the `VITE_*` values ([runtime-config.md](./contracts/runtime-config.md) § Frontend build) from the outputs file into `packages/frontend/.env.production.local`, which `.gitignore` covers. Then run `MAX_HEIGHT_DEPLOY=1 pnpm --filter @max-height/frontend run build` (PowerShell: `$env:MAX_HEIGHT_DEPLOY='1'` first). The build fails if any value is missing.
 9. **`MaxHeight-Frontend`.** `BucketDeployment` uploads `packages/frontend/dist` and invalidates `/*` (research § R-deploy).
 10. **GoDaddy `max` CNAME** to the `DistributionDomainName` output (csp-and-hosting § GoDaddy records). When `https://max.recipieces.com/` loads, run V-06.
 11. **First allowlist entry**: the builder's own address only. Friends are added at the end of [§ Run order](#run-order).

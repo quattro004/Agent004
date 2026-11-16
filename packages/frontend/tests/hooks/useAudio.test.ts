@@ -1,380 +1,209 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AudioChain } from '../../src/audio/audioChain';
+import { createUseAudio } from '../../src/hooks/useAudio';
+import { useVoiceStore } from '../../src/stores/voiceStore';
 
-// Mock stores
-vi.mock('../../src/stores/voiceStore', () => {
-  const setSpeaking = vi.fn();
-  const setMouthOpen = vi.fn();
-  return {
-    useVoiceStore: Object.assign(() => ({ isSpeaking: false }), {
-      getState: () => ({ setSpeaking, setMouthOpen }),
-    }),
-  };
-});
+/**
+ * Voice is synthesized server-side and arrives as SSE `audio` events
+ * (contracts/transport-sse.md). The browser decodes and plays them through
+ * the DSP chain. Browser speech synthesis is not a fallback: it would put
+ * model-adjacent work in the browser and breach P1 (research Q1).
+ */
 
-vi.mock('../../src/stores/conversationStore', () => {
-  let state = { currentResponseText: '', isStreaming: false, currentTurnIndex: 0 };
-  const subscribers = new Set<() => void>();
-  return {
-    useConversationStore: Object.assign(() => state, {
-      getState: () => state,
-      subscribe: (fn: () => void) => {
-        subscribers.add(fn);
-        return () => subscribers.delete(fn);
-      },
-      _setState: (s: Partial<typeof state>) => {
-        state = { ...state, ...s };
-        subscribers.forEach((fn) => fn());
-      },
-      _reset: () => {
-        state = { currentResponseText: '', isStreaming: false, currentTurnIndex: 0 };
-      },
-    }),
-  };
-});
+const CLIP_MS = 400;
 
-vi.mock('../../src/stores/connectionStore', () => ({
-  useConnectionStore: Object.assign(() => ({ sessionState: 'ACTIVE' }), {
-    getState: () => ({ sessionState: 'ACTIVE' }),
-  }),
-}));
-
-// Mock pollyTts
-const mockSynthesizeTurn = vi.fn();
-vi.mock('../../src/services/pollyTts', () => ({
-  synthesizeTurn: (...args: unknown[]) => mockSynthesizeTurn(...args),
-}));
-
-// Mock browserTts
-const mockBrowserSpeak = vi.fn();
-const mockBrowserIsAvailable = vi.fn();
-vi.mock('../../src/services/browserTts', () => ({
-  speak: (...args: unknown[]) => mockBrowserSpeak(...args),
-  isAvailable: () => mockBrowserIsAvailable(),
-  stop: vi.fn(),
-}));
+function clip(seq: number, data = 'AQID') {
+  return { seq, format: 'mp3' as const, data };
+}
 
 describe('useAudio', () => {
-  let mockAudioChain: AudioChain;
+  let audioChain: AudioChain;
+  let decodeAudioData: ReturnType<typeof vi.fn>;
+  let close: ReturnType<typeof vi.fn>;
+  let speak: ReturnType<typeof vi.fn>;
+  const decoded = { duration: CLIP_MS / 1000 } as AudioBuffer;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.useFakeTimers();
-    mockBrowserIsAvailable.mockReturnValue(true);
-    mockBrowserSpeak.mockResolvedValue(undefined);
+    useVoiceStore.getState().reset();
 
-    mockAudioChain = {
+    audioChain = {
       init: vi.fn().mockResolvedValue(undefined),
-      play: vi.fn(),
+      play: vi.fn().mockReturnValue(CLIP_MS),
       stop: vi.fn(),
+      setVolume: vi.fn(),
       getIsMouthOpen: vi.fn().mockReturnValue(false),
       triggerStutter: vi.fn(),
       triggerStaticBurst: vi.fn(),
+      playStatic: vi.fn(),
+      stopStatic: vi.fn(),
       dispose: vi.fn(),
     };
+
+    decodeAudioData = vi.fn().mockResolvedValue(decoded);
+    close = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(function () {
+        return { decodeAudioData, close };
+      }),
+    );
+
+    speak = vi.fn();
+    vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn(), getVoices: () => [] });
   });
 
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it('should export a createUseAudio function', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    expect(createUseAudio).toBeDefined();
-    expect(typeof createUseAudio).toBe('function');
-  });
-
-  it('should call synthesizeTurn when conversation transitions from streaming to complete', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    const { useConversationStore } = await import('../../src/stores/conversationStore');
-    const store = useConversationStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-    };
-
-    mockSynthesizeTurn.mockResolvedValue({
-      audioData: new Uint8Array([1, 2, 3]),
-      visemeMarks: null,
-      textOnly: false,
-    });
-
-    const audio = createUseAudio(mockAudioChain);
-
-    // Simulate streaming→complete
-    store._setState({ currentResponseText: 'Hello!', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({ currentResponseText: 'Hello!', isStreaming: false, currentTurnIndex: 1 });
-
-    // Allow async processing
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(mockSynthesizeTurn).toHaveBeenCalledWith('Hello!');
-    audio.dispose();
-  });
-
-  it('should call audioChain.play with decoded AudioBuffer on successful synthesis', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    const { useConversationStore } = await import('../../src/stores/conversationStore');
-    const store = useConversationStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-    };
-
-    const fakeAudioData = new Uint8Array([1, 2, 3, 4]);
-    mockSynthesizeTurn.mockResolvedValue({
-      audioData: fakeAudioData,
-      visemeMarks: null,
-      textOnly: false,
-    });
-
-    // Mock AudioContext for decoding
-    const mockAudioBuffer = {} as AudioBuffer;
-    const mockDecodeAudioData = vi.fn().mockResolvedValue(mockAudioBuffer);
-    const mockClose = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal(
-      'AudioContext',
-      vi.fn(function () {
-        return {
-          decodeAudioData: mockDecodeAudioData,
-          close: mockClose,
-        };
-      }),
-    );
-
-    const audio = createUseAudio(mockAudioChain);
-
-    store._setState({ currentResponseText: 'Test', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({ currentResponseText: 'Test', isStreaming: false, currentTurnIndex: 1 });
-
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(mockAudioChain.play).toHaveBeenCalledWith(mockAudioBuffer);
-    audio.dispose();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it('should set voiceStore.isSpeaking during playback', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    const { useVoiceStore } = await import('../../src/stores/voiceStore');
-    const voiceState = useVoiceStore.getState();
+  it('plays a server audio clip through the DSP chain', async () => {
+    const audio = createUseAudio(audioChain);
 
-    mockSynthesizeTurn.mockResolvedValue({
-      audioData: new Uint8Array([1, 2, 3]),
-      visemeMarks: null,
-      textOnly: false,
-    });
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    await vi.advanceTimersByTimeAsync(10);
 
-    const audio = createUseAudio(mockAudioChain);
-    const { useConversationStore } = await import('../../src/stores/conversationStore');
-    const store = useConversationStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-    };
-
-    store._setState({ currentResponseText: 'Hi', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({ currentResponseText: 'Hi', isStreaming: false, currentTurnIndex: 1 });
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(voiceState.setSpeaking).toHaveBeenCalledWith(true);
+    expect(decodeAudioData).toHaveBeenCalledTimes(1);
+    expect(audioChain.play).toHaveBeenCalledWith(decoded);
     audio.dispose();
   });
 
-  it('should not crash when synthesis returns textOnly: true', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    const { useConversationStore } = await import('../../src/stores/conversationStore');
-    const store = useConversationStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-    };
+  it('decodes the base64 payload into bytes before decoding audio', async () => {
+    const audio = createUseAudio(audioChain);
 
-    mockSynthesizeTurn.mockResolvedValue({
-      audioData: null,
-      visemeMarks: null,
-      textOnly: true,
-    });
+    useVoiceStore.getState().enqueueAudio(clip(0, 'AQID'));
+    await vi.advanceTimersByTimeAsync(10);
 
-    const audio = createUseAudio(mockAudioChain);
-
-    store._setState({ currentResponseText: 'Fallback', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({
-      currentResponseText: 'Fallback',
-      isStreaming: false,
-      currentTurnIndex: 1,
-    });
-    await vi.advanceTimersByTimeAsync(100);
-
-    // Should not throw and should not call play
-    expect(mockAudioChain.play).not.toHaveBeenCalled();
+    const buffer = decodeAudioData.mock.calls[0][0] as ArrayBuffer;
+    expect(Array.from(new Uint8Array(buffer))).toEqual([1, 2, 3]);
     audio.dispose();
   });
 
-  it('should not reprocess the same turn index twice', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    const { useConversationStore } = await import('../../src/stores/conversationStore');
-    const store = useConversationStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-      _reset: () => void;
-    };
-
-    store._reset();
-
-    mockSynthesizeTurn.mockResolvedValue({
-      audioData: new Uint8Array([1]),
-      visemeMarks: null,
-      textOnly: false,
+  it('plays queued clips one after another in seq order', async () => {
+    const audio = createUseAudio(audioChain);
+    const played: number[] = [];
+    decodeAudioData.mockImplementation((buffer: ArrayBuffer) => {
+      played.push(new Uint8Array(buffer)[0]);
+      return Promise.resolve(decoded);
     });
 
-    const audio = createUseAudio(mockAudioChain);
+    // 'AA==' is byte 0, 'AQ==' is byte 1, 'Ag==' is byte 2.
+    useVoiceStore.getState().enqueueAudio(clip(0, 'AA=='));
+    useVoiceStore.getState().enqueueAudio(clip(1, 'AQ=='));
+    useVoiceStore.getState().enqueueAudio(clip(2, 'Ag=='));
 
-    // First transition
-    store._setState({ currentResponseText: 'First', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({ currentResponseText: 'First', isStreaming: false, currentTurnIndex: 1 });
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(played).toEqual([0]);
 
-    // Same turn index again
-    store._setState({ currentResponseText: 'First', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({ currentResponseText: 'First', isStreaming: false, currentTurnIndex: 1 });
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(CLIP_MS);
+    await vi.advanceTimersByTimeAsync(CLIP_MS);
 
-    expect(mockSynthesizeTurn).toHaveBeenCalledTimes(1);
+    expect(played).toEqual([0, 1, 2]);
+    expect(audioChain.play).toHaveBeenCalledTimes(3);
     audio.dispose();
   });
 
-  it('should fall back to browser TTS when Polly synthesis fails', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    const { useConversationStore } = await import('../../src/stores/conversationStore');
-    const store = useConversationStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-      _reset: () => void;
-    };
+  it('does not start the next clip before the current one finishes', async () => {
+    const audio = createUseAudio(audioChain);
 
-    store._reset();
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    useVoiceStore.getState().enqueueAudio(clip(1));
+    await vi.advanceTimersByTimeAsync(10);
 
-    // Polly fails
-    mockSynthesizeTurn.mockRejectedValue(new Error('No AWS credentials'));
+    expect(audioChain.play).toHaveBeenCalledTimes(1);
 
-    const audio = createUseAudio(mockAudioChain);
-
-    store._setState({ currentResponseText: 'Hello world', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({
-      currentResponseText: 'Hello world',
-      isStreaming: false,
-      currentTurnIndex: 1,
-    });
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(mockBrowserSpeak).toHaveBeenCalledWith('Hello world');
+    await vi.advanceTimersByTimeAsync(CLIP_MS);
+    expect(audioChain.play).toHaveBeenCalledTimes(2);
     audio.dispose();
   });
 
-  it('should not call browser TTS when it is unavailable', async () => {
-    const { createUseAudio } = await import('../../src/hooks/useAudio');
-    const { useConversationStore } = await import('../../src/stores/conversationStore');
-    const store = useConversationStore as unknown as {
-      _setState: (s: Record<string, unknown>) => void;
-      _reset: () => void;
-    };
+  it('ignores a clip whose seq has already played', async () => {
+    const audio = createUseAudio(audioChain);
 
-    store._reset();
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    await vi.advanceTimersByTimeAsync(10);
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    await vi.advanceTimersByTimeAsync(CLIP_MS + 10);
 
-    mockSynthesizeTurn.mockRejectedValue(new Error('No AWS credentials'));
-    mockBrowserIsAvailable.mockReturnValue(false);
-
-    const audio = createUseAudio(mockAudioChain);
-
-    store._setState({ currentResponseText: 'Test', isStreaming: true, currentTurnIndex: 1 });
-    store._setState({ currentResponseText: 'Test', isStreaming: false, currentTurnIndex: 1 });
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(mockBrowserSpeak).not.toHaveBeenCalled();
+    expect(audioChain.play).toHaveBeenCalledTimes(1);
     audio.dispose();
   });
 
-  describe('budget degradation mode', () => {
-    it('should skip Polly and use browser TTS directly when budget mode is browser_tts', async () => {
-      const { createUseAudio } = await import('../../src/hooks/useAudio');
-      const { createBudgetDegradation } = await import('../../src/services/budgetDegradation');
-      const { useConversationStore } = await import('../../src/stores/conversationStore');
-      const store = useConversationStore as unknown as {
-        _setState: (s: Record<string, unknown>) => void;
-        _reset: () => void;
-      };
+  it('marks Max as speaking while clips play and stops when the queue drains', async () => {
+    const audio = createUseAudio(audioChain);
 
-      store._reset();
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(useVoiceStore.getState().isSpeaking).toBe(true);
 
-      const budget = createBudgetDegradation();
-      budget.onBudgetCapped(true); // browser_tts mode
+    await vi.advanceTimersByTimeAsync(CLIP_MS + 10);
+    expect(useVoiceStore.getState().isSpeaking).toBe(false);
+    audio.dispose();
+  });
 
-      const audio = createUseAudio(mockAudioChain, budget);
+  it('drives the mouth from the chain while speaking', async () => {
+    (audioChain.getIsMouthOpen as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    const audio = createUseAudio(audioChain);
 
-      store._setState({
-        currentResponseText: 'Budget test',
-        isStreaming: true,
-        currentTurnIndex: 1,
-      });
-      store._setState({
-        currentResponseText: 'Budget test',
-        isStreaming: false,
-        currentTurnIndex: 1,
-      });
-      await vi.advanceTimersByTimeAsync(100);
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    await vi.advanceTimersByTimeAsync(60);
 
-      expect(mockSynthesizeTurn).not.toHaveBeenCalled();
-      expect(mockBrowserSpeak).toHaveBeenCalled();
-      expect(mockAudioChain.play).not.toHaveBeenCalled();
-      audio.dispose();
-    });
+    expect(useVoiceStore.getState().isMouthOpen).toBe(true);
 
-    it('should prepend first-fallback message on first utterance in browser_tts mode', async () => {
-      const { createUseAudio } = await import('../../src/hooks/useAudio');
-      const { createBudgetDegradation } = await import('../../src/services/budgetDegradation');
-      const { useConversationStore } = await import('../../src/stores/conversationStore');
-      const store = useConversationStore as unknown as {
-        _setState: (s: Record<string, unknown>) => void;
-        _reset: () => void;
-      };
+    await vi.advanceTimersByTimeAsync(CLIP_MS + 60);
+    expect(useVoiceStore.getState().isMouthOpen).toBe(false);
+    audio.dispose();
+  });
 
-      store._reset();
+  it('never falls back to browser speech synthesis when decoding fails', async () => {
+    decodeAudioData.mockRejectedValue(new Error('not mp3'));
+    const audio = createUseAudio(audioChain);
 
-      const budget = createBudgetDegradation();
-      budget.onBudgetCapped(true);
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    await vi.advanceTimersByTimeAsync(CLIP_MS + 10);
 
-      const audio = createUseAudio(mockAudioChain, budget);
+    expect(speak).not.toHaveBeenCalled();
+    expect(audioChain.play).not.toHaveBeenCalled();
+    expect(useVoiceStore.getState().isSpeaking).toBe(false);
+    audio.dispose();
+  });
 
-      store._setState({ currentResponseText: 'Response', isStreaming: true, currentTurnIndex: 1 });
-      store._setState({ currentResponseText: 'Response', isStreaming: false, currentTurnIndex: 1 });
-      await vi.advanceTimersByTimeAsync(100);
+  it('keeps playing the rest of the turn after one clip fails to decode', async () => {
+    decodeAudioData.mockRejectedValueOnce(new Error('not mp3')).mockResolvedValue(decoded);
+    const audio = createUseAudio(audioChain);
 
-      const spokenText = mockBrowserSpeak.mock.calls[0][0] as string;
-      expect(spokenText).toContain('Signal');
-      expect(spokenText).toContain('Response');
-      audio.dispose();
-    });
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    useVoiceStore.getState().enqueueAudio(clip(1));
+    await vi.advanceTimersByTimeAsync(CLIP_MS + 10);
 
-    it('should not prepend degradation message on subsequent utterances', async () => {
-      const { createUseAudio } = await import('../../src/hooks/useAudio');
-      const { createBudgetDegradation } = await import('../../src/services/budgetDegradation');
-      const { useConversationStore } = await import('../../src/stores/conversationStore');
-      const store = useConversationStore as unknown as {
-        _setState: (s: Record<string, unknown>) => void;
-        _reset: () => void;
-      };
+    expect(audioChain.play).toHaveBeenCalledTimes(1);
+    audio.dispose();
+  });
 
-      store._reset();
+  it('never synthesizes speech in the browser on a silent turn', async () => {
+    const audio = createUseAudio(audioChain);
 
-      const budget = createBudgetDegradation();
-      budget.onBudgetCapped(true);
+    await vi.advanceTimersByTimeAsync(1_000);
 
-      const audio = createUseAudio(mockAudioChain, budget);
+    expect(speak).not.toHaveBeenCalled();
+    expect(audioChain.play).not.toHaveBeenCalled();
+    audio.dispose();
+  });
 
-      // First utterance
-      store._setState({ currentResponseText: 'First', isStreaming: true, currentTurnIndex: 1 });
-      store._setState({ currentResponseText: 'First', isStreaming: false, currentTurnIndex: 1 });
-      await vi.advanceTimersByTimeAsync(100);
+  it('drops anything still queued when disposed', async () => {
+    const audio = createUseAudio(audioChain);
 
-      // Second utterance
-      store._setState({ currentResponseText: 'Second', isStreaming: true, currentTurnIndex: 2 });
-      store._setState({ currentResponseText: 'Second', isStreaming: false, currentTurnIndex: 2 });
-      await vi.advanceTimersByTimeAsync(100);
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    useVoiceStore.getState().enqueueAudio(clip(1));
+    await vi.advanceTimersByTimeAsync(10);
 
-      const secondCall = mockBrowserSpeak.mock.calls[1][0] as string;
-      expect(secondCall).toBe('Second');
-      audio.dispose();
-    });
+    audio.dispose();
+    await vi.advanceTimersByTimeAsync(CLIP_MS * 3);
+
+    expect(audioChain.play).toHaveBeenCalledTimes(1);
+    expect(useVoiceStore.getState().audioQueue).toEqual([]);
+    expect(useVoiceStore.getState().isMouthOpen).toBe(false);
   });
 });
