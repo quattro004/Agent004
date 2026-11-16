@@ -28,12 +28,10 @@ export function buildMaxHeightApp(app: cdk.App): void {
 
   new DataStack(app, 'MaxHeight-Data', { env });
 
-  const cognito = new CognitoStack(app, 'MaxHeight-Cognito', { env, agentRuntimeArn });
+  new CognitoStack(app, 'MaxHeight-Cognito', { env, agentRuntimeArn });
 
   new BudgetStack(app, 'MaxHeight-Budget', {
     env,
-    unauthRole: cognito.unauthRole,
-    unauthPolicyName: cognito.unauthPolicyName,
     // Never committed (public repo): cdk deploy -c budgetAlertEmail=<owner email>
     alertEmail: app.node.tryGetContext('budgetAlertEmail'),
   });

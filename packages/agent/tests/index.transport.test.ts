@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { fakeControlTable } from './fixtures/controlTable.js';
 import { makeReq } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
@@ -57,6 +58,7 @@ describe('POST /invocations — SSE transport', () => {
   beforeEach(() => {
     __test.sessions.clear();
     __test.setRuntimeConfig(testRuntimeConfig());
+    __test.setControlTable(fakeControlTable());
     streamMock.mockReset();
     streamMock.mockImplementation(streamOf(['Hi ', 'there.']));
     synthesizeMock.mockReset();

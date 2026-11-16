@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { fakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, bearerHeaders, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
@@ -68,6 +69,7 @@ describe('handleInvocations — identity from the verified token', () => {
     __test.reset();
     vi.clearAllMocks();
     __test.setRuntimeConfig(testRuntimeConfig());
+    __test.setControlTable(fakeControlTable());
     streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });
 

@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { fakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, bearerHeaders, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
@@ -74,6 +75,7 @@ describe('handleInvocations — minted session identifiers', () => {
   beforeEach(() => {
     __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
+    __test.setControlTable(fakeControlTable());
     vi.clearAllMocks();
     streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });

@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { fakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, bearerHeaders, TEST_SUB, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf, textDelta } from './fixtures/strands.js';
@@ -89,6 +90,7 @@ describe('handleInvocations — per-session cap enforcement', () => {
   beforeEach(() => {
     __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
+    __test.setControlTable(fakeControlTable());
     vi.clearAllMocks();
     streamMock.mockImplementation(
       streamOf(['Hi there from Max!'], {

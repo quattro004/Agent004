@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { fakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, TEST_SUB } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf, fakeResult, textDelta } from './fixtures/strands.js';
@@ -96,6 +97,7 @@ describe('handleInvocations — cancellation on client disconnect', () => {
   beforeEach(() => {
     __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
+    __test.setControlTable(fakeControlTable());
     vi.clearAllMocks();
     streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });
@@ -181,6 +183,7 @@ describe('tool callbacks — cancel signal forwarding', () => {
   // holds an outbound HTTP request open unless the signal reaches it too.
   beforeEach(() => {
     __test.setRuntimeConfig(testRuntimeConfig());
+    __test.setControlTable(fakeControlTable());
   });
 
   function callbackFor(name: string) {

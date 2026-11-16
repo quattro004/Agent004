@@ -4,13 +4,16 @@ import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { tool } from '@strands-agents/sdk';
 import type { JSONValue } from '@strands-agents/sdk';
 import { PollyClient } from '@aws-sdk/client-polly';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { buildSystemPrompt } from './personality/systemPrompt.js';
 import { probeBedrockRuntime } from './bedrock/warmup.js';
 import { newsToolSchema, fetchNews } from './tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
 import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
 import { startSpan, endSpan } from './handlers/observability.js';
-import { readModelUsage } from './spend/usage.js';
+import { readModelUsage, computeTurnUsage } from './spend/usage.js';
+import { checkBreaker, recordTurnSpend, BreakerReadError } from './spend/breaker.js';
+import { ControlTable } from './session/controlTable.js';
 import { readVerifiedClaims, InvalidTokenError } from './identity/jwtClaims.js';
 import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js';
 import { SseStream, type SessionLifecycleState } from './transport/sse.js';
@@ -84,6 +87,36 @@ let polly: PollyClient | undefined;
 function pollyClient(config: RuntimeConfig): PollyClient {
   polly ??= new PollyClient({ region: config.awsRegion });
   return polly;
+}
+
+/**
+ * The part of the control table the invocation path uses: the halt the hard
+ * stop writes, and the month's spend tally the breaker reads and adds to.
+ */
+export interface InvocationControlTable {
+  getHalt: ControlTable['getHalt'];
+  getSpend: ControlTable['getSpend'];
+  addSpend: ControlTable['addSpend'];
+}
+
+let control: InvocationControlTable | undefined;
+
+/**
+ * Added to the session cap when setting `SESSION#<sub>.ttl` — cleanup only,
+ * never expiry (spec.md § Session 2026-11-15, approved 15-minute grace).
+ */
+const SESSION_TTL_GRACE_MINUTES = 15;
+
+function controlTable(config: RuntimeConfig): InvocationControlTable {
+  control ??= new ControlTable({
+    client: new DynamoDBClient({ region: config.awsRegion }),
+    tableName: config.controlTableName,
+    sessionMaxMinutes: config.sessionMaxMinutes,
+    sessionTtlGraceMinutes: SESSION_TTL_GRACE_MINUTES,
+    rateLimitPerHour: config.rateLimitPerHour,
+    rateLimitPerDay: config.rateLimitPerDay,
+  });
+  return control;
 }
 
 /** The friend's message is estimated at characters / 4 (spec 003 P-09). */
@@ -250,6 +283,25 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       return;
     }
 
+    // The halt comes before anything else the body says, including the
+    // action dispatch: a stopped system should not be arguing about the
+    // request (FR-018). The runtime reads it on every request, so it takes
+    // effect without waiting for the deny policy to propagate.
+    const table = controlTable(config);
+    try {
+      const halt = await table.getHalt();
+      if (halt) {
+        console.warn(`Refusing: halted at ${halt.haltedAt} (${halt.reason})`);
+        outcome = sse.fail('halted');
+        return;
+      }
+    } catch (err) {
+      // Fail closed: a halt we cannot read is a halt we must assume.
+      console.error('Could not read the halt:', err);
+      outcome = sse.fail('internal');
+      return;
+    }
+
     if (parsed.action !== undefined) {
       outcome = await handleAction(parsed.action, sse);
       return;
@@ -293,10 +345,36 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       return;
     }
 
+    // The month's tally is read last among the refusals, because it is the
+    // only one that costs a network call (contracts/spend-control.md
+    // § Breaker). It fails closed: a turn we cannot price is a turn we do not
+    // run.
+    const turnStartedAt = new Date();
+    let breaker;
+    try {
+      breaker = await checkBreaker({
+        table,
+        limits: {
+          degradeMicroUsd: config.breakerDegradeMicroUsd,
+          tripMicroUsd: config.breakerTripMicroUsd,
+        },
+        now: turnStartedAt,
+      });
+    } catch (err) {
+      if (!(err instanceof BreakerReadError)) throw err;
+      console.error(err.message);
+      outcome = sse.fail('internal');
+      return;
+    }
+    if (breaker.state === 'tripped') {
+      outcome = sse.fail('breaker_tripped');
+      return;
+    }
+
     // The browser decides whether it wants audio; synthesizing for a muted
-    // friend is spend with no listener. The breaker's soft-degrade becomes a
-    // second reason to answer "off" when T074 lands.
-    const voiceEnabled = parsed.voice !== 'off';
+    // friend is spend with no listener. A degraded breaker is the second
+    // reason to answer "off": the reply still arrives, as text.
+    const voiceEnabled = parsed.voice !== 'off' && breaker.state !== 'degraded';
     sse.send({
       type: 'session',
       countedSessionId,
@@ -328,6 +406,9 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     let firstTokenSeen = false;
     let reply = '';
     let pollyCharacters = 0;
+    // Set the moment the model reports usage, so a turn that fails afterwards
+    // is still counted: the tokens were billed either way.
+    let modelUsage: ReturnType<typeof readModelUsage> | undefined;
 
     try {
       const remainingGeneratedTokens = Math.max(0, config.sessionMaxTokens - session.tokenCount);
@@ -358,6 +439,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       // before the limit-stop check, because work that was billed is counted
       // whether or not the turn produced a usable reply.
       const usage = readModelUsage(result);
+      modelUsage = usage;
       session = {
         ...session,
         turnCount: session.turnCount + 1,
@@ -425,6 +507,21 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       }
     } finally {
       clearTimeout(deadline);
+      // The breaker's other half: every turn that reached the model is added
+      // to the month, whether it finished, failed or was abandoned. A failed
+      // write is loud but does not fail the turn the friend already received.
+      if (modelUsage) {
+        const turnUsage = computeTurnUsage(
+          {
+            model: modelUsage,
+            pollyCharacters,
+            memoryEvents: 0,
+            memoryRetrievals: 0,
+          },
+          config.prices,
+        );
+        await recordTurnSpend({ table, now: turnStartedAt }, turnUsage.estimatedMicroUsd);
+      }
       endSpan('reply.complete', {
         inputTokens: String(session.tokenCount),
         pollyCharacters: String(pollyCharacters),
@@ -508,6 +605,11 @@ export const __test = {
     runtimeSessionOwners.clear();
     registry = undefined;
     polly = undefined;
+    control = undefined;
+  },
+  /** Supplies the control table, so no test reaches DynamoDB. */
+  setControlTable(table: InvocationControlTable | undefined) {
+    control = table;
   },
   /** Seeds the config the handler would otherwise get from `initialize()`. */
   setRuntimeConfig(config: RuntimeConfig | undefined) {

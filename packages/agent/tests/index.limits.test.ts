@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { fakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, TEST_SUB } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
@@ -61,6 +62,7 @@ describe('handleInvocations — approved per-turn bounds', () => {
     __test.reset();
     vi.clearAllMocks();
     __test.setRuntimeConfig(testRuntimeConfig());
+    __test.setControlTable(fakeControlTable());
     streamMock.mockImplementation(
       streamOf(['Hi there from Max!'], {
         usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 },
