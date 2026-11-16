@@ -155,3 +155,5 @@ A cancelled turn still counts its usage against the counted session and the brea
 | `reply.complete` | Model call starts | `done` written | `inputTokens`, `outputTokens`, `pollyCharacters` |
 | `memory.create_event` | `CreateEvent` call | Result | `failed` |
 | `memory.action` | Action request received | `result` or `error` written | `action`, `count`, `failed` |
+
+Every span of one request belongs to that request's trace, parented to its `invocation` span, so two requests in flight never end each other's spans. A span still open when the request settles is ended with `abandoned: true`. Spans are OpenTelemetry API spans, exported by whatever tracer provider the runtime installs; with none installed they are no-ops. A span carries no message text.

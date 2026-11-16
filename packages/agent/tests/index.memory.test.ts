@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
 import { bearerHeaders, makeReq, TEST_RUNTIME_SESSION_ID, TEST_SUB } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
 import { streamOf } from './fixtures/strands.js';
+import { captureSpans, type SpanCapture } from './fixtures/spans.js';
 
 const streamMock = vi.hoisted(() => vi.fn());
 const synthesize = vi.hoisted(() => vi.fn());
@@ -80,7 +81,14 @@ const rememberedFact = {
 };
 
 describe('handleInvocations — AgentCore memory', () => {
+  let capture: SpanCapture;
+
+  afterEach(async () => {
+    await capture.stop();
+  });
+
   beforeEach(() => {
+    capture = captureSpans();
     __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
     vi.clearAllMocks();
@@ -157,7 +165,7 @@ describe('handleInvocations — AgentCore memory', () => {
       const entries = log.mock.calls.flatMap(([value]) => {
         if (typeof value !== 'string') return [];
         try {
-          return [JSON.parse(value) as { name?: string; attributes?: Record<string, unknown> }];
+          return [JSON.parse(value) as Record<string, unknown>];
         } catch {
           return [];
         }
@@ -167,12 +175,7 @@ describe('handleInvocations — AgentCore memory', () => {
       expect(warn).toHaveBeenCalledWith(
         JSON.stringify({ event: 'memory.retrieve.failed', errorName: 'Error' }),
       );
-      expect(entries).toContainEqual(
-        expect.objectContaining({
-          name: 'memory.retrieve',
-          attributes: expect.objectContaining({ failed: true }),
-        }),
-      );
+      expect(capture.one('memory.retrieve').attributes).toMatchObject({ failed: true });
       expect(entries).toContainEqual(expect.objectContaining({ MemoryRetrieveFailures: 1 }));
       expect(table.settleRequest).toHaveBeenCalled();
     } finally {
@@ -223,7 +226,7 @@ describe('handleInvocations — AgentCore memory', () => {
       const entries = log.mock.calls.flatMap(([value]) => {
         if (typeof value !== 'string') return [];
         try {
-          return [JSON.parse(value) as { name?: string; attributes?: Record<string, unknown> }];
+          return [JSON.parse(value) as Record<string, unknown>];
         } catch {
           return [];
         }
@@ -233,12 +236,7 @@ describe('handleInvocations — AgentCore memory', () => {
       expect(warn).toHaveBeenCalledWith(
         JSON.stringify({ event: 'memory.create_event.failed', errorName: 'Error' }),
       );
-      expect(entries).toContainEqual(
-        expect.objectContaining({
-          name: 'memory.create_event',
-          attributes: expect.objectContaining({ failed: true }),
-        }),
-      );
+      expect(capture.one('memory.create_event').attributes).toMatchObject({ failed: true });
       expect(entries).toContainEqual(expect.objectContaining({ MemoryEventFailures: 1 }));
     } finally {
       warn.mockRestore();

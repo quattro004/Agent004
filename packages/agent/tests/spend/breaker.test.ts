@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { captureSpans, type SpanCapture } from '../fixtures/spans.js';
 import {
   checkBreaker,
   recordTurnSpend,
@@ -6,7 +7,6 @@ import {
   type BreakerLimits,
   type SpendTally,
 } from '../../src/spend/breaker.js';
-import { setSpanEmitter, type TraceSpan } from '../../src/handlers/observability.js';
 
 /**
  * The in-path breaker (T069; contracts/spend-control.md § Breaker).
@@ -29,15 +29,15 @@ function tally(microUsd: number | undefined): SpendTally {
   };
 }
 
-let spans: TraceSpan[];
+let capture: SpanCapture;
 
 beforeEach(() => {
-  spans = [];
-  setSpanEmitter((span) => spans.push(span));
+  capture = captureSpans();
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
+  await capture.stop();
 });
 
 describe('checkBreaker', () => {
@@ -82,13 +82,14 @@ describe('checkBreaker', () => {
     );
   });
 
-  it('records a breaker.check span carrying the state it decided', async () => {
+  it('records a breaker.check span carrying the tally and what it decided', async () => {
     await checkBreaker({ table: tally(15_000_000), limits: LIMITS, now: NOW });
 
-    const span = spans.find((s) => s.name === 'breaker.check');
-    expect(span).toBeDefined();
-    expect(span?.attributes.state).toBe('tripped');
-    expect(span?.attributes.tallyMicroUsd).toBe('15000000');
+    expect(capture.one('breaker.check').attributes).toMatchObject({
+      tally: 15_000_000,
+      degraded: false,
+      tripped: true,
+    });
   });
 
   it('ends the breaker.check span even when the read fails', async () => {
@@ -101,8 +102,7 @@ describe('checkBreaker', () => {
 
     await expect(checkBreaker({ table, limits: LIMITS, now: NOW })).rejects.toThrow();
 
-    const span = spans.find((s) => s.name === 'breaker.check');
-    expect(span?.attributes.state).toBe('read_failed');
+    expect(capture.one('breaker.check').attributes).toMatchObject({ failed: true });
   });
 });
 

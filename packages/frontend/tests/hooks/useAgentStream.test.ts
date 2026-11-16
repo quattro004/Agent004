@@ -141,6 +141,29 @@ describe('useAgentStream', () => {
       expect(useConversationStore.getState().isStreaming).toBe(false);
     });
 
+    it('shows each text delta as it arrives and finalizes the turn only on done', async () => {
+      const snapshots: Array<{ type: string; text: string; streaming: boolean }> = [];
+      const { stream } = makeStream({
+        onEvent: (event) => {
+          const { currentResponseText, isStreaming } = useConversationStore.getState();
+          snapshots.push({ type: event.type, text: currentResponseText, streaming: isStreaming });
+        },
+      });
+
+      await stream.send({ message: 'hi' });
+
+      // onEvent runs before the store is updated, so a snapshot shows what the
+      // friend could already read when that event arrived.
+      const secondText = snapshots.filter((snapshot) => snapshot.type === 'text')[1];
+      expect(secondText).toMatchObject({ text: 'Hello ', streaming: true });
+      expect(snapshots.at(-1)).toMatchObject({
+        type: 'done',
+        text: 'Hello friend.',
+        streaming: true,
+      });
+      expect(useConversationStore.getState().isStreaming).toBe(false);
+    });
+
     it('records the counted session the server chose', async () => {
       const { stream } = makeStream();
 

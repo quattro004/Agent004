@@ -58,7 +58,7 @@ export async function checkBreaker({
   try {
     spend = await table.getSpend(now);
   } catch (err) {
-    endSpan('breaker.check', { state: 'read_failed' });
+    endSpan('breaker.check', { failed: true });
     throw new BreakerReadError(err);
   }
 
@@ -70,7 +70,11 @@ export async function checkBreaker({
         ? 'degraded'
         : 'ok';
 
-  endSpan('breaker.check', { state, tallyMicroUsd: String(tallyMicroUsd) });
+  endSpan('breaker.check', {
+    tally: tallyMicroUsd,
+    degraded: state === 'degraded',
+    tripped: state === 'tripped',
+  });
   return { state, tallyMicroUsd };
 }
 

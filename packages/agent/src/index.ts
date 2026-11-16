@@ -10,7 +10,7 @@ import { probeBedrockRuntime } from './bedrock/warmup.js';
 import { newsToolSchema, fetchNews } from './tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
 import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
-import { startSpan, endSpan } from './handlers/observability.js';
+import { startSpan, endSpan, withRequestTrace } from './handlers/observability.js';
 import { randomUUID } from 'node:crypto';
 import { readModelUsage, computeTurnUsage, MissingUsageError } from './spend/usage.js';
 import { checkBreaker, recordTurnSpend, BreakerReadError } from './spend/breaker.js';
@@ -278,7 +278,12 @@ function handlePing(_req: IncomingMessage, res: ServerResponse): void {
   res.end(JSON.stringify({ status: 'healthy' }));
 }
 
-async function handleInvocations(req: IncomingMessage, res: ServerResponse): Promise<void> {
+/** Each request is its own trace, so two in flight never end each other's spans. */
+function handleInvocations(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  return withRequestTrace(() => serveInvocation(req, res));
+}
+
+async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promise<void> {
   startSpan('invocation');
 
   const config = getRuntimeConfig();
@@ -501,6 +506,9 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     }
 
     const opened = evaluation.kind === 'open';
+    // Covers opening a session, from the allowlist check to the end of memory
+    // retrieval. A turn in a session already open records `opened: false`.
+    startSpan('session.open');
     let session: CountedSessionWrite;
     if (evaluation.kind === 'continue') {
       session = evaluation.session;
@@ -557,6 +565,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       // Retrieval was attempted, so it is billed even if nothing else runs.
       settleMicroUsd = memoryRetrievals * config.prices.memoryRetrievalMicroUsd;
     }
+    endSpan('session.open', { opened });
 
     sse.send({
       type: 'session',
@@ -598,6 +607,14 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     // Set the moment the model reports usage, so a turn that fails afterwards
     // is still counted: the tokens were billed either way.
     let modelUsage: ReturnType<typeof readModelUsage> | undefined;
+    // Ends when `done` is written, not after the work that follows it. Ending it
+    // again in the `finally` below only matters for a turn that never got that far.
+    const completeReply = () =>
+      endSpan('reply.complete', {
+        inputTokens: modelUsage?.inputTokens ?? 0,
+        outputTokens: modelUsage?.outputTokens ?? 0,
+        pollyCharacters,
+      });
 
     try {
       const remainingGeneratedTokens = Math.max(
@@ -688,6 +705,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
 
       outcome = 'done';
       sse.send({ type: 'done', turnsUsed: session.turns, state: lifecycleStateOf(session) });
+      completeReply();
       turnDelivered = true;
     } catch (err) {
       cancelled = cancellation.signal.aborted;
@@ -702,6 +720,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
         pollyCharacters = err.pollyCharacters;
         outcome = 'done';
         sse.send({ type: 'done', turnsUsed: session.turns, state: lifecycleStateOf(session) });
+        completeReply();
         turnDelivered = true;
       } else if (deadlineExceeded) {
         console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
@@ -746,10 +765,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
             config.prices,
           ) ?? settleMicroUsd;
       }
-      endSpan('reply.complete', {
-        inputTokens: String(session.conversationalTokens),
-        pollyCharacters: String(pollyCharacters),
-      });
+      completeReply();
       if (!firstTokenSeen) endSpan('first_token');
     }
   } finally {
@@ -758,7 +774,7 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     // failure never fails or replays the turn: the work is already done and
     // paid for, and replaying it would spend again.
     if (lease) await settleLease(controlTable(config), lease, settleMicroUsd, turnStartedAt);
-    endSpan('invocation', { countedSessionId, outcome, cancelled: String(cancelled) });
+    endSpan('invocation', { countedSessionId, outcome, cancelled });
     sse.end();
   }
 }

@@ -50,6 +50,7 @@ vi.mock('../src/handlers/observability.js', () => ({
     attributes: {},
   }),
   endSpan: vi.fn().mockReturnValue(null),
+  withRequestTrace: <T>(fn: () => T) => fn(),
 }));
 
 // Dynamic import after mocks
