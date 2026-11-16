@@ -17,13 +17,23 @@ export function bearerHeaders(claims: Record<string, unknown> = { sub: TEST_SUB 
 }
 
 /**
+ * The header AgentCore Runtime always sets, long enough to satisfy its own
+ * 33-character minimum. It routes to a microVM and never identifies a friend.
+ */
+export const TEST_RUNTIME_SESSION_ID = 'runtime-session-0000000000000000000';
+
+/**
  * An `IncomingMessage` double carrying a body and headers. Every request the
- * handler serves is authenticated, so a token is supplied by default: a test
- * that omits one is testing the refusal, not the happy path.
+ * handler serves is authenticated and arrives through AgentCore, so a token
+ * and a runtime session ID are supplied by default: a test that omits one is
+ * testing the refusal, not the happy path.
  */
 export function makeReq(
   body: unknown,
-  headers: IncomingHttpHeaders = bearerHeaders(),
+  headers: IncomingHttpHeaders = {
+    ...bearerHeaders(),
+    'x-amzn-bedrock-agentcore-runtime-session-id': TEST_RUNTIME_SESSION_ID,
+  },
 ): IncomingMessage {
   const stream = new PassThrough();
   Object.assign(stream, { headers });

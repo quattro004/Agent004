@@ -23,14 +23,25 @@ import { wrapInSsml } from './ssml.js';
  */
 export const POLLY_MAX_BILLED_CHARACTERS = 3000;
 
+/** The SSE `audio` event, shaped as transport-sse.md § Events defines it. */
 export interface AudioEvent {
   /** Playback order. The browser buffers and plays by `seq`. */
   seq: number;
-  mp3Base64: string;
+  format: 'mp3';
+  /** Base64, because SSE frames are text and carry no binary. */
+  data: string;
+}
+
+/** The voice settings, which live in runtime configuration (amendment A6). */
+export interface VoiceSettings {
+  voiceId: string;
+  engine: string;
+  sampleRate: number;
 }
 
 export interface SynthesizeOptions {
   client: PollyClient;
+  voice: VoiceSettings;
   /** When false nothing is sent to Polly, so nothing is billed. */
   voiceEnabled: boolean;
   onAudio: (event: AudioEvent) => void | Promise<void>;
@@ -106,11 +117,12 @@ export async function synthesizeToAudioEvents(
   for (const segment of segments) {
     const input: SynthesizeSpeechCommandInput = {
       // Standard, not Neural: amendment A6 chose it on cost, and Matthew is
-      // the voice the DSP chain was tuned against.
-      Engine: 'standard',
-      VoiceId: 'Matthew',
+      // the voice the DSP chain was tuned against. Both are configuration, so
+      // the choice can change without a code deploy.
+      Engine: options.voice.engine as SynthesizeSpeechCommandInput['Engine'],
+      VoiceId: options.voice.voiceId as SynthesizeSpeechCommandInput['VoiceId'],
       OutputFormat: 'mp3',
-      SampleRate: '24000',
+      SampleRate: String(options.voice.sampleRate),
       TextType: 'ssml',
       Text: wrapInSsml(segment),
     };
@@ -135,8 +147,9 @@ export async function synthesizeToAudioEvents(
 
     await options.onAudio({
       seq: emitted,
+      format: 'mp3',
       // SSE frames are text, so the mp3 travels base64-encoded.
-      mp3Base64: Buffer.from(audio).toString('base64'),
+      data: Buffer.from(audio).toString('base64'),
     });
     emitted += 1;
   }

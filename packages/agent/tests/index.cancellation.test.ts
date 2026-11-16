@@ -1,29 +1,25 @@
 /**
- * Cancellation tests for the agent invocation handler (issue #43).
+ * Cancellation tests for the agent invocation handler (issue #43, T030).
  *
- * A guest who closes the tab mid-turn must not keep billing tokens. These
- * tests bypass the HTTP layer and call `handleInvocations` directly with
- * mocked IncomingMessage / ServerResponse, following the same pattern as
- * `index.cap-enforcement.test.ts`.
+ * A friend who closes the tab mid-turn must not keep billing tokens, and the
+ * work already billed before they left must still be counted. These bypass
+ * the HTTP layer and call `handleInvocations` directly with doubles.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'node:events';
-import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { makeReq } from './fixtures/http.js';
+import { makeReq, TEST_SUB } from './fixtures/http.js';
+import { makeRes } from './fixtures/sse.js';
+import { streamOf, fakeResult, textDelta } from './fixtures/strands.js';
+
+const streamMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  const invokeMock = vi.fn().mockResolvedValue({
-    lastMessage: {
-      content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
-    },
-  });
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock, addHook: vi.fn(), messages: [] };
+    return { stream: streamMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { ...actual, Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -41,12 +37,17 @@ vi.mock('../src/tools/webSearchTool.js', () => ({
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
 }));
+vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    synthesizeToAudioEvents: vi.fn().mockResolvedValue({ pollyCharacters: 0, segments: 0 }),
+  };
+});
 
 const sdk = (await import('@strands-agents/sdk')) as unknown as {
-  __invokeMock: ReturnType<typeof vi.fn>;
   tool: ReturnType<typeof vi.fn>;
 };
-const invokeMock = sdk.__invokeMock;
 const toolMock = sdk.tool;
 const { fetchNews } = (await import('../src/tools/newsTool.js')) as unknown as {
   fetchNews: ReturnType<typeof vi.fn>;
@@ -69,106 +70,109 @@ interface ToolRegistration {
 }
 const toolRegistrations = toolMock.mock.calls.map((call) => call[0] as ToolRegistration);
 
-/**
- * A response double that is an EventEmitter, because the disconnect signal we
- * rely on is `res.on('close')` firing while `writableFinished` is still false.
- */
-function makeRes(): {
-  res: ServerResponse;
-  disconnect: () => void;
-  body: () => string;
-  end: Promise<void>;
-} {
-  const chunks: string[] = [];
-  let resolveEnd!: () => void;
-  const ended = new Promise<void>((r) => (resolveEnd = r));
-
-  const emitter = new EventEmitter();
-  const res = Object.assign(emitter, {
-    writableFinished: false,
-    writeHead() {
-      return res;
-    },
-    write(chunk: string) {
-      chunks.push(chunk);
-      return true;
-    },
-    end(chunk?: string) {
-      if (chunk) chunks.push(chunk);
-      (res as unknown as { writableFinished: boolean }).writableFinished = true;
-      resolveEnd();
-      emitter.emit('close');
-      return res;
-    },
-  }) as unknown as ServerResponse;
-
-  return {
-    res,
-    // The client vanishing: 'close' arrives before the response finished.
-    disconnect: () => emitter.emit('close'),
-    body: () => chunks.join(''),
-    end: ended,
+/** A `stream()` that stalls after `chunks`, so a test can disconnect mid-turn. */
+function stallingStream(chunks: string[], options: { usage?: { outputTokens: number } } = {}) {
+  return (_message: string, invokeOptions: { cancelSignal?: AbortSignal }) => {
+    const queue = [...chunks];
+    return {
+      async next() {
+        const chunk = queue.shift();
+        if (chunk !== undefined) return { done: false, value: textDelta(chunk) };
+        return new Promise((_resolve, reject) => {
+          invokeOptions.cancelSignal?.addEventListener('abort', () =>
+            reject(new Error('invocation aborted')),
+          );
+        });
+      },
+      /** The handler never calls this, but a real generator has it. */
+      async return() {
+        return { done: true, value: fakeResult(chunks.join(''), options) };
+      },
+    };
   };
 }
 
 describe('handleInvocations — cancellation on client disconnect', () => {
   beforeEach(() => {
-    __test.sessions.clear();
+    __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
-    invokeMock.mockReset();
-    invokeMock.mockResolvedValue({
-      lastMessage: { content: [{ type: 'textBlock', text: 'Hi there from Max!' }] },
-    });
+    vi.clearAllMocks();
+    streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });
 
-  it('passes a cancelSignal to agent.invoke', async () => {
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hello', sessionId: 's1' }), res);
-    await end;
+  it('passes a cancelSignal to agent.stream', async () => {
+    const double = makeRes();
+    await __test.handleInvocations(makeReq({ message: 'hello' }), double.res);
+    await double.end;
 
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    const options = invokeMock.mock.calls[0]?.[1] as { cancelSignal?: AbortSignal } | undefined;
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    const options = streamMock.mock.calls[0]?.[1] as { cancelSignal?: AbortSignal } | undefined;
     expect(options?.cancelSignal).toBeInstanceOf(AbortSignal);
   });
 
   it('aborts the invocation when the client disconnects mid-turn', async () => {
     let captured: AbortSignal | undefined;
-    invokeMock.mockImplementation((_prompt: unknown, options?: { cancelSignal?: AbortSignal }) => {
-      captured = options?.cancelSignal;
-      return new Promise((_resolve, reject) => {
-        options?.cancelSignal?.addEventListener('abort', () =>
-          reject(new Error('invocation aborted')),
-        );
-      });
+    streamMock.mockImplementation((message: string, options: { cancelSignal?: AbortSignal }) => {
+      captured = options.cancelSignal;
+      return stallingStream([])(message, options);
     });
 
-    const { res, disconnect, end } = makeRes();
-    const pending = __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's2' }), res);
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
 
     await vi.waitFor(() => expect(captured).toBeDefined());
     expect(captured!.aborted).toBe(false);
 
-    disconnect();
+    double.disconnect();
 
     await pending;
-    await end;
+    await double.end;
     expect(captured!.aborted).toBe(true);
+  });
+
+  it('writes nothing further to a stream whose client has gone', async () => {
+    streamMock.mockImplementation(stallingStream(['Half a rep']));
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+
+    await vi.waitFor(() => expect(double.event('text')).toBeDefined());
+    double.disconnect();
+    await pending;
+
+    // No error and no done: there is no one left to tell, and an SSE frame
+    // written after the socket closed is just an exception we would have to
+    // swallow.
+    expect(double.events().map((e) => e.type)).toEqual(['session', 'text']);
   });
 
   it('does not abort a turn that completes normally', async () => {
     let captured: AbortSignal | undefined;
-    invokeMock.mockImplementation((_prompt: unknown, options?: { cancelSignal?: AbortSignal }) => {
-      captured = options?.cancelSignal;
-      return Promise.resolve({
-        lastMessage: { content: [{ type: 'textBlock', text: 'done' }] },
-      });
+    streamMock.mockImplementation((message: string, options: { cancelSignal?: AbortSignal }) => {
+      captured = options.cancelSignal;
+      return streamOf(['done'])();
     });
 
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's3' }), res);
-    await end;
+    const double = makeRes();
+    await __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+    await double.end;
 
     expect(captured!.aborted).toBe(false);
+    expect(double.event('done')).toBeDefined();
+  });
+
+  it('leaves the counted session intact when the friend leaves mid-turn', async () => {
+    streamMock.mockImplementation(stallingStream(['Half a rep']));
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+    await vi.waitFor(() => expect(double.event('text')).toBeDefined());
+    double.disconnect();
+    await pending;
+
+    // The session was opened and must survive, so the friend who comes back
+    // resumes the same budget rather than getting a fresh one (P-05).
+    expect(__test.sessions.get(TEST_SUB)).toBeDefined();
   });
 });
 

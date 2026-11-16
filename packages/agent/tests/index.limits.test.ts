@@ -1,29 +1,27 @@
 /**
- * T163 (RED): the invocation handler enforces the approved per-turn bounds.
+ * T163: the invocation handler enforces the approved per-turn bounds.
  *
  * Spec 003 § Clarifications, Session 2026-11-15. The body limit has to be
  * applied while reading, before the payload is parsed, so an oversized request
  * cannot make us buffer or deserialize it. The SDK limits have to reach
- * `invoke`, and a limit stop has to end the turn as an error rather than be
+ * `stream`, and a limit stop has to end the turn as an error rather than be
  * presented to the friend as a complete reply.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'node:events';
-import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { makeReq } from './fixtures/http.js';
+import { makeReq, TEST_SUB } from './fixtures/http.js';
+import { makeRes } from './fixtures/sse.js';
+import { streamOf } from './fixtures/strands.js';
+
+const streamMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  const invokeMock = vi.fn().mockResolvedValue({
-    lastMessage: { content: [{ type: 'textBlock', text: 'Hi there from Max!' }] },
-    invocationContext: { usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 } },
-  });
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock, addHook: vi.fn(), messages: [] };
+    return { stream: streamMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { ...actual, Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -41,84 +39,59 @@ vi.mock('../src/tools/webSearchTool.js', () => ({
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
 }));
+vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    synthesizeToAudioEvents: vi.fn().mockResolvedValue({ pollyCharacters: 0, segments: 0 }),
+  };
+});
 
 const { __test } = await import('../src/index.js');
-const { __invokeMock: invokeMock } = (await import('@strands-agents/sdk')) as unknown as {
-  __invokeMock: ReturnType<typeof vi.fn>;
-};
 
-function makeRes(): {
-  res: ServerResponse;
-  statusCode: () => number | undefined;
-  body: () => string;
-  end: Promise<void>;
-} {
-  const chunks: string[] = [];
-  let status: number | undefined;
-  let resolveEnd!: () => void;
-  const ended = new Promise<void>((r) => (resolveEnd = r));
-
-  const emitter = new EventEmitter();
-  const res = Object.assign(emitter, {
-    writableFinished: false,
-    writeHead(code: number) {
-      status = code;
-      return res;
-    },
-    write(chunk: string) {
-      chunks.push(chunk);
-      return true;
-    },
-    end(chunk?: string) {
-      if (chunk) chunks.push(chunk);
-      (res as unknown as { writableFinished: boolean }).writableFinished = true;
-      resolveEnd();
-      return res;
-    },
-  }) as unknown as ServerResponse;
-
-  return { res, statusCode: () => status, body: () => chunks.join(''), end: ended };
+async function turn(body: unknown) {
+  const double = makeRes();
+  await __test.handleInvocations(makeReq(body), double.res);
+  await double.end;
+  return double;
 }
 
 describe('handleInvocations — approved per-turn bounds', () => {
   beforeEach(() => {
-    __test.sessions.clear();
+    __test.reset();
     vi.clearAllMocks();
     __test.setRuntimeConfig(testRuntimeConfig());
-    invokeMock.mockResolvedValue({
-      lastMessage: { content: [{ type: 'textBlock', text: 'Hi there from Max!' }] },
-      invocationContext: { usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 } },
-    });
+    streamMock.mockImplementation(
+      streamOf(['Hi there from Max!'], {
+        usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 },
+      }),
+    );
   });
 
-  it('refuses a body over 16 KiB with 413 and never invokes the model', async () => {
-    const oversized = JSON.stringify({ message: 'x'.repeat(20 * 1024), sessionId: 'big' });
-    const { res, end, statusCode, body } = makeRes();
+  it('refuses a body over 16 KiB and never invokes the model', async () => {
+    const { head, events } = await turn(JSON.stringify({ message: 'x'.repeat(20 * 1024) }));
 
-    await __test.handleInvocations(makeReq(oversized), res);
-    await end;
-
-    expect(statusCode()).toBe(413);
-    expect(JSON.parse(body())).toMatchObject({ error: 'request_too_large' });
-    expect(invokeMock).not.toHaveBeenCalled();
+    // Refusals are SSE events, never HTTP statuses: how AgentCore relays a
+    // container's non-2xx status to the browser is unverified.
+    expect(head()?.status).toBe(200);
+    expect(events()).toEqual([
+      expect.objectContaining({ type: 'error', code: 'message_too_long', retryable: false }),
+    ]);
+    expect(streamMock).not.toHaveBeenCalled();
   });
 
   it('refuses the oversized body without parsing it', async () => {
-    // Invalid JSON over the limit must still be a 413, which proves the size
-    // gate runs before `JSON.parse` rather than after it.
-    const { res, end, statusCode } = makeRes();
-    await __test.handleInvocations(makeReq('{' + 'x'.repeat(20 * 1024)), res);
-    await end;
+    // Invalid JSON over the limit must still be message_too_long, which proves
+    // the size gate runs before `JSON.parse` rather than after it.
+    const { events } = await turn('{' + 'x'.repeat(20 * 1024));
 
-    expect(statusCode()).toBe(413);
+    expect(events()[0]).toMatchObject({ code: 'message_too_long' });
   });
 
-  it('passes the approved SDK limits to invoke', async () => {
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's1' }), res);
-    await end;
+  it('passes the approved SDK limits to stream', async () => {
+    await turn({ message: 'hi' });
 
-    expect(invokeMock).toHaveBeenCalledWith(
+    expect(streamMock).toHaveBeenCalledWith(
       'hi',
       expect.objectContaining({
         limits: { turns: 4, outputTokens: 1000, totalTokens: 64_000 },
@@ -126,68 +99,84 @@ describe('handleInvocations — approved per-turn bounds', () => {
     );
   });
 
-  it('rejects a message over the configured character limit', async () => {
-    const { res, end, statusCode, body } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'y'.repeat(2001), sessionId: 's2' }), res);
-    await end;
-
-    expect(statusCode()).toBe(400);
-    expect(JSON.parse(body())).toMatchObject({ error: 'message_too_long' });
-    expect(invokeMock).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['limitTurns', 'model call'],
-    ['limitOutputTokens', 'generated token'],
-    ['limitTotalTokens', 'billed token'],
-  ])('ends the turn as an error when the SDK stops on %s', async (stopReason) => {
-    invokeMock.mockResolvedValueOnce({
-      stopReason,
-      lastMessage: { content: [{ type: 'textBlock', text: 'partial' }] },
-      invocationContext: { usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+  it('shrinks the generated-token ceiling to the capacity the session has left', async () => {
+    const config = testRuntimeConfig();
+    __test.setRuntimeConfig(config);
+    __test.sessions.set(TEST_SUB, {
+      sessionId: 'sess-nearly-spent',
+      actorId: TEST_SUB,
+      greetingId: 'g',
+      state: 'ACTIVE',
+      turnCount: 1,
+      tokenCount: config.sessionMaxTokens - 120,
+      idleNudgeDelivered: false,
+      reEngagementCount: 0,
+      startedAt: new Date(),
+      endedAt: null,
     });
 
-    const { res, end, body } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's3' }), res);
-    await end;
+    await turn({ message: 'hi' });
 
-    expect(body()).toContain('"type":"error"');
-    expect(body()).toContain(stopReason);
-    expect(body()).not.toContain('"type":"done"');
+    expect(streamMock.mock.calls[0]![1].limits.outputTokens).toBe(120);
   });
+
+  it('rejects a message over the configured character limit', async () => {
+    const { events } = await turn({ message: 'y'.repeat(2001) });
+
+    expect(events()).toEqual([
+      expect.objectContaining({ type: 'error', code: 'message_too_long' }),
+    ]);
+    expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['limitTurns', 'limitOutputTokens', 'limitTotalTokens'])(
+    'ends the turn as an error when the SDK stops on %s',
+    async (stopReason) => {
+      streamMock.mockImplementation(
+        streamOf(['partial'], {
+          stopReason,
+          usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        }),
+      );
+
+      const { events, raw } = await turn({ message: 'hi' });
+
+      expect(events().at(-1)).toMatchObject({ type: 'error', code: 'session_cap_exceeded' });
+      expect(raw()).not.toContain('"type":"done"');
+      // The ceiling that stopped us is an internal figure; the friend gets
+      // Max's voice, not our accounting.
+      expect(raw()).not.toContain(stopReason);
+    },
+  );
 
   it('still counts the billed work of a limit-stopped turn', async () => {
-    invokeMock.mockResolvedValueOnce({
-      stopReason: 'limitTotalTokens',
-      lastMessage: { content: [{ type: 'textBlock', text: 'partial' }] },
-      invocationContext: { usage: { inputTokens: 10, outputTokens: 40, totalTokens: 50 } },
-    });
+    streamMock.mockImplementation(
+      streamOf(['partial'], {
+        stopReason: 'limitTotalTokens',
+        usage: { inputTokens: 10, outputTokens: 40, totalTokens: 50 },
+      }),
+    );
 
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's4' }), res);
-    await end;
+    await turn({ message: 'hi' });
 
     // Spending money and not counting it is the failure mode that matters.
-    expect(__test.sessions.get('s4')!.tokenCount).toBeGreaterThanOrEqual(40);
+    expect(__test.sessions.get(TEST_SUB)!.tokenCount).toBeGreaterThanOrEqual(40);
   });
 
   it('abandons the turn at the configured deadline', async () => {
     __test.setRuntimeConfig(
       testRuntimeConfig({ limits: { ...testRuntimeConfig().limits, deadlineMs: 20 } }),
     );
-    invokeMock.mockImplementationOnce(
-      (_m: string, options: { cancelSignal?: AbortSignal }) =>
+    streamMock.mockImplementation((_m: string, options: { cancelSignal?: AbortSignal }) => ({
+      next: () =>
         new Promise((_resolve, reject) => {
           options.cancelSignal?.addEventListener('abort', () => reject(new Error('aborted')));
         }),
-    );
+    }));
 
-    const { res, end, body } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's5' }), res);
-    await end;
+    const { events } = await turn({ message: 'hi' });
 
-    expect(body()).toContain('"type":"error"');
-    expect(body()).toMatch(/deadline|timed out/i);
+    expect(events().at(-1)).toMatchObject({ type: 'error', code: 'session_cap_exceeded' });
   });
 
   it('cancels the in-flight model call when the deadline passes', async () => {
@@ -195,17 +184,17 @@ describe('handleInvocations — approved per-turn bounds', () => {
       testRuntimeConfig({ limits: { ...testRuntimeConfig().limits, deadlineMs: 20 } }),
     );
     let signal: AbortSignal | undefined;
-    invokeMock.mockImplementationOnce(
-      (_m: string, options: { cancelSignal?: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          signal = options.cancelSignal;
-          options.cancelSignal?.addEventListener('abort', () => reject(new Error('aborted')));
-        }),
-    );
+    streamMock.mockImplementation((_m: string, options: { cancelSignal?: AbortSignal }) => {
+      signal = options.cancelSignal;
+      return {
+        next: () =>
+          new Promise((_resolve, reject) => {
+            options.cancelSignal?.addEventListener('abort', () => reject(new Error('aborted')));
+          }),
+      };
+    });
 
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's6' }), res);
-    await end;
+    await turn({ message: 'hi' });
 
     expect(signal?.aborted).toBe(true);
   });

@@ -50,10 +50,17 @@ X-Amzn-Bedrock-AgentCore-Runtime-Session-Id: <runtime session ID>
   "displayAlias": "string", // optional; at most 50 characters (spec 001 data-model.md:19)
   "greetingId": "string", // optional; the greeting the browser played, for context
   "clientTimestamp": "ISO-8601", // optional; time-of-day context only
+  "voice": "on" | "off", // optional, default "on"; "off" suppresses synthesis entirely
 }
 ```
 
 The server **ignores** `sessionId`, `actorId` and any other field. Identity comes only from the token (FR-010, #55).
+
+`voice` is the one setting the browser owns, because muting is the friend's
+choice and synthesizing audio they will not hear costs money for nothing. The
+server can still answer `voice: "off"` in the `session` event when the
+soft-degrade is active, so the browser must read that field rather than assume
+its request was honoured.
 
 ### Actions
 
@@ -115,7 +122,7 @@ The breaker and cap figures (`conversationalTokens`, spend) are **not** sent to 
 | `session_cap_exceeded` | Turn, token or 30-minute cap reached before this turn (code name kept from `index.ts:173`) | false | Ended state; the next message opens a fresh counted session |
 | `session_mismatch` | The runtime session ID is bound to a different `sub` | false | The browser drops its session ID, makes a new one and retries once |
 | `moderation_blocked` | Guardrails intervened (if the adopted model's path supports them, Q2) | false | In-character deflection |
-| `internal` | Anything else. Logged with a correlation ID; the friend's message text is never logged. | true | Signal-lost state |
+| `internal` | Anything else, including a request that reaches the container with no usable `sub` (the platform's JWT authorizer should already have refused it, so that is a misconfiguration, not a friend error). Logged with a correlation ID; the friend's message text is never logged. | true | Signal-lost state |
 
 Refusal order before a turn, which is cheapest first and spends nothing:
 

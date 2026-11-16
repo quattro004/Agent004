@@ -20,15 +20,19 @@ function audioResponse(bytes: number[]) {
 
 const client = () => new PollyClient({ region: 'us-west-2' });
 
+/** The voice settings the runtime configuration supplies (amendment A6). */
+const voice = { voiceId: 'Matthew', engine: 'standard', sampleRate: 24000 } as const;
+
 describe('synthesizeToAudioEvents', () => {
   beforeEach(() => {
     polly.reset();
     polly.on(SynthesizeSpeechCommand).resolves(audioResponse([1, 2, 3]));
   });
 
-  it('speaks as Standard Matthew at 24 kHz mp3 (amendment A6)', async () => {
+  it('speaks with the configured voice, engine and sample rate', async () => {
     await synthesizeToAudioEvents('Hello there.', {
       client: client(),
+      voice,
       voiceEnabled: true,
       onAudio: vi.fn(),
     });
@@ -42,9 +46,28 @@ describe('synthesizeToAudioEvents', () => {
     });
   });
 
+  it('takes the voice from configuration rather than a hardcoded default', async () => {
+    // A6 chose Standard Matthew, but the choice lives in runtime configuration
+    // so it can be changed without a code deploy. Asserting a different voice
+    // is what proves the setting is read rather than coincidentally matched.
+    await synthesizeToAudioEvents('Hello there.', {
+      client: client(),
+      voice: { voiceId: 'Joanna', engine: 'neural', sampleRate: 16000 },
+      voiceEnabled: true,
+      onAudio: vi.fn(),
+    });
+
+    expect(polly.commandCalls(SynthesizeSpeechCommand)[0].args[0].input).toMatchObject({
+      Engine: 'neural',
+      VoiceId: 'Joanna',
+      SampleRate: '16000',
+    });
+  });
+
   it('never asks for speech marks, which would be a second billed request', async () => {
     await synthesizeToAudioEvents('Hello there.', {
       client: client(),
+      voice,
       voiceEnabled: true,
       onAudio: vi.fn(),
     });
@@ -60,7 +83,7 @@ describe('synthesizeToAudioEvents', () => {
 
     const result = await synthesizeToAudioEvents(
       'First sentence. Second sentence. Third sentence.',
-      { client: client(), voiceEnabled: true, onAudio, maxBilledCharacters: 20 },
+      { client: client(), voice, voiceEnabled: true, onAudio, maxBilledCharacters: 20 },
     );
 
     const seqs = onAudio.mock.calls.map(([event]) => event.seq);
@@ -76,11 +99,15 @@ describe('synthesizeToAudioEvents', () => {
 
     await synthesizeToAudioEvents('Hello there.', {
       client: client(),
+      voice,
       voiceEnabled: true,
       onAudio,
     });
 
-    expect(onAudio.mock.calls[0][0].mp3Base64).toBe(Buffer.from([1, 2, 3]).toString('base64'));
+    expect(onAudio.mock.calls[0][0]).toMatchObject({
+      format: 'mp3',
+      data: Buffer.from([1, 2, 3]).toString('base64'),
+    });
   });
 
   it('bills the plain text, not the SSML wrapper', async () => {
@@ -88,6 +115,7 @@ describe('synthesizeToAudioEvents', () => {
 
     const result = await synthesizeToAudioEvents(text, {
       client: client(),
+      voice,
       voiceEnabled: true,
       onAudio: vi.fn(),
     });
@@ -104,6 +132,7 @@ describe('synthesizeToAudioEvents', () => {
 
     const result = await synthesizeToAudioEvents('Hello there.', {
       client: client(),
+      voice,
       voiceEnabled: false,
       onAudio,
     });
@@ -120,6 +149,7 @@ describe('synthesizeToAudioEvents', () => {
 
     await synthesizeToAudioEvents(long, {
       client: client(),
+      voice,
       voiceEnabled: true,
       onAudio: vi.fn(),
     });
@@ -145,6 +175,7 @@ describe('synthesizeToAudioEvents', () => {
     await expect(
       synthesizeToAudioEvents('First sentence. Second sentence.', {
         client: client(),
+        voice,
         voiceEnabled: true,
         onAudio,
         maxBilledCharacters: 16,

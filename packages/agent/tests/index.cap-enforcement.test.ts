@@ -1,29 +1,27 @@
 /**
  * Cap-enforcement integration tests for the agent invocation handler.
  *
- * These tests bypass the HTTP layer and call `handleInvocations` directly
- * with mocked IncomingMessage / ServerResponse so we can deterministically
- * exercise the per-session token-cap gate (constitution P2 / FR-010).
+ * These bypass the HTTP layer and call `handleInvocations` directly with
+ * doubles, so the per-session token, turn and duration gates (constitution
+ * P2 / FR-010) can be exercised deterministically. Caps are keyed to the
+ * verified `sub`, never to anything the browser sends.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'node:events';
-import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { makeReq, TEST_SUB } from './fixtures/http.js';
+import { makeReq, bearerHeaders, TEST_SUB, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
+import { makeRes } from './fixtures/sse.js';
+import { streamOf, textDelta } from './fixtures/strands.js';
+import type { Session } from '../src/handlers/sessionManager.js';
+
+const streamMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  const invokeMock = vi.fn().mockResolvedValue({
-    lastMessage: {
-      content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
-    },
-    invocationContext: { usage: { inputTokens: 3000, outputTokens: 7, totalTokens: 3007 } },
-  });
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock, addHook: vi.fn(), messages: [] };
+    return { stream: streamMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { ...actual, Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -41,161 +39,154 @@ vi.mock('../src/tools/webSearchTool.js', () => ({
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
 }));
+vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    synthesizeToAudioEvents: vi.fn().mockResolvedValue({ pollyCharacters: 0, segments: 0 }),
+  };
+});
 
 const { __test } = await import('../src/index.js');
-const { __invokeMock: invokeMock } = (await import('@strands-agents/sdk')) as unknown as {
-  __invokeMock: ReturnType<typeof vi.fn>;
-};
 
-function makeRes(): {
-  res: ServerResponse;
-  statusCode: () => number | undefined;
-  body: () => string;
-  end: Promise<void>;
-} {
-  const chunks: string[] = [];
-  let status: number | undefined;
-  let resolveEnd!: () => void;
-  const ended = new Promise<void>((r) => (resolveEnd = r));
+/** The reply usage every test shares: 7 generated tokens. */
+const REPLY_OUTPUT_TOKENS = 7;
 
-  const emitter = new EventEmitter();
-  const res = Object.assign(emitter, {
-    writableFinished: false,
-    writeHead(code: number) {
-      status = code;
-      return res;
-    },
-    write(chunk: string) {
-      chunks.push(chunk);
-      return true;
-    },
-    end(chunk?: string) {
-      if (chunk) chunks.push(chunk);
-      (res as unknown as { writableFinished: boolean }).writableFinished = true;
-      resolveEnd();
-      return res;
-    },
-  }) as unknown as ServerResponse;
+async function turn(message: string, runtimeSessionId = TEST_RUNTIME_SESSION_ID) {
+  const double = makeRes();
+  await __test.handleInvocations(
+    makeReq(
+      { message },
+      {
+        ...bearerHeaders({ sub: TEST_SUB }),
+        'x-amzn-bedrock-agentcore-runtime-session-id': runtimeSessionId,
+      },
+    ),
+    double.res,
+  );
+  await double.end;
+  return double;
+}
 
-  return {
-    res,
-    statusCode: () => status,
-    body: () => chunks.join(''),
-    end: ended,
-  };
+/** Seeds a counted session for `TEST_SUB` that is already at some usage. */
+function seedSession(overrides: Partial<Session>): void {
+  __test.sessions.set(TEST_SUB, {
+    sessionId: 'sess-seeded',
+    actorId: TEST_SUB,
+    greetingId: 'g',
+    state: 'ACTIVE',
+    turnCount: 0,
+    tokenCount: 0,
+    idleNudgeDelivered: false,
+    reEngagementCount: 0,
+    startedAt: new Date(),
+    endedAt: null,
+    ...overrides,
+  } as Session);
 }
 
 describe('handleInvocations — per-session cap enforcement', () => {
   beforeEach(() => {
-    __test.sessions.clear();
+    __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
     vi.clearAllMocks();
+    streamMock.mockImplementation(
+      streamOf(['Hi there from Max!'], {
+        usage: { inputTokens: 3000, outputTokens: REPLY_OUTPUT_TOKENS, totalTokens: 3007 },
+      }),
+    );
   });
 
-  it('creates a session record on first invocation when none exists', async () => {
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hello', sessionId: 'sess-1' }), res);
-    await end;
+  it('opens a counted session on the first turn when none exists', async () => {
+    const { events } = await turn('hello');
 
-    const session = __test.sessions.get('sess-1');
+    const session = __test.sessions.get(TEST_SUB);
     expect(session).toBeDefined();
     expect(session!.turnCount).toBe(1);
     expect(session!.tokenCount).toBeGreaterThan(0);
+    expect(events()[0]).toMatchObject({ type: 'session', opened: true });
   });
 
   it('counts conversational tokens as the reply outputTokens plus the message at chars/4', async () => {
     // P-09 (spec 003 data-model.md § Counted Session): outputTokens comes from
     // result.invocationContext.usage; the friend's message is estimated.
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hello there', sessionId: 'sess-u' }), res);
-    await end;
+    await turn('hello there');
 
-    expect(__test.sessions.get('sess-u')!.tokenCount).toBe(7 + Math.ceil('hello there'.length / 4));
+    expect(__test.sessions.get(TEST_SUB)!.tokenCount).toBe(
+      REPLY_OUTPUT_TOKENS + Math.ceil('hello there'.length / 4),
+    );
   });
 
   it('fails the turn loudly, without counting it, when the result carries no usage', async () => {
-    invokeMock.mockResolvedValueOnce({
-      lastMessage: { content: [{ type: 'textBlock', text: 'Hi' }] },
+    streamMock.mockImplementation(async function* () {
+      yield textDelta('Hi');
+      return { lastMessage: { content: [{ type: 'textBlock', text: 'Hi' }] } };
     });
 
-    const { res, end, body } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hello', sessionId: 'sess-m' }), res);
-    await end;
+    const { events } = await turn('hello');
 
-    expect(body()).toContain('"type":"error"');
-    expect(body()).toContain('invocationContext.usage');
-    expect(__test.sessions.get('sess-m')!.turnCount).toBe(0);
+    // The friend is told the stream failed, never why: the detail names an
+    // internal field and belongs in the log, not in the browser.
+    expect(events().at(-1)).toMatchObject({ type: 'error', code: 'internal' });
+    expect(__test.sessions.get(TEST_SUB)!.turnCount).toBe(0);
   });
 
-  it('accumulates token and turn counts across invocations on the same sessionId', async () => {
-    const r1 = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'first', sessionId: 'sess-2' }), r1.res);
-    await r1.end;
+  it('accumulates token and turn counts across turns for the same subject', async () => {
+    await turn('first');
+    await turn('second');
 
-    const r2 = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'second', sessionId: 'sess-2' }), r2.res);
-    await r2.end;
-
-    const session = __test.sessions.get('sess-2');
-    expect(session!.turnCount).toBe(2);
+    expect(__test.sessions.get(TEST_SUB)!.turnCount).toBe(2);
   });
 
-  it('rejects with 429 + session_cap_exceeded when the token cap is exceeded', async () => {
-    // Pre-seed a session that has already exhausted its 20k-token budget.
-    __test.sessions.set('sess-3', {
-      sessionId: 'sess-3',
-      actorId: TEST_SUB,
-      greetingId: 'g',
-      state: 'ACTIVE',
-      turnCount: 5,
-      tokenCount: 25_000,
-      idleNudgeDelivered: false,
-      reEngagementCount: 0,
-      startedAt: new Date(),
-      endedAt: null,
-    });
+  it('refuses with session_cap_exceeded when the token cap is exceeded', async () => {
+    seedSession({ turnCount: 5, tokenCount: 25_000 });
 
-    const { res, end, statusCode, body } = makeRes();
-    await __test.handleInvocations(
-      makeReq({ message: 'still talking?', sessionId: 'sess-3' }),
-      res,
+    const { head, events } = await turn('still talking?');
+
+    // The refusal is an SSE event, not an HTTP status, and it carries no
+    // figures — a friend learns about a cap only in Max's voice.
+    expect(head()?.status).toBe(200);
+    expect(events()).toEqual([
+      expect.objectContaining({ type: 'error', code: 'session_cap_exceeded', retryable: false }),
+    ]);
+    expect(events()[0]).not.toHaveProperty('tokenCount');
+    expect(streamMock).not.toHaveBeenCalled();
+
+    // The over-budget session is marked ENDED, so later attempts keep being
+    // refused and never re-enter the model path.
+    const ended = __test.sessions.get(TEST_SUB)!;
+    expect(ended.state).toBe('ENDED');
+    expect(ended.endedAt).not.toBeNull();
+  });
+
+  it('refuses when the turn cap is exceeded', async () => {
+    seedSession({ turnCount: 60, tokenCount: 100 });
+
+    const { events } = await turn('hi');
+
+    expect(events()[0]).toMatchObject({ type: 'error', code: 'session_cap_exceeded' });
+    expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it('counts a turn stopped at an approved ceiling rather than presenting it as finished', async () => {
+    streamMock.mockImplementation(
+      streamOf(['Half an ans'], {
+        usage: { inputTokens: 10, outputTokens: REPLY_OUTPUT_TOKENS, totalTokens: 17 },
+        stopReason: 'limitOutputTokens',
+      }),
     );
-    await end;
 
-    expect(statusCode()).toBe(429);
-    const payload = JSON.parse(body());
-    expect(payload).toMatchObject({
-      error: 'session_cap_exceeded',
-      reason: 'token_limit',
-      sessionId: 'sess-3',
-    });
+    const { events } = await turn('tell me everything');
 
-    // The over-budget session must be marked ENDED so subsequent attempts
-    // continue to be rejected and never re-enter the invoke path.
-    const ended = __test.sessions.get('sess-3');
-    expect(ended!.state).toBe('ENDED');
-    expect(ended!.endedAt).not.toBeNull();
+    expect(events().at(-1)).toMatchObject({ type: 'error', code: 'session_cap_exceeded' });
+    // Billed work is counted whether or not the turn produced a usable reply.
+    expect(__test.sessions.get(TEST_SUB)!.turnCount).toBe(1);
+    expect(__test.sessions.get(TEST_SUB)!.tokenCount).toBeGreaterThan(0);
   });
 
-  it('rejects when the turn cap is exceeded', async () => {
-    __test.sessions.set('sess-4', {
-      sessionId: 'sess-4',
-      actorId: TEST_SUB,
-      greetingId: 'g',
-      state: 'ACTIVE',
-      turnCount: 60,
-      tokenCount: 100,
-      idleNudgeDelivered: false,
-      reEngagementCount: 0,
-      startedAt: new Date(),
-      endedAt: null,
-    });
+  it('never sends spend figures to the browser', async () => {
+    const { raw } = await turn('hello');
 
-    const { res, end, statusCode, body } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 'sess-4' }), res);
-    await end;
-
-    expect(statusCode()).toBe(429);
-    expect(JSON.parse(body()).reason).toBe('turn_limit');
+    expect(raw()).not.toMatch(/conversationalTokens|tokenCount|microUsd|outputTokens/);
   });
 });

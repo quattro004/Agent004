@@ -1,31 +1,26 @@
 /**
- * Identity comes from the verified token, never from the body (#55, FR-010;
- * contracts/transport-sse.md § Body, "The server ignores `sessionId`,
- * `actorId` and any other field").
+ * Identity tests for the agent invocation handler (#55, FR-010).
  *
- * The handler used to take `actorId` straight from the request, so a caller
- * could claim to be anyone. Worse, a session's turn and token budget is keyed
- * by `sessionId` alone, so one caller could spend another's budget by
- * presenting their identifier. Both holes close here: the subject comes from
- * the bearer token, and a session is bound to the subject that opened it.
+ * Who is spending is decided by the verified token and nothing else. The
+ * browser supplies a runtime session ID, but that only routes to a microVM —
+ * it never selects whose budget is spent, and it never carries one friend's
+ * conversation into another's reply.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'node:events';
-import type { ServerResponse } from 'node:http';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { bearerHeaders as bearer, makeReq } from './fixtures/http.js';
+import { makeReq, bearerHeaders, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
+import { makeRes } from './fixtures/sse.js';
+import { streamOf } from './fixtures/strands.js';
+
+const streamMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  const invokeMock = vi.fn().mockResolvedValue({
-    lastMessage: { content: [{ type: 'textBlock', text: 'Hi there from Max!' }] },
-    invocationContext: { usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 } },
-  });
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock, addHook: vi.fn(), messages: [] };
+    return { stream: streamMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { ...actual, Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -43,131 +38,123 @@ vi.mock('../src/tools/webSearchTool.js', () => ({
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
 }));
+vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    synthesizeToAudioEvents: vi.fn().mockResolvedValue({ pollyCharacters: 0, segments: 0 }),
+  };
+});
 
 const { __test } = await import('../src/index.js');
-const { __invokeMock: invokeMock } = (await import('@strands-agents/sdk')) as unknown as {
-  __invokeMock: ReturnType<typeof vi.fn>;
-};
 
-function makeRes(): {
-  res: ServerResponse;
-  statusCode: () => number | undefined;
-  body: () => string;
-  end: Promise<void>;
-} {
-  const chunks: string[] = [];
-  let status: number | undefined;
-  let resolveEnd!: () => void;
-  const ended = new Promise<void>((r) => (resolveEnd = r));
+/** Headers for a friend, optionally on a particular runtime session. */
+function headersFor(sub: string, runtimeSessionId = TEST_RUNTIME_SESSION_ID) {
+  return {
+    ...bearerHeaders({ sub }),
+    'x-amzn-bedrock-agentcore-runtime-session-id': runtimeSessionId,
+  };
+}
 
-  const emitter = new EventEmitter();
-  const res = Object.assign(emitter, {
-    writableFinished: false,
-    writeHead(code: number) {
-      status = code;
-      return res;
-    },
-    write(chunk: string) {
-      chunks.push(chunk);
-      return true;
-    },
-    end(chunk?: string) {
-      if (chunk) chunks.push(chunk);
-      (res as unknown as { writableFinished: boolean }).writableFinished = true;
-      resolveEnd();
-      return res;
-    },
-  }) as unknown as ServerResponse;
-
-  return { res, statusCode: () => status, body: () => chunks.join(''), end: ended };
+async function turn(body: unknown, headers: Record<string, string>) {
+  const double = makeRes();
+  await __test.handleInvocations(makeReq(body, headers), double.res);
+  await double.end;
+  return double;
 }
 
 describe('handleInvocations — identity from the verified token', () => {
   beforeEach(() => {
-    __test.sessions.clear();
+    __test.reset();
     vi.clearAllMocks();
     __test.setRuntimeConfig(testRuntimeConfig());
-    invokeMock.mockResolvedValue({
-      lastMessage: { content: [{ type: 'textBlock', text: 'Hi there from Max!' }] },
-      invocationContext: { usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 } },
-    });
+    streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });
 
-  it("keys the session's actor to the token's sub", async () => {
-    const { res, end } = makeRes();
-    await __test.handleInvocations(
-      makeReq({ message: 'hi', sessionId: 's1' }, bearer({ sub: 'friend-1' })),
-      res,
-    );
-    await end;
+  it("keys the counted session to the token's sub", async () => {
+    await turn({ message: 'hi' }, headersFor('friend-1'));
 
-    expect(__test.sessions.get('s1')?.actorId).toBe('friend-1');
+    expect(__test.sessions.get('friend-1')?.actorId).toBe('friend-1');
   });
 
   it('ignores an actorId supplied in the body', async () => {
-    const { res, end } = makeRes();
-    await __test.handleInvocations(
-      makeReq({ message: 'hi', sessionId: 's1', actorId: 'someone-else' }, bearer({ sub: 'me' })),
-      res,
-    );
-    await end;
+    await turn({ message: 'hi', actorId: 'someone-else' }, headersFor('me'));
 
-    expect(__test.sessions.get('s1')?.actorId).toBe('me');
+    expect(__test.sessions.get('me')?.actorId).toBe('me');
+    expect(__test.sessions.has('someone-else')).toBe(false);
   });
 
   it('refuses a request with no bearer token and never invokes the model', async () => {
-    const { res, end, statusCode, body } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi' }, {}), res);
-    await end;
+    const { head, events } = await turn(
+      { message: 'hi' },
+      { 'x-amzn-bedrock-agentcore-runtime-session-id': TEST_RUNTIME_SESSION_ID },
+    );
 
-    expect(statusCode()).toBe(401);
-    expect(JSON.parse(body())).toMatchObject({ error: 'unauthenticated' });
-    expect(invokeMock).not.toHaveBeenCalled();
+    // The platform's JWT authorizer should already have refused this, so a
+    // tokenless request reaching the container is a misconfiguration.
+    expect(head()?.status).toBe(200);
+    expect(events()).toEqual([
+      expect.objectContaining({ type: 'error', code: 'internal', retryable: true }),
+    ]);
+    expect(streamMock).not.toHaveBeenCalled();
   });
 
   it('refuses a bearer token with no sub claim', async () => {
-    const { res, end, statusCode } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi' }, bearer({ email: 'a@b.c' })), res);
-    await end;
+    const { events } = await turn({ message: 'hi' }, {
+      ...bearerHeaders({ email: 'a@b.c' }),
+      'x-amzn-bedrock-agentcore-runtime-session-id': TEST_RUNTIME_SESSION_ID,
+    } as Record<string, string>);
 
-    expect(statusCode()).toBe(401);
-    expect(invokeMock).not.toHaveBeenCalled();
+    expect(events()[0]).toMatchObject({ type: 'error', code: 'internal' });
+    expect(streamMock).not.toHaveBeenCalled();
   });
 
-  it("refuses to spend another subject's session budget", async () => {
-    const first = makeRes();
-    await __test.handleInvocations(
-      makeReq({ message: 'hi', sessionId: 'shared' }, bearer({ sub: 'friend-1' })),
-      first.res,
-    );
-    await first.end;
-    const turnsAfterOwner = __test.sessions.get('shared')?.turnCount;
+  it('gives two subjects separate counted sessions, never a shared budget', async () => {
+    await turn({ message: 'hi' }, headersFor('friend-1'));
+    await turn({ message: 'hi' }, headersFor('friend-2', 'runtime-session-1111111111111111111'));
 
-    const second = makeRes();
-    await __test.handleInvocations(
-      makeReq({ message: 'hi', sessionId: 'shared' }, bearer({ sub: 'intruder' })),
-      second.res,
+    expect(__test.sessions.get('friend-1')?.turnCount).toBe(1);
+    expect(__test.sessions.get('friend-2')?.turnCount).toBe(1);
+    expect(__test.sessions.get('friend-1')?.sessionId).not.toBe(
+      __test.sessions.get('friend-2')?.sessionId,
     );
-    await second.end;
+  });
 
-    expect(second.statusCode()).toBe(403);
-    expect(JSON.parse(second.body())).toMatchObject({ error: 'session_mismatch' });
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    expect(__test.sessions.get('shared')?.turnCount).toBe(turnsAfterOwner);
-    expect(__test.sessions.get('shared')?.actorId).toBe('friend-1');
+  it('refuses a runtime session ID already owned by another sub', async () => {
+    await turn({ message: 'hi' }, headersFor('friend-1'));
+
+    // Presenting someone else's runtime session ID would otherwise evict their
+    // in-flight conversation from this instance's registry.
+    const { events } = await turn({ message: 'hi' }, headersFor('intruder'));
+
+    expect(events()).toEqual([
+      expect.objectContaining({ type: 'error', code: 'session_mismatch', retryable: false }),
+    ]);
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect(__test.sessions.has('intruder')).toBe(false);
+    expect(__test.sessions.get('friend-1')?.turnCount).toBe(1);
   });
 
   it('lets the same subject continue its own session', async () => {
-    for (const _ of [1, 2]) {
-      const { res, end } = makeRes();
-      await __test.handleInvocations(
-        makeReq({ message: 'hi', sessionId: 'mine' }, bearer({ sub: 'friend-1' })),
-        res,
-      );
-      await end;
-    }
+    await turn({ message: 'hi' }, headersFor('friend-1'));
+    await turn({ message: 'hi again' }, headersFor('friend-1'));
 
-    expect(__test.sessions.get('mine')?.turnCount).toBe(2);
-    expect(invokeMock).toHaveBeenCalledTimes(2);
+    expect(__test.sessions.get('friend-1')?.turnCount).toBe(2);
+    expect(streamMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('continues the same counted session under a new runtime session ID (P-05)', async () => {
+    await turn({ message: 'hi' }, headersFor('friend-1'));
+    const opened = __test.sessions.get('friend-1')?.sessionId;
+
+    // A new browser tab mints a new runtime session ID. Strict continuity
+    // means that must not hand the friend a fresh cap.
+    const { events } = await turn(
+      { message: 'still me' },
+      headersFor('friend-1', 'runtime-session-2222222222222222222'),
+    );
+
+    expect(events()[0]).toMatchObject({ type: 'session', countedSessionId: opened, opened: false });
+    expect(__test.sessions.get('friend-1')?.turnCount).toBe(2);
   });
 });
