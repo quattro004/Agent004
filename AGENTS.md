@@ -129,6 +129,10 @@ them.
 - `ControlTable.putSession` creates only absent items. Updates/replacements must
   pass the previously read snapshot; a condition conflict is not success and
   must not replay model work that has already spent money.
+- A cancelled Strands turn **resolves** with `stopReason: 'cancelled'` rather
+  than throwing, so abort handling must inspect the result as well as `catch`.
+  An error after response headers are sent must end the response, never
+  `writeHead` again, which crashes the process (wiki `Gotchas`).
 - Do not hide failures with broad catches or silent fallbacks; surface errors clearly.
 - Keep dependency hygiene strict: review new dependencies and keep `pnpm-lock.yaml` committed.
 
