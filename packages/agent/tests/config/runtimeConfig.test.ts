@@ -57,6 +57,7 @@ function validEnv(): Record<string, string> {
     TURN_MAX_GENERATED_TOKENS: '1000',
     TURN_MAX_BILLED_TOKENS: '64000',
     TURN_DEADLINE_MS: '60000',
+    GLOBAL_MAX_ACTIVE_REQUESTS: '2',
     SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
     SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
     SSM_PARAM_SEARCH_KEY: '/max-height/search-api-key',
@@ -85,7 +86,18 @@ describe('loadRuntimeConfig — approved per-turn bounds', () => {
     });
   });
 
+  it('reads the global active-request limit from the environment', async () => {
+    const config = await loadRuntimeConfig(validEnv());
+    expect(config.maxActiveRequests).toBe(2);
+  });
+
+  it('rejects a global active-request limit below one, which would refuse every request', async () => {
+    const env = { ...validEnv(), GLOBAL_MAX_ACTIVE_REQUESTS: '0' };
+    await expect(loadRuntimeConfig(env)).rejects.toThrow(/GLOBAL_MAX_ACTIVE_REQUESTS/);
+  });
+
   it.each([
+    'GLOBAL_MAX_ACTIVE_REQUESTS',
     'REQUEST_BODY_MAX_BYTES',
     'MODEL_INPUT_MAX_BYTES',
     'TOOL_RESULT_MAX_BYTES',

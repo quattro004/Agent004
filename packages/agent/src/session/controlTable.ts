@@ -66,6 +66,43 @@ export interface Halt {
   reason: string;
 }
 
+export interface AdmissionRequest {
+  sub: string;
+  /** Unique per request; settlement must present the same one. */
+  requestId: string;
+  /** Conservative maximum the request could cost, committed before any call. */
+  reserveMicroUsd: number;
+  /** The month's committed spend, reservations included, may not pass this. */
+  spendCeilingMicroUsd: number;
+  /** Requests allowed in flight across every runtime instance. */
+  maxActiveRequests: number;
+  now: Date;
+}
+
+/** What a settlement needs to find, and match, the request it admitted. */
+export interface Lease {
+  sub: string;
+  requestId: string;
+  reservedMicroUsd: number;
+  /** UTC `yyyy-mm` of admission, so a month rollover settles where it reserved. */
+  month: string;
+}
+
+export type Admission =
+  | { admitted: true; lease: Lease }
+  | { admitted: false; reason: 'friend_busy' | 'capacity_busy' | 'spend_limit' };
+
+/**
+ * The lease is gone or belongs to another request, so counting this settlement
+ * could double-count or free someone else's slot. It is never retried.
+ */
+export class SettlementConflictError extends Error {
+  constructor(lease: Lease, options?: { cause?: unknown }) {
+    super(`Request ${lease.requestId} for ${lease.sub} was not the holder of its lease`, options);
+    this.name = 'SettlementConflictError';
+  }
+}
+
 type Item = Record<string, AttributeValue>;
 
 const HOUR_SECONDS = 3600;
@@ -258,6 +295,153 @@ export class ControlTable {
     );
   }
 
+  /**
+   * Admits one spend-bearing request, or refuses it, in one transaction: the
+   * month's spend is reserved at a conservative maximum, a global slot is
+   * taken, and the friend's lease is created. Nothing here expires, so a
+   * request that never settles keeps its reservation and occupied capacity
+   * until an operator reconciles it (spec.md Session 2026-11-15).
+   */
+  async admitRequest(request: AdmissionRequest): Promise<Admission> {
+    const { sub, requestId, reserveMicroUsd, spendCeilingMicroUsd, maxActiveRequests, now } =
+      request;
+    assertMicroUsd('reserveMicroUsd', reserveMicroUsd);
+    if (!Number.isSafeInteger(maxActiveRequests) || maxActiveRequests < 1) {
+      throw new Error(`maxActiveRequests must be a positive integer, got ${maxActiveRequests}`);
+    }
+    // A fresh month has no SPEND item, which the condition below would admit.
+    if (reserveMicroUsd > spendCeilingMicroUsd) {
+      return { admitted: false, reason: 'spend_limit' };
+    }
+
+    const month = monthOf(now);
+    const lease: Lease = { sub, requestId, reservedMicroUsd: reserveMicroUsd, month };
+    const { tableName } = this.options;
+
+    try {
+      await this.options.client.send(
+        new TransactWriteItemsCommand({
+          TransactItems: [
+            {
+              Update: {
+                TableName: tableName,
+                Key: { pk: { S: `SPEND#${month}` } },
+                UpdateExpression: 'ADD #microUsd :amount SET #updatedAt = :updatedAt',
+                ConditionExpression: 'attribute_not_exists(#microUsd) OR #microUsd <= :ceiling',
+                ExpressionAttributeNames: { '#microUsd': 'microUsd', '#updatedAt': 'updatedAt' },
+                ExpressionAttributeValues: {
+                  ':amount': { N: String(reserveMicroUsd) },
+                  ':ceiling': { N: String(spendCeilingMicroUsd - reserveMicroUsd) },
+                  ':updatedAt': { S: now.toISOString() },
+                },
+              },
+            },
+            {
+              Update: {
+                TableName: tableName,
+                Key: { pk: { S: ACTIVE_KEY } },
+                UpdateExpression: 'ADD #active :delta',
+                ConditionExpression: 'attribute_not_exists(#active) OR #active < :max',
+                ExpressionAttributeNames: { '#active': 'active' },
+                ExpressionAttributeValues: {
+                  ':delta': { N: '1' },
+                  ':max': { N: String(maxActiveRequests) },
+                },
+              },
+            },
+            {
+              Put: {
+                TableName: tableName,
+                Item: {
+                  pk: { S: leaseKey(sub) },
+                  requestId: { S: requestId },
+                  reservedMicroUsd: { N: String(reserveMicroUsd) },
+                  month: { S: month },
+                  startedAt: { S: now.toISOString() },
+                },
+                ConditionExpression: 'attribute_not_exists(pk)',
+              },
+            },
+          ],
+        }),
+      );
+      return { admitted: true, lease };
+    } catch (err) {
+      if (!(err instanceof TransactionCanceledException)) throw err;
+      const failed = (index: number) =>
+        err.CancellationReasons?.[index]?.Code === 'ConditionalCheckFailed';
+      if (failed(2)) return { admitted: false, reason: 'friend_busy' };
+      if (failed(1)) return { admitted: false, reason: 'capacity_busy' };
+      if (failed(0)) return { admitted: false, reason: 'spend_limit' };
+      throw err;
+    }
+  }
+
+  /**
+   * Replaces the reservation with what the request actually cost, and frees
+   * its lease and global slot, in one transaction guarded by the lease. A
+   * conflict means the request was already settled or is not the lease's
+   * holder, so nothing is counted twice.
+   */
+  async settleRequest(lease: Lease, actualMicroUsd: number, now: Date): Promise<void> {
+    assertMicroUsd('actualMicroUsd', actualMicroUsd);
+    const { tableName } = this.options;
+
+    try {
+      await this.options.client.send(
+        new TransactWriteItemsCommand({
+          TransactItems: [
+            {
+              Delete: {
+                TableName: tableName,
+                Key: { pk: { S: leaseKey(lease.sub) } },
+                ConditionExpression: '#requestId = :requestId AND #reservedMicroUsd = :reserved',
+                ExpressionAttributeNames: {
+                  '#requestId': 'requestId',
+                  '#reservedMicroUsd': 'reservedMicroUsd',
+                },
+                ExpressionAttributeValues: {
+                  ':requestId': { S: lease.requestId },
+                  ':reserved': { N: String(lease.reservedMicroUsd) },
+                },
+              },
+            },
+            {
+              Update: {
+                TableName: tableName,
+                Key: { pk: { S: ACTIVE_KEY } },
+                UpdateExpression: 'ADD #active :delta',
+                ConditionExpression: '#active > :zero',
+                ExpressionAttributeNames: { '#active': 'active' },
+                ExpressionAttributeValues: { ':delta': { N: '-1' }, ':zero': { N: '0' } },
+              },
+            },
+            {
+              Update: {
+                TableName: tableName,
+                Key: { pk: { S: `SPEND#${lease.month}` } },
+                UpdateExpression: 'ADD #microUsd :amount SET #updatedAt = :updatedAt',
+                ExpressionAttributeNames: { '#microUsd': 'microUsd', '#updatedAt': 'updatedAt' },
+                ExpressionAttributeValues: {
+                  ':amount': { N: String(actualMicroUsd - lease.reservedMicroUsd) },
+                  ':updatedAt': { S: now.toISOString() },
+                },
+              },
+            },
+          ],
+        }),
+      );
+    } catch (err) {
+      if (
+        err instanceof TransactionCanceledException &&
+        err.CancellationReasons?.some((reason) => reason.Code === 'ConditionalCheckFailed')
+      ) {
+        throw new SettlementConflictError(lease, { cause: err });
+      }
+      throw err;
+    }
+  }
+
   async getSpend(now: Date): Promise<Spend | undefined> {
     const item = await this.get(spendKey(now));
     if (!item) return undefined;
@@ -282,8 +466,24 @@ export class ControlTable {
   }
 }
 
+const ACTIVE_KEY = 'CONTROL#ACTIVE';
+
+function monthOf(now: Date): string {
+  return now.toISOString().slice(0, 7);
+}
+
 function spendKey(now: Date): string {
-  return `SPEND#${now.toISOString().slice(0, 7)}`;
+  return `SPEND#${monthOf(now)}`;
+}
+
+function leaseKey(sub: string): string {
+  return `LEASE#${sub}`;
+}
+
+function assertMicroUsd(name: string, value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${name} (microUsd) must be a non-negative integer, got ${value}`);
+  }
 }
 
 function epochSeconds(iso: string): number {

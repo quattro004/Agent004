@@ -56,6 +56,10 @@ const RUNTIME_CONFIG: Record<string, string> = {
   TURN_MAX_GENERATED_TOKENS: '1000',
   TURN_MAX_BILLED_TOKENS: '64000',
   TURN_DEADLINE_MS: '60000',
+  // Constitution 1.9.0 P2 / spec 003 Session 2026-11-15: two spend-bearing
+  // requests in flight across every runtime instance, one per friend (the
+  // per-friend limit is the lease key itself, so it has no variable).
+  GLOBAL_MAX_ACTIVE_REQUESTS: '2',
   // Constitution 1.9.0 P2's application layer (amendment A7, T117): the
   // application soft-degrades at $11 of its own measured spend and refuses new
   // spend-bearing work at $15, holding $5 back for lines it never meters. These

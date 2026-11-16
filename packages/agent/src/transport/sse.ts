@@ -28,6 +28,7 @@ export type SseErrorCode =
   | 'halted'
   | 'breaker_tripped'
   | 'rate_limited'
+  | 'busy'
   | 'session_cap_exceeded'
   | 'session_mismatch'
   | 'moderation_blocked'
@@ -71,6 +72,11 @@ export const SSE_ERRORS: Record<SseErrorCode, ErrorDefinition> = {
   rate_limited: {
     retryable: true,
     inCharacterMessage: 'Easy, easy — even I have to c-c-catch my breath. Give it a minute.',
+  },
+  busy: {
+    retryable: true,
+    inCharacterMessage:
+      "One c-conversation at a time, friend — I'm still on the last one. Try again in a moment.",
   },
   session_cap_exceeded: {
     retryable: false,

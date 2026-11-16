@@ -28,6 +28,7 @@ export function testRuntimeConfig(overrides: Partial<RuntimeConfig> = {}): Runti
     historyWindow: 40,
     breakerDegradeMicroUsd: 11_000_000,
     breakerTripMicroUsd: 15_000_000,
+    maxActiveRequests: 2,
     limits: { ...TURN_LIMIT_DEFAULTS },
     prices: {
       modelInputPerMTokMicroUsd: 1_000_000,

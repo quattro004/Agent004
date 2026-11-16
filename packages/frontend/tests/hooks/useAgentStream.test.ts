@@ -272,6 +272,7 @@ describe('useAgentStream', () => {
       ['halted', 'BUDGET_CAPPED'],
       ['breaker_tripped', 'BUDGET_CAPPED'],
       ['rate_limited', 'RATE_LIMITED'],
+      ['busy', null],
       ['session_cap_exceeded', 'ENDED'],
       ['session_mismatch', null],
       ['moderation_blocked', null],

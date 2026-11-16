@@ -47,6 +47,7 @@ reservation remain T166/T167.
 | `TURN_MAX_GENERATED_TOKENS` | `1000` → SDK `InvokeLimits.outputTokens`, lowered further by the session's remaining budget | Same |
 | `TURN_MAX_BILLED_TOKENS` | `64000` (input + output) → SDK `InvokeLimits.totalTokens`. Checked **between** calls, so the stopping call can overshoot | Same; `InvokeLimits` in the pinned SDK's `.d.ts` |
 | `TURN_DEADLINE_MS` | `60000`. Covers model, tool and voice work together. Reaching it is not success; billed work is still counted | Same |
+| `GLOBAL_MAX_ACTIVE_REQUESTS` | `2`. Spend-bearing requests in flight across every runtime instance; the per-friend limit of one is the `LEASE#<sub>` key, not a variable. At least `1`. Enforced atomically at admission (T166) | Spec Session 2026-11-15; `spend-control.md` § Admission |
 | `BREAKER_DEGRADE_MICRO_USD` | `11000000`. Constitution 1.9.0 P2's application layer (amendment A7): soft-degrade at $11 of measured application spend | Research Q6; constitution P2 |
 | `BREAKER_TRIP_MICRO_USD` | `15000000`. Same layer: refuse new spend-bearing work at $15 | Research Q6; constitution P2 |
 | `PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD` | **Derived** from the adopted model's human-read price | R-cost |
@@ -60,7 +61,7 @@ reservation remain T166/T167.
 | `SSM_PARAM_NEWS_KEY` | `/max-height/news-api-key` | Same |
 | `SSM_PARAM_SEARCH_KEY`, `SSM_PARAM_SEARCH_ENGINE_ID` | `/max-height/search-api-key` and `/max-height/search-engine-id` (new SecureStrings, tasks.md C15) | `webSearchTool.ts:30,35` read them from the environment today |
 
-That is 37 variables, under the limit of 50.
+That is 38 variables, under the limit of 50.
 
 No `PRICE_MEMORY_EXTRACTION_*` variable is needed. Built-in strategies include extraction in the long-term storage price (R-cost, resolved 2026-11-13 under T005a).
 

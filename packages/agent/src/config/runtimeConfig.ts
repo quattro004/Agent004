@@ -27,6 +27,8 @@ export interface RuntimeConfig {
   historyWindow: number;
   breakerDegradeMicroUsd: number;
   breakerTripMicroUsd: number;
+  /** Spend-bearing requests allowed in flight across all runtime instances. */
+  maxActiveRequests: number;
   /** Per-turn safety bounds approved 2026-11-15; every one is CDK-set. */
   limits: TurnLimits;
   prices: UsageRates;
@@ -96,6 +98,7 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
     historyWindow: integer('HISTORY_WINDOW'),
     breakerDegradeMicroUsd: integer('BREAKER_DEGRADE_MICRO_USD'),
     breakerTripMicroUsd: integer('BREAKER_TRIP_MICRO_USD'),
+    maxActiveRequests: integer('GLOBAL_MAX_ACTIVE_REQUESTS'),
     limits: {
       requestBodyMaxBytes: integer('REQUEST_BODY_MAX_BYTES'),
       modelInputMaxBytes: integer('MODEL_INPUT_MAX_BYTES'),
@@ -126,6 +129,9 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
   const problems = [
     ...(missing.length > 0 ? [`missing required variables: ${missing.join(', ')}`] : []),
     ...invalid,
+    ...(config.maxActiveRequests === 0
+      ? ['GLOBAL_MAX_ACTIVE_REQUESTS="0" must be at least 1, or every request is refused']
+      : []),
   ];
   if (problems.length > 0) {
     throw new RuntimeConfigError(`Agent runtime configuration is invalid: ${problems.join('; ')}`);
