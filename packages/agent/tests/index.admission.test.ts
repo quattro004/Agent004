@@ -266,6 +266,84 @@ describe('handleInvocations — admission and settlement', () => {
   });
 });
 
+// Strands does not throw when its cancelSignal fires. The stream resolves with
+// stopReason 'cancelled' and whatever usage had arrived, which for an aborted
+// model call is none.
+describe('handleInvocations — a turn Strands reports as cancelled', () => {
+  const CANCELLED_RESULT = {
+    stopReason: 'cancelled',
+    lastMessage: { content: [{ type: 'textBlock', text: 'Cancelled by user' }] },
+    invocationContext: { usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    synthesize.mockResolvedValue({ pollyCharacters: 0, segments: 0 });
+    memorySdk.createEvent.mockResolvedValue(undefined);
+    memorySdk.retrieveRecords.mockResolvedValue([]);
+    streamMock.mockImplementation((_message: string, options: { cancelSignal: AbortSignal }) => {
+      let streamed = false;
+      return {
+        async next() {
+          if (!streamed) {
+            streamed = true;
+            return { done: false, value: textDelta('Half a rep') };
+          }
+          if (!options.cancelSignal.aborted) {
+            await new Promise<void>((resolve) =>
+              options.cancelSignal.addEventListener('abort', () => resolve(), { once: true }),
+            );
+          }
+          return { done: true, value: CANCELLED_RESULT };
+        },
+      };
+    });
+  });
+
+  it('settles at the full reservation and keeps the partial reply out of memory when the friend leaves', async () => {
+    const table = boot();
+    const double = makeRes();
+    const pending = __test.handleInvocations(
+      makeReq(
+        { message: 'hello' },
+        {
+          ...bearerHeaders({ sub: TEST_SUB }),
+          'x-amzn-bedrock-agentcore-runtime-session-id': TEST_RUNTIME_SESSION_ID,
+        },
+      ),
+      double.res,
+    );
+    await vi.waitFor(() => expect(double.event('text')).toBeDefined());
+
+    double.disconnect();
+    await pending;
+
+    // The model call was aborted before it reported usage, so what it billed is
+    // unknown and the reservation is the only safe price.
+    const [lease, actual] = table.settleRequest.mock.calls[0];
+    expect(actual).toBe(lease.reservedMicroUsd);
+    expect(memorySdk.createEvent).not.toHaveBeenCalled();
+    expect(double.event('done')).toBeUndefined();
+  });
+
+  it('reports the deadline, settles at the full reservation and keeps the partial reply out of memory', async () => {
+    const table = boot(
+      testRuntimeConfig({ limits: { ...testRuntimeConfig().limits, deadlineMs: 20 } }),
+    );
+
+    const { events } = await turn();
+
+    expect(errorCodeOf(events)).toBe('session_cap_exceeded');
+    expect(events().some((e) => e.type === 'done')).toBe(false);
+    const [lease, actual] = table.settleRequest.mock.calls[0];
+    expect(actual).toBe(lease.reservedMicroUsd);
+    expect(memorySdk.createEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe('handleInvocations — the counted session in the control table', () => {
   beforeEach(() => {
     vi.clearAllMocks();

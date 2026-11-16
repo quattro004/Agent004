@@ -184,6 +184,14 @@ const LIMIT_STOP_REASONS: Record<string, string> = {
   limitStructuredOutputAttempts: 'the structured output retry ceiling was reached',
 };
 
+/** The Strands stream ended in `stopReason: 'cancelled'` instead of throwing. */
+class TurnCancelledError extends Error {
+  constructor() {
+    super('The agent stream was cancelled');
+    this.name = 'TurnCancelledError';
+  }
+}
+
 // --- Tool Definitions ---
 
 const newsTool = tool({
@@ -645,6 +653,12 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         step = await stream.next();
       }
       const result = step.value;
+      const stopReason = (result as { stopReason?: string } | undefined)?.stopReason ?? '';
+
+      // Strands resolves, rather than throws, when the cancelSignal fires, and
+      // the aborted model call never reported what it billed. Handle it as the
+      // abort it is, so the reservation stands and no partial reply is kept.
+      if (stopReason === 'cancelled') throw new TurnCancelledError();
 
       // Conversational tokens: this invocation's outputTokens plus the
       // estimated message, not the reused Agent's lifetime usage. This runs
@@ -667,7 +681,6 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       }
       session = counted;
 
-      const stopReason = (result as { stopReason?: string } | undefined)?.stopReason ?? '';
       if (LIMIT_STOP_REASONS[stopReason]) {
         // A truncated answer presented as a finished one is a lie to the
         // friend and hides that we hit a spend ceiling. The reason names an
@@ -1021,15 +1034,27 @@ function requestHandler(req: IncomingMessage, res: ServerResponse): void {
   if (method === 'GET' && url === '/ping') {
     handlePing(req, res);
   } else if (method === 'POST' && url === '/invocations') {
-    handleInvocations(req, res).catch((err) => {
-      console.error('Invocation error:', err);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Internal server error' }));
-    });
+    handleInvocations(req, res).catch((err) => answerInvocationFailure(res, err));
   } else {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
   }
+}
+
+/**
+ * An invocation always opens its SSE response before it finishes, so by the
+ * time a failure reaches here the headers are usually sent. Writing a status
+ * then would throw inside the `.catch` and, as an unhandled rejection, exit the
+ * process.
+ */
+function answerInvocationFailure(res: ServerResponse, err: unknown): void {
+  console.error('Invocation error:', err);
+  if (res.headersSent) {
+    if (!res.writableEnded) res.end();
+    return;
+  }
+  res.writeHead(500, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Internal server error' }));
 }
 
 // Exposed for tests so they can assert/reset cap-enforcement state without

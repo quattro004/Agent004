@@ -182,12 +182,15 @@ export interface BoundModelInputResult<T> {
 }
 
 /**
- * Bounds the serialized model input by dropping the oldest messages.
+ * Bounds the serialized model input by dropping the oldest turns.
  *
- * The current request is never dropped — a turn without it is not the turn
- * the friend asked for — so a single oversized message is passed through and
- * bounded by the request-body limit instead. The system prompt is counted but
- * never removed.
+ * Bedrock Converse refuses a conversation that opens with a reply or answers a
+ * tool call it was never shown, so the cut falls only where a turn begins: a
+ * user message that carries more than tool results. The current turn, which
+ * starts at the last such message and includes any tool calls it has made so
+ * far, is never dropped. A turn that alone exceeds the limit is passed through
+ * and bounded by the request-body limit and per-tool-result bound instead. The
+ * system prompt is counted but never removed.
  */
 export function boundModelInput<T extends MessageLike>(
   messages: T[],
@@ -196,14 +199,25 @@ export function boundModelInput<T extends MessageLike>(
   const { maxBytes, systemPrompt = '' } = options;
   const promptBytes = Buffer.byteLength(systemPrompt, 'utf8');
 
-  let start = 0;
-  const fits = (): boolean =>
-    serializedBytes(messages.slice(start)) + promptBytes <= maxBytes ||
-    start >= messages.length - 1;
+  const turnStarts = messages.flatMap((message, index) => (startsATurn(message) ? [index] : []));
+  const currentTurn = turnStarts.at(-1);
+  if (currentTurn === undefined) return { messages, dropped: 0 };
 
-  while (!fits()) start += 1;
+  const start =
+    turnStarts.find((index) => serializedBytes(messages.slice(index)) + promptBytes <= maxBytes) ??
+    currentTurn;
 
   return { messages: start === 0 ? messages : messages.slice(start), dropped: start };
+}
+
+/** A user message that is the friend speaking, not the return of a tool call. */
+function startsATurn(message: MessageLike): boolean {
+  return (
+    message.role === 'user' &&
+    !message.content.some(
+      (block) => (block as { type?: unknown } | null)?.type === 'toolResultBlock',
+    )
+  );
 }
 
 /** The SDK's per-request limit dimensions (`InvokeOptions.limits`). */

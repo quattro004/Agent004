@@ -183,6 +183,96 @@ describe('boundModelInput — 32 KiB serialized model input', () => {
       expect(Array.isArray(bound.content)).toBe(true);
     }
   });
+
+  // Bedrock Converse refuses a conversation that opens with a reply, or that
+  // answers a tool call it was never shown. Bounding has to cut between turns.
+  describe('where it cuts', () => {
+    const assistant = (text: string) => ({
+      role: 'assistant' as const,
+      content: [{ type: 'textBlock' as const, text }],
+    });
+    const toolUse = (toolUseId: string, query: string) => ({
+      role: 'assistant' as const,
+      content: [{ type: 'toolUseBlock' as const, toolUseId, name: 'web_search', input: { query } }],
+    });
+    const toolResult = (toolUseId: string, text: string) => ({
+      role: 'user' as const,
+      content: [
+        {
+          type: 'toolResultBlock' as const,
+          toolUseId,
+          status: 'success',
+          content: [{ type: 'textBlock', text }],
+        },
+      ],
+    });
+
+    const blocksOf = (m: { content: unknown[] }) => m.content as Array<{ type: string }>;
+    const opensWithFriendsWords = (m: { role: string; content: unknown[] }) =>
+      m.role === 'user' && !blocksOf(m).some((block) => block.type === 'toolResultBlock');
+    const orphanedToolResults = (history: Array<{ content: unknown[] }>): string[] => {
+      const asked = new Set<string>();
+      const orphans: string[] = [];
+      for (const m of history) {
+        for (const block of m.content as Array<{ type: string; toolUseId?: string }>) {
+          if (block.type === 'toolUseBlock') asked.add(block.toolUseId!);
+          if (block.type === 'toolResultBlock' && !asked.has(block.toolUseId!)) {
+            orphans.push(block.toolUseId!);
+          }
+        }
+      }
+      return orphans;
+    };
+
+    it('never leaves a reply as the first message', () => {
+      const messages = [
+        message('a'.repeat(3000)),
+        assistant('b'.repeat(300)),
+        message('c'.repeat(300)),
+        assistant('d'.repeat(300)),
+        message('current'),
+      ];
+
+      const { messages: bounded } = boundModelInput(messages, { maxBytes: 1500, systemPrompt });
+
+      expect(bounded[0].role).toBe('user');
+      expect(JSON.stringify(bounded)).toContain('current');
+    });
+
+    it('never leaves a tool result without the tool call that asked for it', () => {
+      const messages = [
+        message('a'.repeat(3000)),
+        toolUse('t1', 'q'.repeat(2000)),
+        toolResult('t1', 'r'.repeat(300)),
+        assistant('Here is what I found.'),
+        message('current'),
+      ];
+
+      const { messages: bounded } = boundModelInput(messages, { maxBytes: 1200, systemPrompt });
+
+      expect(orphanedToolResults(bounded)).toEqual([]);
+      expect(opensWithFriendsWords(bounded[0])).toBe(true);
+    });
+
+    it('keeps the whole of a turn still using its tools, however large', () => {
+      const messages = [
+        message('a'.repeat(3000)),
+        assistant('b'.repeat(300)),
+        message('current question'),
+        toolUse('t1', 'weather'),
+        toolResult('t1', 'r'.repeat(300)),
+      ];
+
+      const { messages: bounded, dropped } = boundModelInput(messages, {
+        maxBytes: 200,
+        systemPrompt,
+      });
+
+      expect(dropped).toBe(2);
+      expect(bounded.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+      expect(orphanedToolResults(bounded)).toEqual([]);
+    });
+  });
 });
 
 describe('invokeLimitsFor — the approved per-turn ceilings', () => {
