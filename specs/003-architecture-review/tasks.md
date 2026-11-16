@@ -155,8 +155,8 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 - [x] T039 [US1] Implement `packages/frontend/src/hooks/useAgentStream.ts` until T031 passes
 - [x] T040 [US1] Implement the build-time `VITE_*` check in `packages/frontend/vite.config.ts` until T032 passes, The variables are already documented in runtime-config.md § Frontend build and quickstart.md § Deploy order step 8, so no new example file is added
 - [x] T041 [US1] Change `packages/frontend/src/hooks/useAudio.ts` to play server `audio` events until T033 passes
-- [ ] T042 [US1] Wire `useAgentStream` into `packages/frontend/src/App.tsx` and `packages/frontend/src/stores/connectionStore.ts`, and enforce the 2,000-character limit in `packages/frontend/src/components/TextInput.tsx`. Update `packages/frontend/tests/App.test.tsx` and `tests/components/TextInput.test.tsx` RED first
-- [ ] T043 [US1] Delete `packages/frontend/src/services/websocketManager.ts`, `src/hooks/useWebSocket.ts` and `src/config/wsUrl.ts`, with their tests `tests/services/websocketManager.test.ts`, `tests/hooks/useWebSocket.test.ts` and `tests/config/wsUrl.test.ts`. This is a deletion, so the check is that the frontend suite and typecheck stay green
+- [x] T042 [US1] Wire `useAgentStream` into `packages/frontend/src/App.tsx` and `packages/frontend/src/stores/connectionStore.ts`, and enforce the 2,000-character limit in `packages/frontend/src/components/TextInput.tsx`. Update `packages/frontend/tests/App.test.tsx` and `tests/components/TextInput.test.tsx` RED first
+- [x] T043 [US1] Delete `packages/frontend/src/services/websocketManager.ts`, `src/hooks/useWebSocket.ts` and `src/config/wsUrl.ts`, with their tests `tests/services/websocketManager.test.ts`, `tests/hooks/useWebSocket.test.ts` and `tests/config/wsUrl.test.ts`. This is a deletion, so the check is that the frontend suite and typecheck stay green
 - [x] T044 [US1] Add the `/runtimes/*` behavior and its origin request policy to `packages/infra/lib/frontend-stack.ts` until T034 passes
 
 **Checkpoint**: Locally, a message produces a streamed, voiced reply through the new transport.
@@ -187,15 +187,15 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
   - the SPA rewrite function on the default behavior only, with runtime `cloudfront-js-2.0`
   - a `BucketDeployment` invalidating `/*`
 - [ ] T051 [P] [US2] RED: create `packages/infra/test/spa-rewrite.test.ts`. `/`, `/privacy` and `/auth/callback` are rewritten to `/index.html`; a path with a file extension is not rewritten
-- [ ] T052 [P] [US2] RED: create `packages/frontend/tests/services/auth.test.ts`. It covers these:
+- [x] T052 [P] [US2] RED: create `packages/frontend/tests/services/auth.test.ts`. It covers these:
   - PKCE verifier and challenge, and `state` generation and check
   - a code exchange at the Cognito token endpoint
   - the access token held in memory only and the refresh token in `sessionStorage`
   - silent refresh before expiry
   - sign-out clears both tokens and redirects to the sign-out URI
   - a mismatched `state` discards the code and shows the sign-in error state
-- [ ] T053 [P] [US2] RED: create `packages/frontend/tests/components/SignIn.test.tsx`. It covers the in-character signed-out, sign-in error and denied states, using the denial copy from auth-and-allowlist.md § Denial copy, and never shows a raw error
-- [ ] T054 [P] [US2] RED: create `packages/frontend/tests/components/PrivacyPage.test.tsx`. `/privacy` renders while signed out (FR-053) and states what is stored, for how long, and how to request deletion
+- [x] T053 [P] [US2] RED: create `packages/frontend/tests/components/SignIn.test.tsx`. It covers the in-character signed-out, sign-in error and denied states, using the denial copy from auth-and-allowlist.md § Denial copy, and never shows a raw error
+- [x] T054 [P] [US2] RED: create `packages/frontend/tests/components/PrivacyPage.test.tsx`. `/privacy` renders while signed out (FR-053) and states what is stored, for how long, and how to request deletion
 
 ### Implementation for User Story 2
 
@@ -206,9 +206,9 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 - [ ] T059 [US2] Add the session-open allowlist check to `packages/agent/src/index.ts` until T049 passes
 - [ ] T060 [P] [US2] Create `packages/infra/lib/functions/spa-rewrite.js` until T051 passes
 - [ ] T061 [US2] Change `packages/infra/lib/frontend-stack.ts` (custom domain, certificate, CSP, the SPA function in place of `errorResponses`, `BucketDeployment`) until T050 passes
-- [ ] T062 [US2] Implement `packages/frontend/src/services/auth.ts` with no third-party auth library, until T052 passes
-- [ ] T063 [US2] Create `packages/frontend/src/components/SignIn.tsx` and `packages/frontend/src/components/SignInError.tsx`, and route `/auth/callback` in `packages/frontend/src/App.tsx`, until T053 passes
-- [ ] T064 [US2] Create `packages/frontend/src/components/PrivacyPage.tsx` and route `/privacy` in `packages/frontend/src/App.tsx` until T054 passes
+- [x] T062 [US2] Implement `packages/frontend/src/services/auth.ts` with no third-party auth library, until T052 passes
+- [x] T063 [US2] Create `packages/frontend/src/components/SignIn.tsx` and `packages/frontend/src/components/SignInError.tsx`, and route `/auth/callback` in `packages/frontend/src/App.tsx`, until T053 passes
+- [x] T064 [US2] Create `packages/frontend/src/components/PrivacyPage.tsx` and route `/privacy` in `packages/frontend/src/App.tsx` until T054 passes
 - [ ] T065 [US2] Delete `packages/frontend/src/services/cognitoAuth.ts` and `tests/services/cognitoAuth.test.ts`, and remove `@aws-sdk/client-cognito-identity` from `packages/frontend/package.json`. This is a deletion, so the check is that the suite and typecheck stay green and `pnpm-lock.yaml` is committed
 
 **Checkpoint**: Only an allowlisted, verified Google identity can obtain a token or open a counted session.

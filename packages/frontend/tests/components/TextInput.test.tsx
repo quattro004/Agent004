@@ -2,11 +2,33 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { createRef } from 'react';
 import { TextInput } from '../../src/components/TextInput';
+import { MAX_MESSAGE_CHARS } from '../../src/config/constants';
 
 describe('TextInput', () => {
   it('renders an input element', () => {
     render(<TextInput onSubmit={() => {}} />);
     expect(screen.getByTestId('text-input')).toBeInTheDocument();
+  });
+
+  it('defaults to the shared 2,000-character message limit', () => {
+    render(<TextInput onSubmit={() => {}} />);
+    const input = screen.getByTestId('text-input') as HTMLInputElement;
+    expect(MAX_MESSAGE_CHARS).toBe(2000);
+    expect(input.maxLength).toBe(MAX_MESSAGE_CHARS);
+  });
+
+  it('refuses to submit a message longer than the limit', () => {
+    // The browser attribute stops typing, but a paste or an autofill can
+    // still put an over-long value in the field. The runtime would refuse it
+    // with `message_too_long` after the request had already been paid for.
+    const onSubmit = vi.fn();
+    render(<TextInput onSubmit={onSubmit} maxLength={10} />);
+    const input = screen.getByTestId('text-input');
+
+    fireEvent.change(input, { target: { value: 'x'.repeat(11) } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('calls onSubmit with trimmed text on Enter', () => {

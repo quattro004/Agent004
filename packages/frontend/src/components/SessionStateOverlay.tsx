@@ -1,5 +1,6 @@
 import React from 'react';
 import { StaticNoise } from './StaticNoise';
+import { DENIED_MESSAGE } from '../config/copy';
 
 export type OverlayState =
   'ENDED' | 'BUDGET_CAPPED' | 'RATE_LIMITED' | 'SIGNAL_LOST' | 'DENIED' | 'ERROR' | null;
@@ -13,8 +14,7 @@ const MESSAGES: Record<Exclude<OverlayState, null | 'SIGNAL_LOST'>, string> = {
   BUDGET_CAPPED: 'Max is taking a break — even digital stars need downtime.',
   RATE_LIMITED: "Slow d-down, speed demon! Even I can't talk that fast.",
   // One constant line for every denial, so it never reveals who is invited (FR-043).
-  DENIED:
-    "This channel's invite-only, friend. If you think you should be on the list, ask the person who sent you the link.",
+  DENIED: DENIED_MESSAGE,
   ERROR: 'Something went wrong behind the scenes. Try again shortly.',
 };
 

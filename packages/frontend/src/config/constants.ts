@@ -1,6 +1,12 @@
 /** Duration (ms) to display greeting text before transitioning to normal state. */
 export const GREETING_DISPLAY_MS = 15_000;
 
+/**
+ * The longest message the runtime accepts before it refuses the turn with
+ * `message_too_long` (contracts/transport-sse.md § Error codes).
+ */
+export const MAX_MESSAGE_CHARS = 2000;
+
 /** Min/max interval (ms) for randomized frame swaps in timed talking animation during greeting. */
 const TALK_FRAME_INTERVAL_MIN_MS = 200;
 const TALK_FRAME_INTERVAL_MAX_MS = 300;

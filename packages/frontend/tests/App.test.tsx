@@ -62,14 +62,31 @@ vi.mock('../src/components/TextInput', () => ({
 }));
 
 // Mock hooks
-const mockSendMessage = vi.fn();
-vi.mock('../src/hooks/useWebSocket', () => ({
-  useWebSocket: () => ({
-    sendMessage: mockSendMessage,
-    startSession: vi.fn(),
-    endSession: vi.fn(),
-    sendInterrupt: vi.fn(),
-  }),
+const mockSend = vi.fn().mockResolvedValue(undefined);
+const mockCancel = vi.fn();
+vi.mock('../src/hooks/useAgentStream', () => ({
+  useAgentStream: () => ({ send: mockSend, cancel: mockCancel }),
+}));
+
+const { mockGetAccessToken, mockRefreshAccessToken, mockSignIn, mockHandleCallback, mockSignOut } =
+  vi.hoisted(() => ({
+    mockGetAccessToken: vi.fn().mockResolvedValue('access-token'),
+    mockRefreshAccessToken: vi.fn().mockResolvedValue('access-token'),
+    mockSignIn: vi.fn().mockResolvedValue(undefined),
+    mockHandleCallback: vi.fn().mockResolvedValue({ status: 'signed-in' }),
+    mockSignOut: vi.fn().mockResolvedValue(undefined),
+  }));
+
+vi.mock('../src/services/authService', () => ({
+  RUNTIME_ARN: 'arn:aws:bedrock-agentcore:us-west-2:111122223333:runtime/max-height',
+  authService: {
+    signIn: mockSignIn,
+    handleCallback: mockHandleCallback,
+    getAccessToken: mockGetAccessToken,
+    refreshAccessToken: mockRefreshAccessToken,
+    signOut: mockSignOut,
+    isSignedIn: () => true,
+  },
 }));
 
 vi.mock('../src/hooks/useIsMobile', () => ({
@@ -123,7 +140,7 @@ vi.mock('../src/stores/connectionStore', () => {
   let state = {
     sessionState: 'ACTIVE' as string,
     sessionId: 'test-session',
-    isWebSocketReady: true,
+    isStreamReady: true,
   };
   const listeners = new Set<() => void>();
   return {
@@ -386,12 +403,23 @@ describe('App — TV Power Lifecycle', () => {
     const input = screen.getByTestId('text-input');
     fireEvent.change(input, { target: { value: 'hello Max' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(mockSendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'user_message',
-        payload: expect.objectContaining({ text: 'hello Max' }),
-      }),
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'hello Max', voice: 'on' }),
     );
+  });
+
+  it('cancels the turn in flight when the TV is switched off', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+    fireEvent.click(screen.getByTestId('tv-knob'));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).toHaveAttribute('data-is-on', 'true');
+    });
+
+    mockCancel.mockClear();
+    fireEvent.click(screen.getByTestId('tv-knob'));
+
+    expect(mockCancel).toHaveBeenCalled();
   });
 
   it('should turn TV off when session enters ENDED state', async () => {
@@ -438,7 +466,7 @@ describe('App — TV Power Lifecycle', () => {
     const connStore = useConnectionStore as unknown as {
       _setState: (s: Record<string, unknown>) => void;
     };
-    connStore._setState({ isWebSocketReady: false });
+    connStore._setState({ isStreamReady: false });
 
     const { App } = await import('../src/App');
     render(<App />);
@@ -509,7 +537,7 @@ describe('App — Greeting Flow', () => {
     const { useConnectionStore } = await import('../src/stores/connectionStore');
     (
       useConnectionStore as unknown as { _setState: (s: Record<string, unknown>) => void }
-    )._setState({ sessionState: 'ACTIVE', sessionId: 'test-session', isWebSocketReady: true });
+    )._setState({ sessionState: 'ACTIVE', sessionId: 'test-session', isStreamReady: true });
 
     const { useConversationStore } = await import('../src/stores/conversationStore');
     (
@@ -563,7 +591,7 @@ describe('App — Greeting Flow', () => {
     const connStore = useConnectionStore as unknown as {
       _setState: (s: Record<string, unknown>) => void;
     };
-    connStore._setState({ sessionState: 'SIGNAL_LOST', isWebSocketReady: false });
+    connStore._setState({ sessionState: 'SIGNAL_LOST', isStreamReady: false });
 
     const { App } = await import('../src/App');
     render(<App />);
@@ -579,7 +607,7 @@ describe('App — Greeting Flow', () => {
     const connStore = useConnectionStore as unknown as {
       _setState: (s: Record<string, unknown>) => void;
     };
-    connStore._setState({ sessionState: 'SIGNAL_LOST', isWebSocketReady: false });
+    connStore._setState({ sessionState: 'SIGNAL_LOST', isStreamReady: false });
 
     const { App } = await import('../src/App');
     render(<App />);
@@ -669,5 +697,106 @@ describe('App — Greeting Flow', () => {
     // This is a basic smoke test; real behavior depends on voiceStore integration
     const avatar = screen.getByTestId('avatar-frame');
     expect(avatar).toHaveAttribute('data-talking');
+  });
+});
+
+describe('App — the gate in front of the broadcast', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAccessToken.mockResolvedValue('access-token');
+    mockHandleCallback.mockResolvedValue({ status: 'signed-in' });
+    window.history.replaceState({}, '', '/');
+  });
+
+  afterEach(async () => {
+    cleanup();
+    window.history.replaceState({}, '', '/');
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+    });
+  });
+
+  it('shows the sign-in panel instead of the TV when no token can be had', async () => {
+    mockGetAccessToken.mockResolvedValue(null);
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('sign-in')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('tv-knob')).not.toBeInTheDocument();
+  });
+
+  it('starts sign-in when the friend asks for it', async () => {
+    mockGetAccessToken.mockResolvedValue(null);
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('sign-in')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /sign in with google/i }));
+
+    expect(mockSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the TV once a stored refresh token still works', async () => {
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('sign-in')).not.toBeInTheDocument();
+  });
+
+  it('exchanges the code at /auth/callback and cleans the URL', async () => {
+    window.history.replaceState({}, '', '/auth/callback?code=code-1&state=state-1');
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
+    });
+    expect(mockHandleCallback).toHaveBeenCalledTimes(1);
+    expect(mockHandleCallback.mock.calls[0][0].get('code')).toBe('code-1');
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
+  });
+
+  it('shows the one denial line when the callback was refused', async () => {
+    window.history.replaceState({}, '', '/auth/callback?error=access_denied&state=state-1');
+    mockHandleCallback.mockResolvedValue({ status: 'denied' });
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('sign-in-denied')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('tv-knob')).not.toBeInTheDocument();
+  });
+
+  it('shows the in-character sign-in error when the exchange fails', async () => {
+    window.history.replaceState({}, '', '/auth/callback?code=code-1&state=state-1');
+    mockHandleCallback.mockResolvedValue({ status: 'error', reason: 'exchange_failed' });
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('sign-in-error')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the privacy page without signing in', async () => {
+    mockGetAccessToken.mockResolvedValue(null);
+    window.history.replaceState({}, '', '/privacy');
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('privacy-page')).toBeInTheDocument();
+    });
+    expect(mockGetAccessToken).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('sign-in')).not.toBeInTheDocument();
   });
 });

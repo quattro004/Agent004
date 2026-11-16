@@ -72,14 +72,21 @@ vi.mock('../src/components/TextInput', () => ({
   ),
 }));
 
-const mockSendMessage = vi.fn();
-vi.mock('../src/hooks/useWebSocket', () => ({
-  useWebSocket: () => ({
-    sendMessage: mockSendMessage,
-    startSession: vi.fn(),
-    endSession: vi.fn(),
-    sendInterrupt: vi.fn(),
-  }),
+const mockSend = vi.fn().mockResolvedValue(undefined);
+vi.mock('../src/hooks/useAgentStream', () => ({
+  useAgentStream: () => ({ send: mockSend, cancel: vi.fn() }),
+}));
+
+vi.mock('../src/services/authService', () => ({
+  RUNTIME_ARN: 'arn:aws:bedrock-agentcore:us-west-2:111122223333:runtime/max-height',
+  authService: {
+    signIn: vi.fn(),
+    handleCallback: vi.fn().mockResolvedValue({ status: 'signed-in' }),
+    getAccessToken: vi.fn().mockResolvedValue('access-token'),
+    refreshAccessToken: vi.fn().mockResolvedValue('access-token'),
+    signOut: vi.fn(),
+    isSignedIn: () => true,
+  },
 }));
 
 vi.mock('../src/hooks/useIsMobile', () => ({
@@ -142,7 +149,7 @@ vi.mock('../src/stores/connectionStore', () => {
   let state = {
     sessionState: 'ACTIVE' as string,
     sessionId: 'test-session',
-    isWebSocketReady: true,
+    isStreamReady: true,
   };
   const listeners = new Set<() => void>();
   return {
@@ -245,7 +252,7 @@ describe('App — Tune-In Sequence (off → tuning → settling → on)', () => 
     const { useConnectionStore } = await import('../src/stores/connectionStore');
     (
       useConnectionStore as unknown as { _setState: (s: Record<string, unknown>) => void }
-    )._setState({ sessionState: 'ACTIVE', sessionId: 'test-session', isWebSocketReady: true });
+    )._setState({ sessionState: 'ACTIVE', sessionId: 'test-session', isStreamReady: true });
   });
 
   afterEach(async () => {

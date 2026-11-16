@@ -1,4 +1,5 @@
 import React, { useState, forwardRef, type KeyboardEvent, type ChangeEvent } from 'react';
+import { MAX_MESSAGE_CHARS } from '../config/constants';
 
 export interface TextInputProps {
   onSubmit: (text: string) => void;
@@ -7,16 +8,20 @@ export interface TextInputProps {
 }
 
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
-  { onSubmit, disabled = false, maxLength = 2000 },
+  { onSubmit, disabled = false, maxLength = MAX_MESSAGE_CHARS },
   ref,
 ) {
   const [value, setValue] = useState('');
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' && value.trim() && !disabled) {
-      onSubmit(value.trim());
-      setValue('');
-    }
+    if (e.key !== 'Enter' || disabled) return;
+    const text = value.trim();
+    // The attribute stops typing past the limit, but a paste or an autofill
+    // can still overshoot it, and the runtime would charge for the request
+    // before refusing it with `message_too_long`.
+    if (!text || text.length > maxLength) return;
+    onSubmit(text);
+    setValue('');
   }
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
