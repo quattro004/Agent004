@@ -9,18 +9,28 @@ import { FrontendStack } from '../lib/frontend-stack.js';
 const SITE_DOMAIN = 'max.recipieces.com';
 const COGNITO_HOST = 'max-height-test.auth.us-west-2.amazoncognito.com';
 
+/** The file the frontend build writes to say whether `dist` may be published. */
+const BUILD_MARKER_FILE = 'max-height-build.json';
+
 /**
- * `BucketDeployment` needs a directory that exists at synth time. The infra
- * suite must not depend on the frontend having been built, so the test
- * supplies its own.
+ * Publishing needs a directory that exists at synth time. The infra suite
+ * must not depend on the frontend having been built, so the test supplies its
+ * own: by default a finished deploy build.
  */
-function siteContentFixture(): string {
+function siteContentFixture(options: { index?: boolean; marker?: string | null } = {}): string {
+  const { index = true, marker = JSON.stringify({ deploy: true }) } = options;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'max-height-site-'));
-  fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>Max Height</title>');
+  if (index) {
+    fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><title>Max Height</title>');
+  }
+  if (marker !== null) fs.writeFileSync(path.join(dir, BUILD_MARKER_FILE), marker);
   return dir;
 }
 
-function buildTemplate(): Template {
+function buildStack(props: { publishSite?: boolean; siteContentPath?: string } = {}): {
+  app: cdk.App;
+  stack: FrontendStack;
+} {
   const app = new cdk.App();
   // The certificate really lives in us-east-1 (CloudFront's requirement), but
   // a cross-region reference needs a two-stack app, and this suite is about
@@ -44,9 +54,15 @@ function buildTemplate(): Template {
     domainName: SITE_DOMAIN,
     certificate,
     cognitoHost: COGNITO_HOST,
-    siteContentPath: siteContentFixture(),
+    ...props,
   });
-  return Template.fromStack(stack);
+  return { app, stack };
+}
+
+function buildTemplate(): Template {
+  return Template.fromStack(
+    buildStack({ publishSite: true, siteContentPath: siteContentFixture() }).stack,
+  );
 }
 
 describe('FrontendStack', () => {
@@ -268,5 +284,78 @@ describe('FrontendStack', () => {
       const custom = template.findResources('AWS::CloudFront::OriginRequestPolicy');
       expect(Object.keys(custom)).toHaveLength(0);
     });
+  });
+});
+
+// T170/T171: a deploy of any other stack synthesizes this one too, and the
+// site is built from outputs that exist only after those stacks deploy. So the
+// stack builds without a site by default, and publishing is something asked for.
+describe('FrontendStack bootstrap and publication', () => {
+  const missing = path.join(os.tmpdir(), 'max-height-no-such-site');
+
+  test('builds the bucket and distribution without any built site', () => {
+    const { stack } = buildStack({ siteContentPath: missing });
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::S3::Bucket', 1);
+    template.resourceCountIs('AWS::CloudFront::Distribution', 1);
+  });
+
+  test('publishes nothing unless asked to', () => {
+    const { stack } = buildStack({ siteContentPath: siteContentFixture() });
+
+    Template.fromStack(stack).resourceCountIs('Custom::CDKBucketDeployment', 0);
+  });
+
+  test('refuses to publish when the site has not been built', () => {
+    expect(() => buildStack({ publishSite: true, siteContentPath: missing })).toThrow(
+      /pnpm --filter @max-height\/frontend build/,
+    );
+  });
+
+  test('refuses to publish a directory with no index.html', () => {
+    const siteContentPath = siteContentFixture({ index: false });
+
+    expect(() => buildStack({ publishSite: true, siteContentPath })).toThrow(/index\.html/);
+  });
+
+  test('refuses to publish a build that did not say what kind it is', () => {
+    const siteContentPath = siteContentFixture({ marker: null });
+
+    expect(() => buildStack({ publishSite: true, siteContentPath })).toThrow(/MAX_HEIGHT_DEPLOY=1/);
+  });
+
+  test('refuses to publish a compile-check build, which has no runtime or sign-in values', () => {
+    const siteContentPath = siteContentFixture({ marker: JSON.stringify({ deploy: false }) });
+
+    expect(() => buildStack({ publishSite: true, siteContentPath })).toThrow(/MAX_HEIGHT_DEPLOY=1/);
+  });
+
+  test('refuses a marker that is not JSON rather than guessing', () => {
+    const siteContentPath = siteContentFixture({ marker: 'oops' });
+
+    expect(() => buildStack({ publishSite: true, siteContentPath })).toThrow(/MAX_HEIGHT_DEPLOY=1/);
+  });
+
+  test('publishes a deploy build and invalidates every path', () => {
+    const { stack } = buildStack({ publishSite: true, siteContentPath: siteContentFixture() });
+
+    Template.fromStack(stack).hasResourceProperties('Custom::CDKBucketDeployment', {
+      DistributionPaths: ['/*'],
+    });
+  });
+
+  test('keeps the build marker out of the uploaded site', () => {
+    const { app } = buildStack({ publishSite: true, siteContentPath: siteContentFixture() });
+
+    const assetDirs = fs
+      .readdirSync(app.synth().directory)
+      .filter((entry) => entry.startsWith('asset.'))
+      .map((entry) => path.join(app.synth().directory, entry))
+      .filter((entry) => fs.statSync(entry).isDirectory());
+    const site = assetDirs.find((dir) => fs.existsSync(path.join(dir, 'index.html')));
+
+    expect(site).toBeDefined();
+    expect(fs.existsSync(path.join(site!, BUILD_MARKER_FILE))).toBe(false);
   });
 });

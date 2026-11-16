@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   REQUIRED_VITE_VARS,
   assertBuildConfig,
+  buildMarker,
   isDeployBuild,
   readBuildConfig,
 } from '../../src/config/buildConfig';
@@ -75,6 +76,24 @@ describe('buildConfig', () => {
 
     it('never applies outside a production build', () => {
       expect(isDeployBuild({ MAX_HEIGHT_DEPLOY: '1', ...COMPLETE }, 'development')).toBe(false);
+    });
+  });
+
+  describe('the marker a build leaves for the publisher', () => {
+    it('says a complete deploy build is publishable', () => {
+      expect(buildMarker({ MAX_HEIGHT_DEPLOY: '1', ...COMPLETE }, 'production')).toEqual({
+        deploy: true,
+      });
+    });
+
+    it('says a compile-check build with no configuration is not publishable', () => {
+      expect(buildMarker({}, 'production')).toEqual({ deploy: false });
+    });
+
+    it('never calls a development build publishable', () => {
+      expect(buildMarker({ MAX_HEIGHT_DEPLOY: '1', ...COMPLETE }, 'development')).toEqual({
+        deploy: false,
+      });
     });
   });
 });

@@ -21,8 +21,51 @@ export interface FrontendStackProps extends cdk.StackProps {
   certificate: acm.ICertificate;
   /** `<prefix>.auth.<region>.amazoncognito.com`, for the CSP's connect-src. */
   cognitoHost: string;
-  /** The built site. Defaults to `packages/frontend/dist`. */
+  /**
+   * Upload the built site and invalidate CloudFront (`-c publishSite=true`).
+   * Off by default: a deploy of any other stack synthesizes this one too, and
+   * the site cannot be built until the stacks it takes its values from exist.
+   */
+  publishSite?: boolean;
+  /** The built site, read only when publishing. Defaults to `packages/frontend/dist`. */
   siteContentPath?: string;
+}
+
+/**
+ * The file the frontend build writes into `dist` (`buildConfig.ts` in the
+ * frontend package) to say whether that build carries the runtime and sign-in
+ * configuration. `pnpm run validate` leaves a build without it in `dist`, and
+ * publishing that would ship a client that cannot reach anything.
+ */
+const BUILD_MARKER_FILE = 'max-height-build.json';
+
+/** Throws unless `siteContentPath` holds a finished deploy build. */
+function assertPublishable(siteContentPath: string): void {
+  if (!fs.existsSync(siteContentPath)) {
+    throw new Error(
+      `The built site is not at ${siteContentPath}. ` +
+        `Run \`pnpm --filter @max-height/frontend build\` before publishing the site.`,
+    );
+  }
+  if (!fs.existsSync(path.join(siteContentPath, 'index.html'))) {
+    throw new Error(`${siteContentPath} has no index.html, so it is not a built site.`);
+  }
+  if (!isDeployBuild(path.join(siteContentPath, BUILD_MARKER_FILE))) {
+    throw new Error(
+      `${siteContentPath} is not a deploy build. Write the VITE_* values from the stack ` +
+        `outputs and rebuild with MAX_HEIGHT_DEPLOY=1 (quickstart.md § Deploy order).`,
+    );
+  }
+}
+
+function isDeployBuild(markerPath: string): boolean {
+  try {
+    return (
+      (JSON.parse(fs.readFileSync(markerPath, 'utf8')) as { deploy?: unknown }).deploy === true
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -35,12 +78,7 @@ export class FrontendStack extends cdk.Stack {
     super(scope, id, { ...props, crossRegionReferences: true });
 
     const siteContentPath = props.siteContentPath ?? DEFAULT_SITE_CONTENT;
-    if (!fs.existsSync(siteContentPath)) {
-      throw new Error(
-        `The built site is not at ${siteContentPath}. ` +
-          `Run \`pnpm --filter @max-height/frontend build\` before deploying the frontend stack.`,
-      );
-    }
+    if (props.publishSite) assertPublishable(siteContentPath);
 
     const siteBucket = new s3.Bucket(this, 'SiteBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -133,14 +171,18 @@ export class FrontendStack extends cdk.Stack {
       defaultRootObject: 'index.html',
     });
 
-    new s3deploy.BucketDeployment(this, 'SiteContent', {
-      sources: [s3deploy.Source.asset(siteContentPath)],
-      destinationBucket: siteBucket,
-      distribution,
-      // The SPA's entry point keeps its name across deploys, so a stale cached
-      // index.html would keep serving the previous build's asset hashes.
-      distributionPaths: ['/*'],
-    });
+    if (props.publishSite) {
+      // Dropping this resource again (a later deploy without publishSite)
+      // leaves the uploaded files in place: `retainOnDelete` defaults to true.
+      new s3deploy.BucketDeployment(this, 'SiteContent', {
+        sources: [s3deploy.Source.asset(siteContentPath, { exclude: [BUILD_MARKER_FILE] })],
+        destinationBucket: siteBucket,
+        distribution,
+        // The SPA's entry point keeps its name across deploys, so a stale cached
+        // index.html would keep serving the previous build's asset hashes.
+        distributionPaths: ['/*'],
+      });
+    }
 
     new cdk.CfnOutput(this, 'SiteUrl', { value: `https://${props.domainName}` });
 

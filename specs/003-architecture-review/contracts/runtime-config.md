@@ -110,7 +110,7 @@ The hard stop attaches a deny-all-spend inline policy to this role ([spend-contr
 
 `VITE_WS_URL` is removed with the WebSocket path (`App.tsx:33`, `config/wsUrl.ts`). A deploy build with any of these values missing fails the build, so it does not ship a broken client. This matches the fail-closed precedent in `config/wsUrl.ts`.
 
-A **deploy build** is a production build that either sets `MAX_HEIGHT_DEPLOY=1` or carries some of these values but not all of them. A production build carrying none of them is CI compiling the client, which deploys nothing, so it is left alone — otherwise `pnpm run build` could never pass without deployment configuration no contributor holds. Tasks deviation C27.
+A **deploy build** is a production build that either sets `MAX_HEIGHT_DEPLOY=1` or carries some of these values but not all of them. A production build carrying none of them is CI compiling the client, which deploys nothing, so it is left alone — otherwise `pnpm run build` could never pass without deployment configuration no contributor holds. Tasks deviation C27. Every build writes `max-height-build.json` into `dist` recording whether it was a deploy build; `FrontendStack` publishes only when that says `true` and `-c publishSite=true` is set, so a compile-check `dist` can never reach the bucket (tasks deviation C42).
 
 ## Lambdas
 

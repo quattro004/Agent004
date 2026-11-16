@@ -14,6 +14,14 @@ const env = { region: 'us-west-2' };
 
 export { SITE_DOMAIN };
 
+/** `-c publishSite=true` arrives as a string; anything unrecognised is an error, not "off". */
+function publishSiteContext(app: cdk.App): boolean {
+  const value: unknown = app.node.tryGetContext('publishSite');
+  if (value === undefined || value === false || value === 'false') return false;
+  if (value === true || value === 'true') return true;
+  throw new Error(`Context publishSite must be true or false, not ${JSON.stringify(value)}.`);
+}
+
 /**
  * Adds every Max Height stack to `app`. Lives outside `bin/app.ts` so tests can
  * assert app-wide properties (Region, tags, log retention) on the real app.
@@ -67,6 +75,9 @@ export function buildMaxHeightApp(app: cdk.App): void {
     domainName: SITE_DOMAIN,
     certificate: certificateStack.certificate,
     cognitoHost: cognitoStack.cognitoHost,
+    // Bootstrap deploys leave this off, so no stack needs a built frontend:
+    // cdk deploy MaxHeight-Frontend -c publishSite=true (quickstart.md § Deploy order).
+    publishSite: publishSiteContext(app),
     // Defaults to packages/frontend/dist; the infra tests point it at a
     // fixture so they need no frontend build.
     siteContentPath: app.node.tryGetContext('siteContentPath'),

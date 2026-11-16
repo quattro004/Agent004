@@ -100,7 +100,7 @@ Package-level commands:
 
 - Frontend: `cd packages/frontend && pnpm run dev` / `pnpm run test` / `pnpm run test:e2e`
 - Agent: `cd packages/agent && pnpm run dev` / `pnpm run test`
-- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email> -c cognitoDomainPrefix=<prefix> -c googleClientId=<client id>` (every `cdk synth`, `diff` and `deploy` needs all three; never commit the owner address)
+- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email> -c cognitoDomainPrefix=<prefix> -c googleClientId=<client id>` (every `cdk synth`, `diff` and `deploy` needs all three; never commit the owner address). Add `-c publishSite=true` only when deploying `MaxHeight-Frontend` with a finished `MAX_HEIGHT_DEPLOY=1` frontend build; without it no stack reads `dist`
 - Repo tools: `cd packages/repo-tools && pnpm run test`
 
 ## Required engineering workflow

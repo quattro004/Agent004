@@ -46,6 +46,22 @@ export function isDeployBuild(env: EnvLike, mode: string): boolean {
   return REQUIRED_VITE_VARS.some((name) => (env[name] ?? '').trim() !== '');
 }
 
+/** Written into `dist` by every build, so the infra publisher can tell the kinds apart. */
+export const BUILD_MARKER_FILE = 'max-height-build.json';
+
+export interface BuildMarker {
+  deploy: boolean;
+}
+
+/**
+ * Whether the finished build may be published. `pnpm run validate` leaves a
+ * compile-check `dist` behind with no runtime or sign-in configuration, and
+ * uploading that would ship a client that cannot reach anything. Only a
+ * production deploy build that passed `assertBuildConfig` says `deploy: true`.
+ */
+export function buildMarker(env: EnvLike, mode: string): BuildMarker {
+  return { deploy: isDeployBuild(env, mode) };
+}
 export function assertBuildConfig(env: EnvLike, isProd: boolean): void {
   if (!isProd) return;
   const missing = missingViteVars(env);

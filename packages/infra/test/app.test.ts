@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
 import { buildMaxHeightApp } from '../lib/max-height-app.js';
-import { DEPLOY_CONTEXT } from './deploy-context.js';
+import { DEPLOY_CONTEXT, PUBLISH_CONTEXT } from './deploy-context.js';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -61,13 +61,18 @@ describe('infra package dependency declarations', () => {
 });
 
 // research § R-deploy (Region, cost-allocation tag) and § R-obs (14-day logs).
-describe('Max Height app', () => {
+// Every property below must hold both when bootstrapping (no built site) and
+// when publishing it (T170).
+describe.each([
+  ['bootstrap', DEPLOY_CONTEXT],
+  ['publication', PUBLISH_CONTEXT],
+])('Max Height app, %s deploy', (mode, context) => {
   const CERTIFICATE_STACK = 'MaxHeight-Certificate';
   let app: cdk.App;
   let stacks: cdk.Stack[];
 
   beforeAll(() => {
-    app = new cdk.App({ context: DEPLOY_CONTEXT });
+    app = new cdk.App({ context });
     buildMaxHeightApp(app);
     app.synth();
     stacks = app.node.children.filter((c): c is cdk.Stack => cdk.Stack.isStack(c));
@@ -141,5 +146,50 @@ describe('Max Height app', () => {
         });
     });
     expect(offenders).toEqual([]);
+  });
+
+  test('uploads the site only in a publishing deploy', () => {
+    const frontend = stacks.find((s) => s.stackName === 'MaxHeight-Frontend')!;
+    const template = app.synth().getStackArtifact(frontend.artifactId).template as {
+      Resources: Record<string, { Type: string }>;
+    };
+    const uploads = Object.values(template.Resources).filter(
+      (r) => r.Type === 'Custom::CDKBucketDeployment',
+    );
+
+    expect(uploads).toHaveLength(mode === 'publication' ? 1 : 0);
+  });
+
+  // The budget must deploy first, before anything that can spend, so it takes
+  // nothing from another stack and needs no built site.
+  test('the Budget stack depends on no other stack and imports nothing', () => {
+    const budget = stacks.find((s) => s.stackName === 'MaxHeight-Budget')!;
+    const template = JSON.stringify(app.synth().getStackArtifact(budget.artifactId).template);
+
+    expect(budget.dependencies).toEqual([]);
+    expect(template).not.toContain('Fn::ImportValue');
+  });
+});
+
+describe('publishSite context', () => {
+  const synth = (publishSite: unknown) => {
+    const app = new cdk.App({ context: { ...PUBLISH_CONTEXT, publishSite } });
+    buildMaxHeightApp(app);
+    return app.synth();
+  };
+
+  test('accepts the string the CLI passes for -c publishSite=true', () => {
+    expect(() => synth('true')).not.toThrow();
+  });
+
+  test('treats the string false as not publishing, even with no built site', () => {
+    const app = new cdk.App({
+      context: { ...DEPLOY_CONTEXT, publishSite: 'false' },
+    });
+    expect(() => buildMaxHeightApp(app)).not.toThrow();
+  });
+
+  test('rejects a value it does not recognise instead of silently not publishing', () => {
+    expect(() => synth('yes')).toThrow(/publishSite/);
   });
 });
