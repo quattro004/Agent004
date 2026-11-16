@@ -108,6 +108,33 @@ export class OpsStack extends cdk.Stack {
       }),
     });
 
+    for (const [id, metricName, description] of [
+      [
+        'SettlementFailed',
+        'SettlementFailures',
+        'A request could not be settled: a lease and its reservation stand until reconciled',
+      ],
+      [
+        'UnmeteredRequest',
+        'UnmeteredRequests',
+        'A turn had no usable usage and was charged at its full reservation',
+      ],
+      [
+        'SessionWriteFailed',
+        'SessionWriteFailures',
+        'A counted session could not be saved: its caps may not be enforced',
+      ],
+    ] as const) {
+      this.alarm(id, description, {
+        metric: new cloudwatch.Metric({
+          namespace: RUNTIME_METRIC_NAMESPACE,
+          metricName,
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+      });
+    }
+
     this.alarm('RuntimeSystemErrors', 'The AgentCore Runtime returned a server error', {
       metric: new cloudwatch.Metric({
         namespace: 'AWS/Bedrock-AgentCore',

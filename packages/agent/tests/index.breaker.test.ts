@@ -11,7 +11,6 @@ import { makeReq, bearerHeaders, TEST_SUB, TEST_RUNTIME_SESSION_ID } from './fix
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
 import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
-import type { Session } from '../src/handlers/sessionManager.js';
 
 const streamMock = vi.hoisted(() => vi.fn());
 
@@ -186,28 +185,17 @@ describe('handleInvocations — the breaker', () => {
     expect(events()[0]).toMatchObject({ type: 'session', voice: 'on' });
   });
 
-  // The caps are the friend's own ceiling and are checked without a network
-  // call, so they are decided before the month's tally is read.
-  it('reports session_cap_exceeded ahead of the breaker when both would refuse', async () => {
+  // The tally is read before the lease is taken and the session is read
+  // under it, so a tripped breaker refuses without touching the session.
+  it('refuses with breaker_tripped before the counted session is read', async () => {
     const config = testRuntimeConfig();
     const table = install(fakeControlTable({ spendMicroUsd: config.breakerTripMicroUsd }));
-    __test.sessions.set(TEST_SUB, {
-      sessionId: 'sess-capped',
-      actorId: TEST_SUB,
-      greetingId: 'g',
-      state: 'ACTIVE',
-      turnCount: config.sessionMaxTurns,
-      tokenCount: 0,
-      idleNudgeDelivered: false,
-      reEngagementCount: 0,
-      startedAt: new Date(),
-      endedAt: null,
-    } as Session);
 
     const { events } = await turn();
 
-    expect(errorCodeOf(events)).toBe('session_cap_exceeded');
-    expect(table.getSpend).not.toHaveBeenCalled();
+    expect(errorCodeOf(events)).toBe('breaker_tripped');
+    expect(table.admitRequest).not.toHaveBeenCalled();
+    expect(table.getSession).not.toHaveBeenCalled();
   });
 
   it('fails closed when the tally cannot be read', async () => {
@@ -222,50 +210,39 @@ describe('handleInvocations — the breaker', () => {
     expect(streamMock).not.toHaveBeenCalled();
   });
 
-  it('adds the turn estimate to the month once the turn finishes', async () => {
+  it('settles the month to the turn estimate once the turn finishes', async () => {
     const table = install(fakeControlTable({ spendMicroUsd: 0 }));
     synthesize.mockResolvedValue({ pollyCharacters: 120, segments: 1 });
 
     await turn();
 
-    expect(table.addSpend).toHaveBeenCalledTimes(1);
-    const [microUsd] = table.addSpend.mock.calls[0];
+    expect(table.settleRequest).toHaveBeenCalledTimes(1);
+    const [, microUsd] = table.settleRequest.mock.calls[0];
     expect(Number.isSafeInteger(microUsd)).toBe(true);
     expect(microUsd).toBeGreaterThan(0);
+    expect(table.counters.committedMicroUsd).toBe(microUsd);
   });
 
   // The spend happened whether or not the friend got a usable reply.
-  it('still records the estimate when the turn fails after the model ran', async () => {
+  it('still settles the estimate when the turn fails after the model ran', async () => {
     const table = install(fakeControlTable({ spendMicroUsd: 0 }));
     synthesize.mockRejectedValue(new Error('Polly exploded'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await turn();
 
-    expect(table.addSpend).toHaveBeenCalledTimes(1);
+    expect(table.settleRequest).toHaveBeenCalledTimes(1);
+    expect(table.counters.committedMicroUsd).toBeGreaterThan(0);
   });
 
-  it('records nothing when the turn never reached the model', async () => {
+  it('takes no reservation when the turn never reached admission', async () => {
     const table = install(
       fakeControlTable({ halt: { haltedAt: '2026-11-17T00:00:00.000Z', reason: 'budget-100' } }),
     );
 
     await turn();
 
-    expect(table.addSpend).not.toHaveBeenCalled();
-  });
-
-  // The reply is already delivered and already billed; losing the tally write
-  // must not take the turn down with it.
-  it('completes the turn even when the tally write fails', async () => {
-    const table = install(fakeControlTable({ spendMicroUsd: 0 }));
-    table.addSpend.mockRejectedValue(new Error('ThrottlingException'));
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    const { events } = await turn();
-
-    expect(events().some((e) => e.type === 'done')).toBe(true);
-    expect(errorCodeOf(events)).toBeUndefined();
+    expect(table.admitRequest).not.toHaveBeenCalled();
+    expect(table.counters.committedMicroUsd).toBe(0);
   });
 });

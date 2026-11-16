@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { fakeControlTable } from './fixtures/controlTable.js';
+import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, TEST_SUB } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf, fakeResult, textDelta } from './fixtures/strands.js';
@@ -61,6 +61,8 @@ const { fetchWebSearch } = (await import('../src/tools/webSearchTool.js')) as un
 };
 const { __test } = await import('../src/index.js');
 
+let table: FakeControlTable;
+
 /**
  * Snapshot the tool registrations now, at import time: the tools are built once
  * when `index.ts` loads, and Vitest clears `mock.calls` before test bodies run.
@@ -97,7 +99,8 @@ describe('handleInvocations — cancellation on client disconnect', () => {
   beforeEach(() => {
     __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
-    __test.setControlTable(fakeControlTable());
+    table = fakeControlTable();
+    __test.setControlTable(table);
     vi.clearAllMocks();
     streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });
@@ -174,7 +177,7 @@ describe('handleInvocations — cancellation on client disconnect', () => {
 
     // The session was opened and must survive, so the friend who comes back
     // resumes the same budget rather than getting a fresh one (P-05).
-    expect(__test.sessions.get(TEST_SUB)).toBeDefined();
+    expect(table.sessions.get(TEST_SUB)).toBeDefined();
   });
 });
 
@@ -183,7 +186,8 @@ describe('tool callbacks — cancel signal forwarding', () => {
   // holds an outbound HTTP request open unless the signal reaches it too.
   beforeEach(() => {
     __test.setRuntimeConfig(testRuntimeConfig());
-    __test.setControlTable(fakeControlTable());
+    table = fakeControlTable();
+    __test.setControlTable(table);
   });
 
   function callbackFor(name: string) {

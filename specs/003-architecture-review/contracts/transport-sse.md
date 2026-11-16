@@ -119,6 +119,7 @@ The breaker and cap figures (`conversationalTokens`, spend) are **not** sent to 
 | `halted` | `CONTROL#HALT` is present (hard stop) | false | Hard-stop state |
 | `breaker_tripped` | `SPEND#<yyyy-mm>` has reached the trip limit | false | Hard-stop state |
 | `rate_limited` | Hourly (60) or daily (500) messages per `sub` exceeded (spec 001 websocket-api.md:207-208) | true, after the window | Rate-limited state |
+| `busy` | Admission refused the turn because the friend already has a request in flight, or `GLOBAL_MAX_ACTIVE_REQUESTS` are in flight across instances (T166). No queue and no replay; the friend sends again | true | Stays active; Max's in-character line is the reply |
 | `session_cap_exceeded` | Turn, token or 30-minute cap reached before this turn (code name kept from `index.ts:173`) | false | Ended state; the next message opens a fresh counted session |
 | `session_mismatch` | The runtime session ID is bound to a different `sub` | false | The browser drops its session ID, makes a new one and retries once |
 | `moderation_blocked` | Guardrails intervened (if the adopted model's path supports them, Q2) | false | In-character deflection |
@@ -128,10 +129,12 @@ Refusal order before a turn, which is cheapest first and spends nothing:
 
 1. body validation
 2. `CONTROL#HALT`
-3. allowlist (at counted-session open; on every action)
-4. rate limit (not for `memory.forget`)
-5. counted-session caps (chat turns only)
-6. breaker (chat turns only)
+3. rate limit (not for `memory.forget`); a refused message is not counted, but a message answered `busy` is
+4. breaker pre-read (chat turns only; the tally includes in-flight reservations)
+5. admission (chat turns only): one request per friend, `GLOBAL_MAX_ACTIVE_REQUESTS` overall, and room under the trip threshold for the reservation → `busy` or `breaker_tripped`
+6. counted-session caps and the allowlist at counted-session open (chat turns only), both read under the lease, so a refusal here settles at 0 µUSD. The allowlist is also checked on every action
+
+Admission precedes the session read because the counted session is state that only the lease holder may write (T166/T167).
 
 ## Cancellation
 

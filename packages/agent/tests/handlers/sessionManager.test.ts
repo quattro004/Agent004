@@ -1,156 +1,125 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  createSession,
-  endSession,
-  checkSessionCaps,
-  getSessionState,
+  openSession,
+  evaluateSession,
+  recordTurn,
+  type SessionCaps,
 } from '../../src/handlers/sessionManager.js';
+import type { CountedSession } from '../../src/session/controlTable.js';
 
-describe('sessionManager', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
+const CAPS: SessionCaps = { maxTurns: 50, maxTokens: 20_000, maxMinutes: 30 };
+const T0 = new Date('2026-11-20T10:00:00.000Z');
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+function stored(overrides: Partial<CountedSession> = {}): CountedSession {
+  return {
+    sessionId: 'sess-1',
+    state: 'Active',
+    openedAt: T0.toISOString(),
+    turns: 0,
+    conversationalTokens: 0,
+    ttl: 0,
+    ...overrides,
+  };
+}
 
-  describe('createSession', () => {
-    it('should create a session with initial state', () => {
-      const session = createSession({
-        actorId: 'test-actor-123',
-        greetingId: 'greeting-001',
-      });
+const minutesAfter = (minutes: number): Date => new Date(T0.getTime() + minutes * 60_000);
 
-      expect(session.sessionId).toBeDefined();
-      expect(session.actorId).toBe('test-actor-123');
-      expect(session.greetingId).toBe('greeting-001');
-      expect(session.state).toBe('GREETING');
-      expect(session.turnCount).toBe(0);
-      expect(session.tokenCount).toBe(0);
-      expect(session.idleNudgeDelivered).toBe(false);
-      expect(session.reEngagementCount).toBe(0);
-      expect(session.startedAt).toBeDefined();
-      expect(session.endedAt).toBeNull();
-    });
-
-    it('should generate a unique sessionId', () => {
-      const session1 = createSession({
-        actorId: 'actor-1',
-        greetingId: 'greeting-001',
-      });
-      const session2 = createSession({
-        actorId: 'actor-2',
-        greetingId: 'greeting-002',
-      });
-      expect(session1.sessionId).not.toBe(session2.sessionId);
+describe('openSession', () => {
+  it('starts an Active session with nothing counted, stamped with the opening time', () => {
+    expect(openSession(T0)).toMatchObject({
+      state: 'Active',
+      openedAt: T0.toISOString(),
+      turns: 0,
+      conversationalTokens: 0,
     });
   });
 
-  describe('checkSessionCaps', () => {
-    it('should return not-exceeded when under all caps', () => {
-      const session = createSession({
-        actorId: 'test-actor',
-        greetingId: 'greeting-001',
-      });
-      session.state = 'ACTIVE';
-      session.turnCount = 10;
-      session.tokenCount = 5000;
+  it('mints a distinct id each time', () => {
+    expect(openSession(T0).sessionId).not.toBe(openSession(T0).sessionId);
+  });
+});
 
-      const result = checkSessionCaps(session);
-      expect(result.exceeded).toBe(false);
-      expect(result.reason).toBeNull();
-    });
+describe('evaluateSession', () => {
+  it('opens a session when none is stored', () => {
+    expect(evaluateSession(undefined, CAPS, T0)).toEqual({ kind: 'open' });
+  });
 
-    it('should trigger at 50 turns', () => {
-      const session = createSession({
-        actorId: 'test-actor',
-        greetingId: 'greeting-001',
-      });
-      session.state = 'ACTIVE';
-      session.turnCount = 50;
-      session.tokenCount = 5000;
-
-      const result = checkSessionCaps(session);
-      expect(result.exceeded).toBe(true);
-      expect(result.reason).toBe('turn_limit');
-    });
-
-    it('should trigger at 20,000 tokens', () => {
-      const session = createSession({
-        actorId: 'test-actor',
-        greetingId: 'greeting-001',
-      });
-      session.state = 'ACTIVE';
-      session.turnCount = 10;
-      session.tokenCount = 20000;
-
-      const result = checkSessionCaps(session);
-      expect(result.exceeded).toBe(true);
-      expect(result.reason).toBe('token_limit');
-    });
-
-    it('should trigger at 30 minutes', () => {
-      const now = new Date('2026-04-29T10:00:00Z');
-      vi.setSystemTime(now);
-
-      const session = createSession({
-        actorId: 'test-actor',
-        greetingId: 'greeting-001',
-      });
-      session.state = 'ACTIVE';
-      session.turnCount = 10;
-      session.tokenCount = 5000;
-
-      // Advance 30 minutes
-      vi.setSystemTime(new Date('2026-04-29T10:30:00Z'));
-
-      const result = checkSessionCaps(session);
-      expect(result.exceeded).toBe(true);
-      expect(result.reason).toBe('time_limit');
-    });
-
-    it('should trigger on whichever cap is hit first', () => {
-      const session = createSession({
-        actorId: 'test-actor',
-        greetingId: 'greeting-001',
-      });
-      session.state = 'ACTIVE';
-      session.turnCount = 50;
-      session.tokenCount = 20000;
-
-      const result = checkSessionCaps(session);
-      expect(result.exceeded).toBe(true);
-      // Should report the first cap hit (turn limit checked first)
-      expect(result.reason).toBeTruthy();
+  it('continues an Active session that is within every cap', () => {
+    const session = stored({ turns: 10, conversationalTokens: 5000 });
+    expect(evaluateSession(session, CAPS, minutesAfter(5))).toEqual({
+      kind: 'continue',
+      session,
     });
   });
 
-  describe('endSession', () => {
-    it('should set state to ENDED and record endedAt', () => {
-      const session = createSession({
-        actorId: 'test-actor',
-        greetingId: 'greeting-001',
+  it.each(['SignedOff', 'Expired'] as const)(
+    'opens a fresh session after a %s one, with fresh caps',
+    (state) => {
+      expect(evaluateSession(stored({ state, turns: 50 }), CAPS, minutesAfter(1))).toEqual({
+        kind: 'open',
       });
-      session.state = 'ACTIVE';
+    },
+  );
 
-      const ended = endSession(session, 'cap_reached');
-      expect(ended.state).toBe('ENDED');
-      expect(ended.endedAt).toBeDefined();
-      expect(ended.endedAt).not.toBeNull();
+  it('opens a fresh session when the time cap elapsed, evaluated at this request', () => {
+    expect(evaluateSession(stored({ turns: 3 }), CAPS, minutesAfter(30))).toEqual({
+      kind: 'open',
     });
   });
 
-  describe('getSessionState', () => {
-    it('should return current session state', () => {
-      const session = createSession({
-        actorId: 'test-actor',
-        greetingId: 'greeting-001',
-      });
-      expect(getSessionState(session)).toBe('GREETING');
+  it('still continues one millisecond before the time cap', () => {
+    const justBefore = new Date(T0.getTime() + 30 * 60_000 - 1);
+    expect(evaluateSession(stored(), CAPS, justBefore).kind).toBe('continue');
+  });
 
-      session.state = 'ACTIVE';
-      expect(getSessionState(session)).toBe('ACTIVE');
+  it('refuses an Active session already at the turn cap', () => {
+    const session = stored({ turns: 50 });
+    expect(evaluateSession(session, CAPS, minutesAfter(1))).toEqual({
+      kind: 'exceeded',
+      session,
+      reason: 'turn_limit',
     });
+  });
+
+  it('refuses an Active session already at the token cap', () => {
+    const session = stored({ conversationalTokens: 20_000 });
+    expect(evaluateSession(session, CAPS, minutesAfter(1))).toEqual({
+      kind: 'exceeded',
+      session,
+      reason: 'token_limit',
+    });
+  });
+
+  it('uses the configured caps, not figures of its own', () => {
+    const tight: SessionCaps = { maxTurns: 2, maxTokens: 100, maxMinutes: 1 };
+    expect(evaluateSession(stored({ turns: 2 }), tight, T0)).toMatchObject({
+      kind: 'exceeded',
+      reason: 'turn_limit',
+    });
+    expect(evaluateSession(stored(), tight, minutesAfter(1)).kind).toBe('open');
+  });
+});
+
+describe('recordTurn', () => {
+  it('adds the turn and its conversational tokens, and stays Active under the caps', () => {
+    expect(recordTurn(stored({ turns: 2, conversationalTokens: 100 }), 40, CAPS)).toEqual({
+      sessionId: 'sess-1',
+      state: 'Active',
+      openedAt: T0.toISOString(),
+      turns: 3,
+      conversationalTokens: 140,
+    });
+  });
+
+  it('signs the session off when the turn cap is reached by this turn', () => {
+    expect(recordTurn(stored({ turns: 49 }), 10, CAPS).state).toBe('SignedOff');
+  });
+
+  it('signs the session off when the token cap is reached by this turn', () => {
+    expect(recordTurn(stored({ conversationalTokens: 19_990 }), 10, CAPS).state).toBe('SignedOff');
+  });
+
+  it('does not carry the stored ttl into the write', () => {
+    expect(recordTurn(stored({ ttl: 123 }), 1, CAPS)).not.toHaveProperty('ttl');
   });
 });

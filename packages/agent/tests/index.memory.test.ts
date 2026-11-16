@@ -143,7 +143,7 @@ describe('handleInvocations — AgentCore memory', () => {
         ],
       }),
     );
-    expect(table.addSpend).toHaveBeenCalled();
+    expect(table.settleRequest).toHaveBeenCalled();
   });
 
   it('continues without recalled context and reports a retrieval failure', async () => {
@@ -174,7 +174,7 @@ describe('handleInvocations — AgentCore memory', () => {
         }),
       );
       expect(entries).toContainEqual(expect.objectContaining({ MemoryRetrieveFailures: 1 }));
-      expect(table.addSpend).toHaveBeenCalled();
+      expect(table.settleRequest).toHaveBeenCalled();
     } finally {
       warn.mockRestore();
       log.mockRestore();
@@ -317,6 +317,6 @@ describe('handleInvocations — AgentCore memory', () => {
       action: 'memory.forget',
       data: { recordsDeleted: 1, eventsDeleted: 1 },
     });
-    expect(__test.sessions.get(TEST_SUB)?.state).toBe('ENDED');
+    expect(table.sessions.get(TEST_SUB)?.state).toBe('SignedOff');
   });
 });

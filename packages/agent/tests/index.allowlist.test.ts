@@ -126,12 +126,14 @@ describe('handleInvocations — the allowlist at session open', () => {
     expect(synthesize).not.toHaveBeenCalled();
   });
 
-  it('checks the list before the month tally, which costs a second read', async () => {
+  it('releases the lease and the reservation when it refuses an open', async () => {
     const table = install({ allow: null });
 
     await turn();
 
-    expect(table.getSpend).not.toHaveBeenCalled();
+    expect(table.leases.size).toBe(0);
+    expect(table.counters.active).toBe(0);
+    expect(table.counters.committedMicroUsd).toBe(0);
   });
 
   it('lets an already-open counted session continue without re-checking', async () => {

@@ -11,9 +11,16 @@ import { newsToolSchema, fetchNews } from './tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
 import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
 import { startSpan, endSpan } from './handlers/observability.js';
-import { readModelUsage, computeTurnUsage } from './spend/usage.js';
+import { randomUUID } from 'node:crypto';
+import { readModelUsage, computeTurnUsage, MissingUsageError } from './spend/usage.js';
 import { checkBreaker, recordTurnSpend, BreakerReadError } from './spend/breaker.js';
-import { ControlTable } from './session/controlTable.js';
+import { estimateReservationMicroUsd } from './spend/reservation.js';
+import {
+  ControlTable,
+  type CountedSession,
+  type CountedSessionWrite,
+  type Lease,
+} from './session/controlTable.js';
 import { readVerifiedClaims, InvalidTokenError } from './identity/jwtClaims.js';
 import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js';
 import { SseStream, type SessionLifecycleState, type SseErrorCode } from './transport/sse.js';
@@ -32,12 +39,7 @@ import {
   invokeLimitsFor,
   registerTurnLimits,
 } from './limits/turnLimits.js';
-import {
-  createSession,
-  checkSessionCaps,
-  endSession,
-  type Session,
-} from './handlers/sessionManager.js';
+import { evaluateSession, openSession, recordTurn } from './handlers/sessionManager.js';
 
 const PORT = 8080;
 
@@ -59,13 +61,6 @@ export function getRuntimeConfig(): RuntimeConfig {
 
 /** Initialization must fail loudly rather than retry past this deadline. */
 const INIT_DEADLINE_MS = 120_000;
-
-// In-memory session store, keyed by the verified `sub`: a friend has at most
-// one active counted session (P-05). It lives for the lifetime of this
-// container instance, which is acceptable while sessions are short-lived
-// (≤30 min per FR-010). T090 moves it to the control table, where it survives
-// an instance and holds across the several instances serving one friend.
-const sessions = new Map<string, Session>();
 
 /**
  * Which `sub` owns each runtime session ID. The browser mints that ID itself,
@@ -98,12 +93,18 @@ function pollyClient(config: RuntimeConfig): PollyClient {
 
 /**
  * The part of the control table the invocation path uses: the halt the hard
- * stop writes, and the month's spend tally the breaker reads and adds to.
+ * stop writes, the month's spend tally the breaker reads, the admission lease
+ * and counted session that make one friend's turns and the month's spend
+ * agree across runtime instances, and `addSpend` for memory actions.
  */
 export interface InvocationControlTable {
   getHalt: ControlTable['getHalt'];
   getSpend: ControlTable['getSpend'];
   addSpend: ControlTable['addSpend'];
+  admitRequest: ControlTable['admitRequest'];
+  settleRequest: ControlTable['settleRequest'];
+  getSession: ControlTable['getSession'];
+  putSession: ControlTable['putSession'];
   getFriend: ControlTable['getFriend'];
   getAllow: ControlTable['getAllow'];
   consumeRate: ControlTable['consumeRate'];
@@ -290,6 +291,13 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
   let countedSessionId = '';
   let cancelled = false;
 
+  // The admission lease, and what settlement will charge for it. Anything not
+  // known to be cheap is charged at the full reservation: a turn we cannot
+  // price is never refunded (spend-control.md § Settlement).
+  let lease: Lease | undefined;
+  let settleMicroUsd = 0;
+  let turnStartedAt = new Date();
+
   try {
     // Identity first: it is free to check, and an unauthenticated caller
     // should not get us to buffer a body at all. The inbound JWT authorizer
@@ -379,46 +387,16 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       return;
     }
 
-    // Get-or-create the counted session. A friend has at most one, keyed to
-    // the verified subject, so no client-supplied value can reach another
-    // friend's turn and token allowance (P-05, FR-011).
+    // The counted session is the server's to choose, keyed to the verified
+    // subject, so no client-supplied value can reach another friend's turn
+    // and token allowance (P-05, FR-011). It is read under the admission
+    // lease below.
     const runtimeSessionId = runtimeSessionIdFrom(req);
     const owner = runtimeSessionOwners.get(runtimeSessionId);
     if (owner !== undefined && owner !== sub) {
       outcome = sse.fail('session_mismatch');
       return;
     }
-
-    const existing = sessions.get(sub);
-    const session0 =
-      existing ?? createSession({ actorId: sub, greetingId: parsed.greetingId ?? 'default' });
-    let session = session0;
-    const opened = existing === undefined;
-
-    if (opened) {
-      // FR-042: the second gate. Cognito's triggers refuse a stranger at
-      // sign-in and at every refresh, but an access token stays valid for an
-      // hour after the builder removes someone, so a *new* conversation is
-      // checked against the list here. A conversation already underway is not
-      // re-checked; spec 001's 30-minute cap ends it
-      // (contracts/auth-and-allowlist.md § Revocation timeline).
-      const refusal = await admitToNewSession(table, sub);
-      if (refusal) {
-        outcome = sse.fail(refusal);
-        return;
-      }
-      sessions.set(sub, session);
-
-      // The pruner reads this stamp to decide whose memory has gone cold
-      // (FR-056). Losing one write only delays that, so it must not cost a
-      // friend their conversation — but it is never swallowed silently.
-      try {
-        await table.recordFriendSeen(sub, new Date());
-      } catch (err) {
-        console.error('Could not stamp lastSeenAt:', err);
-      }
-    }
-    countedSessionId = session.sessionId;
 
     // FR-012: the windows bound the friend, where the caps below bound one
     // conversation. A friend who ends a session gets fresh caps; they do not
@@ -438,21 +416,10 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       return;
     }
 
-    // Constitution P2 / FR-010: enforce the per-session hard caps before
-    // invoking the model. Without this gate one friend could blow past the
-    // token, turn and duration limits.
-    const capCheck = checkSessionCaps(session);
-    if (capCheck.exceeded) {
-      sessions.set(sub, endSession(session, 'cap_reached'));
-      outcome = sse.fail('session_cap_exceeded');
-      return;
-    }
-
-    // The month's tally is read last among the refusals, because it is the
-    // only one that costs a network call (contracts/spend-control.md
-    // § Breaker). It fails closed: a turn we cannot price is a turn we do not
-    // run.
-    const turnStartedAt = new Date();
+    // The month's tally is read next, because it decides voice as well as
+    // refusal (contracts/spend-control.md § Breaker). It fails closed: a turn
+    // we cannot price is a turn we do not run.
+    turnStartedAt = new Date();
     let breaker;
     try {
       breaker = await checkBreaker({
@@ -474,6 +441,102 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       return;
     }
 
+    // Admission commits the turn's conservative maximum to the month and
+    // takes the friend's lease in one transaction, before any model call
+    // (T167). A concurrent turn from the same friend, a full house, and a
+    // reservation that would pass the trip threshold are all refused here, so
+    // concurrency cannot spend past a ceiling that was only checked before.
+    // The lease is settled to the measured spend in the outer `finally`.
+    try {
+      const admission = await table.admitRequest({
+        sub,
+        requestId: randomUUID(),
+        reserveMicroUsd: estimateReservationMicroUsd({
+          limits,
+          maxOutputTokensPerCall: config.maxOutputTokens,
+          rates: config.prices,
+        }),
+        spendCeilingMicroUsd: config.breakerTripMicroUsd,
+        maxActiveRequests: config.maxActiveRequests,
+        now: turnStartedAt,
+      });
+      if (!admission.admitted) {
+        outcome = sse.fail(admission.reason === 'spend_limit' ? 'breaker_tripped' : 'busy');
+        return;
+      }
+      lease = admission.lease;
+    } catch (err) {
+      console.error('Could not admit the request:', err);
+      outcome = sse.fail('internal');
+      return;
+    }
+
+    // Constitution P2 / FR-010: the counted session's caps are enforced before
+    // the model runs. The session is read under the lease, so two instances
+    // cannot both extend it.
+    const caps = {
+      maxTurns: config.sessionMaxTurns,
+      maxTokens: config.sessionMaxTokens,
+      maxMinutes: config.sessionMaxMinutes,
+    };
+    let stored: CountedSession | undefined;
+    try {
+      stored = await table.getSession(sub);
+    } catch (err) {
+      console.error('Could not read the counted session:', err);
+      outcome = sse.fail('internal');
+      return;
+    }
+    const evaluation = evaluateSession(stored, caps, turnStartedAt);
+
+    if (evaluation.kind === 'exceeded') {
+      try {
+        await table.putSession(sub, withState(evaluation.session, 'SignedOff'), evaluation.session);
+      } catch (err) {
+        console.error('Could not sign off the capped session:', err);
+        emitCountMetric('SessionWriteFailures');
+      }
+      outcome = sse.fail('session_cap_exceeded');
+      return;
+    }
+
+    const opened = evaluation.kind === 'open';
+    let session: CountedSessionWrite;
+    if (evaluation.kind === 'continue') {
+      session = evaluation.session;
+    } else {
+      // FR-042: the second gate. Cognito's triggers refuse a stranger at
+      // sign-in and at every refresh, but an access token stays valid for an
+      // hour after the builder removes someone, so a *new* conversation is
+      // checked against the list here. A conversation already underway is not
+      // re-checked; the session's time cap ends it
+      // (contracts/auth-and-allowlist.md § Revocation timeline).
+      const refusal = await admitToNewSession(table, sub);
+      if (refusal) {
+        outcome = sse.fail(refusal);
+        return;
+      }
+
+      session = openSession(turnStartedAt);
+      try {
+        await table.putSession(sub, session, stored);
+      } catch (err) {
+        console.error('Could not open the counted session:', err);
+        outcome = sse.fail('internal');
+        return;
+      }
+
+      // The pruner reads this stamp to decide whose memory has gone cold
+      // (FR-056). Losing one write only delays that, so it must not cost a
+      // friend their conversation — but it is never swallowed silently.
+      try {
+        await table.recordFriendSeen(sub, new Date());
+      } catch (err) {
+        console.error('Could not stamp lastSeenAt:', err);
+      }
+    }
+    countedSessionId = session.sessionId;
+
     // The browser decides whether it wants audio; synthesizing for a muted
     // friend is spend with no listener. A degraded breaker is the second
     // reason to answer "off": the reply still arrives, as text.
@@ -488,9 +551,11 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
         endSpan('memory.retrieve', { count: memories.length, failed: false });
       } catch (error) {
         emitMemoryFailureWarning('retrieve', error);
-        emitMemoryFailureMetric('MemoryRetrieveFailures');
+        emitCountMetric('MemoryRetrieveFailures');
         endSpan('memory.retrieve', { count: 0, failed: true });
       }
+      // Retrieval was attempted, so it is billed even if nothing else runs.
+      settleMicroUsd = memoryRetrievals * config.prices.memoryRetrievalMicroUsd;
     }
 
     sse.send({
@@ -535,7 +600,13 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
     let modelUsage: ReturnType<typeof readModelUsage> | undefined;
 
     try {
-      const remainingGeneratedTokens = Math.max(0, config.sessionMaxTokens - session.tokenCount);
+      const remainingGeneratedTokens = Math.max(
+        0,
+        config.sessionMaxTokens - session.conversationalTokens,
+      );
+      // From here the model may bill us, and until it reports usage the only
+      // safe price for the request is its full reservation.
+      settleMicroUsd = lease.reservedMicroUsd;
       const stream = agent.stream(message, {
         cancelSignal: cancellation.signal,
         limits: invokeLimitsFor(limits, { remainingGeneratedTokens }),
@@ -564,13 +635,20 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       // whether or not the turn produced a usable reply.
       const usage = readModelUsage(result);
       modelUsage = usage;
-      session = {
-        ...session,
-        turnCount: session.turnCount + 1,
-        tokenCount: session.tokenCount + usage.outputTokens + estimateMessageTokens(message),
-        state: 'ACTIVE',
-      };
-      sessions.set(sub, session);
+      const counted = recordTurn(
+        session,
+        usage.outputTokens + estimateMessageTokens(message),
+        caps,
+      );
+      try {
+        await table.putSession(sub, counted, session);
+      } catch (err) {
+        // The reply is already generated and billed, so the turn still
+        // reaches the friend; the lost count is loud so it can be repaired.
+        console.error('Could not persist the counted session:', err);
+        emitCountMetric('SessionWriteFailures');
+      }
+      session = counted;
 
       const stopReason = (result as { stopReason?: string } | undefined)?.stopReason ?? '';
       if (LIMIT_STOP_REASONS[stopReason]) {
@@ -609,16 +687,21 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
       }
 
       outcome = 'done';
-      sse.send({ type: 'done', turnsUsed: session.turnCount, state: lifecycleStateOf(session) });
+      sse.send({ type: 'done', turnsUsed: session.turns, state: lifecycleStateOf(session) });
       turnDelivered = true;
     } catch (err) {
       cancelled = cancellation.signal.aborted;
+      if (err instanceof MissingUsageError) {
+        // A model reply we cannot meter stays charged at its reservation; the
+        // metric is how the builder learns the usage contract has changed.
+        emitCountMetric('UnmeteredRequests');
+      }
       if (err instanceof PollySynthesisError) {
         // Polly already billed for part of the reply; the text the friend can
         // read is worth more than a refusal, so the turn still completes.
         pollyCharacters = err.pollyCharacters;
         outcome = 'done';
-        sse.send({ type: 'done', turnsUsed: session.turnCount, state: lifecycleStateOf(session) });
+        sse.send({ type: 'done', turnsUsed: session.turns, state: lifecycleStateOf(session) });
         turnDelivered = true;
       } else if (deadlineExceeded) {
         console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
@@ -647,41 +730,81 @@ async function handleInvocations(req: IncomingMessage, res: ServerResponse): Pro
           endSpan('memory.create_event', { failed: false });
         } catch (error) {
           emitMemoryFailureWarning('create_event', error);
-          emitMemoryFailureMetric('MemoryEventFailures');
+          emitCountMetric('MemoryEventFailures');
           endSpan('memory.create_event', { failed: true });
         }
       }
 
-      // The breaker's other half: every turn that reached the model is added
-      // to the month, whether it finished, failed or was abandoned. A failed
-      // write is loud but does not fail the turn the friend already received.
+      // Every turn that reached the model is charged to the month, whether it
+      // finished, failed or was abandoned: usage prices it exactly, and
+      // without usage the reservation stands. The charge is applied when the
+      // lease settles, below.
       if (modelUsage) {
-        const turnUsage = computeTurnUsage(
-          {
-            model: modelUsage,
-            pollyCharacters,
-            memoryEvents,
-            memoryRetrievals,
-          },
-          config.prices,
-        );
-        await recordTurnSpend({ table, now: turnStartedAt }, turnUsage.estimatedMicroUsd);
-      } else if (memoryEvents > 0 || memoryRetrievals > 0) {
-        const memorySpend =
-          memoryEvents * config.prices.memoryEventMicroUsd +
-          memoryRetrievals * config.prices.memoryRetrievalMicroUsd;
-        await recordTurnSpend({ table, now: turnStartedAt }, memorySpend);
+        settleMicroUsd =
+          meteredMicroUsd(
+            { model: modelUsage, pollyCharacters, memoryEvents, memoryRetrievals },
+            config.prices,
+          ) ?? settleMicroUsd;
       }
       endSpan('reply.complete', {
-        inputTokens: String(session.tokenCount),
+        inputTokens: String(session.conversationalTokens),
         pollyCharacters: String(pollyCharacters),
       });
       if (!firstTokenSeen) endSpan('first_token');
     }
   } finally {
+    // Settle before the stream closes, so the slot and the correction are not
+    // left to a runtime that may freeze once the response ends. A settlement
+    // failure never fails or replays the turn: the work is already done and
+    // paid for, and replaying it would spend again.
+    if (lease) await settleLease(controlTable(config), lease, settleMicroUsd, turnStartedAt);
     endSpan('invocation', { countedSessionId, outcome, cancelled: String(cancelled) });
     sse.end();
   }
+}
+
+/** The turn's measured cost, or `undefined` when usage is missing so the caller keeps the reservation. */
+function meteredMicroUsd(
+  usage: Parameters<typeof computeTurnUsage>[0],
+  prices: Parameters<typeof computeTurnUsage>[1],
+): number | undefined {
+  try {
+    return computeTurnUsage(usage, prices).estimatedMicroUsd;
+  } catch (err) {
+    if (!(err instanceof MissingUsageError)) throw err;
+    console.error(err.message);
+    emitCountMetric('UnmeteredRequests');
+    return undefined;
+  }
+}
+
+async function settleLease(
+  table: InvocationControlTable,
+  lease: Lease,
+  actualMicroUsd: number,
+  now: Date,
+): Promise<void> {
+  try {
+    await table.settleRequest(lease, actualMicroUsd, now);
+  } catch (err) {
+    console.error(
+      `Could not settle request ${lease.requestId} for ${lease.sub} at ${actualMicroUsd} microUSD ` +
+        `(reserved ${lease.reservedMicroUsd}); the lease and reservation stand until reconciled:`,
+      err,
+    );
+    emitCountMetric('SettlementFailures');
+  }
+}
+
+/** The stored item minus its `ttl`, in the shape a conditional write expects. */
+function withState(session: CountedSessionWrite, state: CountedSessionWrite['state']) {
+  return {
+    sessionId: session.sessionId,
+    state,
+    openedAt: session.openedAt,
+    turns: session.turns,
+    conversationalTokens: session.conversationalTokens,
+  };
 }
 
 const KNOWN_ACTIONS = new Set(['memory.list', 'memory.export', 'memory.delete', 'memory.forget']);
@@ -759,9 +882,16 @@ async function handleAction(
     }
 
     count = (result.recordsDeleted ?? 0) + (result.eventsDeleted ?? 0);
-    const session = sessions.get(sub);
-    if (session && session.state !== 'ENDED') {
-      sessions.set(sub, endSession(session, 'manual'));
+    try {
+      const stored = await table.getSession(sub);
+      if (stored?.state === 'Active') {
+        await table.putSession(sub, withState(stored, 'SignedOff'), stored);
+      }
+    } catch (error) {
+      // The memory is already gone; a session that could not be closed simply
+      // continues, so this is reported rather than failed.
+      console.error('Could not sign off the session after forget-me:', error);
+      emitCountMetric('SessionWriteFailures');
     }
     for (const [runtimeSessionId, owner] of runtimeSessionOwners) {
       if (owner !== sub) continue;
@@ -781,7 +911,7 @@ async function handleAction(
     return 'done';
   } catch (error) {
     console.error('AgentCore Memory action failed:', error);
-    emitMemoryFailureMetric('MemoryActionFailures');
+    emitCountMetric('MemoryActionFailures');
     return sse.fail('internal');
   } finally {
     if (memoryCallAttempted) {
@@ -793,13 +923,12 @@ async function handleAction(
 
 /**
  * The two states the browser is told about. A session mid-conversation is
- * `ACTIVE`; a session the server has ended is reported as Max's in-character
- * sign-off, which is what tells the browser the next message opens a fresh
- * counted session. `sessionManager`'s wider state machine is spec 001's and
- * is reworked by T090.
+ * `ACTIVE`; one that reached its turn or token cap is Max's in-character
+ * sign-off, which tells the browser the next message opens a fresh counted
+ * session.
  */
-function lifecycleStateOf(session: Session): SessionLifecycleState {
-  return session.state === 'ENDED' ? 'SIGNED_OFF' : 'ACTIVE';
+function lifecycleStateOf(session: CountedSessionWrite): SessionLifecycleState {
+  return session.state === 'SignedOff' ? 'SIGNED_OFF' : 'ACTIVE';
 }
 
 /** Pulls the text out of a model stream event, or `undefined` for anything else. */
@@ -833,7 +962,7 @@ function isInvocationBody(value: unknown): value is InvocationBody {
   );
 }
 
-function emitMemoryFailureMetric(name: string): void {
+function emitCountMetric(name: string): void {
   const timestamp = Date.now();
   console.log(
     JSON.stringify({
@@ -890,13 +1019,11 @@ function requestHandler(req: IncomingMessage, res: ServerResponse): void {
 // Exposed for tests so they can assert/reset cap-enforcement state without
 // having to issue HTTP requests against a live server.
 export const __test = {
-  sessions,
   requestHandler,
   handleInvocations,
   createMaxHeightAgent,
   /** Clears every piece of per-instance state a test could carry over. */
   reset() {
-    sessions.clear();
     runtimeSessionOwners.clear();
     registry = undefined;
     polly = undefined;

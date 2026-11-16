@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { fakeControlTable } from './fixtures/controlTable.js';
+import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, bearerHeaders, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
@@ -64,26 +64,29 @@ async function turn(body: unknown, headers: Record<string, string>) {
   return double;
 }
 
+let table: FakeControlTable;
+
 describe('handleInvocations — identity from the verified token', () => {
   beforeEach(() => {
     __test.reset();
     vi.clearAllMocks();
     __test.setRuntimeConfig(testRuntimeConfig());
-    __test.setControlTable(fakeControlTable());
+    table = fakeControlTable();
+    __test.setControlTable(table);
     streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });
 
   it("keys the counted session to the token's sub", async () => {
     await turn({ message: 'hi' }, headersFor('friend-1'));
 
-    expect(__test.sessions.get('friend-1')?.actorId).toBe('friend-1');
+    expect(table.sessions.has('friend-1')).toBe(true);
   });
 
   it('ignores an actorId supplied in the body', async () => {
     await turn({ message: 'hi', actorId: 'someone-else' }, headersFor('me'));
 
-    expect(__test.sessions.get('me')?.actorId).toBe('me');
-    expect(__test.sessions.has('someone-else')).toBe(false);
+    expect(table.sessions.has('me')).toBe(true);
+    expect(table.sessions.has('someone-else')).toBe(false);
   });
 
   it('refuses a request with no bearer token and never invokes the model', async () => {
@@ -115,10 +118,10 @@ describe('handleInvocations — identity from the verified token', () => {
     await turn({ message: 'hi' }, headersFor('friend-1'));
     await turn({ message: 'hi' }, headersFor('friend-2', 'runtime-session-1111111111111111111'));
 
-    expect(__test.sessions.get('friend-1')?.turnCount).toBe(1);
-    expect(__test.sessions.get('friend-2')?.turnCount).toBe(1);
-    expect(__test.sessions.get('friend-1')?.sessionId).not.toBe(
-      __test.sessions.get('friend-2')?.sessionId,
+    expect(table.sessions.get('friend-1')?.turns).toBe(1);
+    expect(table.sessions.get('friend-2')?.turns).toBe(1);
+    expect(table.sessions.get('friend-1')?.sessionId).not.toBe(
+      table.sessions.get('friend-2')?.sessionId,
     );
   });
 
@@ -133,21 +136,21 @@ describe('handleInvocations — identity from the verified token', () => {
       expect.objectContaining({ type: 'error', code: 'session_mismatch', retryable: false }),
     ]);
     expect(streamMock).toHaveBeenCalledTimes(1);
-    expect(__test.sessions.has('intruder')).toBe(false);
-    expect(__test.sessions.get('friend-1')?.turnCount).toBe(1);
+    expect(table.sessions.has('intruder')).toBe(false);
+    expect(table.sessions.get('friend-1')?.turns).toBe(1);
   });
 
   it('lets the same subject continue its own session', async () => {
     await turn({ message: 'hi' }, headersFor('friend-1'));
     await turn({ message: 'hi again' }, headersFor('friend-1'));
 
-    expect(__test.sessions.get('friend-1')?.turnCount).toBe(2);
+    expect(table.sessions.get('friend-1')?.turns).toBe(2);
     expect(streamMock).toHaveBeenCalledTimes(2);
   });
 
   it('continues the same counted session under a new runtime session ID (P-05)', async () => {
     await turn({ message: 'hi' }, headersFor('friend-1'));
-    const opened = __test.sessions.get('friend-1')?.sessionId;
+    const opened = table.sessions.get('friend-1')?.sessionId;
 
     // A new browser tab mints a new runtime session ID. Strict continuity
     // means that must not hand the friend a fresh cap.
@@ -157,6 +160,6 @@ describe('handleInvocations — identity from the verified token', () => {
     );
 
     expect(events()[0]).toMatchObject({ type: 'session', countedSessionId: opened, opened: false });
-    expect(__test.sessions.get('friend-1')?.turnCount).toBe(2);
+    expect(table.sessions.get('friend-1')?.turns).toBe(2);
   });
 });

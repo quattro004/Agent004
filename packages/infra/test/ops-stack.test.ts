@@ -9,7 +9,7 @@ import { OpsStack } from '../lib/ops-stack.js';
 /**
  * The operations stack (T068; contracts/spend-control.md § Stack split and
  * § Operations alarms). It deploys after Data and Agent and owns the hard-stop
- * Lambda, the operations alarm topic, and the four alarms.
+ * Lambda, the operations alarm topic, and the seven alarms.
  */
 
 const env = { account: '111122223333', region: 'us-west-2' };
@@ -132,8 +132,8 @@ describe('OpsStack', () => {
     });
   });
 
-  describe('the four operations alarms', () => {
-    test('there are exactly four, and all of them notify the operations topic', () => {
+  describe('the operations alarms', () => {
+    test('there are exactly seven, and all of them notify the operations topic', () => {
       const { template } = synth();
 
       const alarms = Object.values(
@@ -142,7 +142,7 @@ describe('OpsStack', () => {
           { Properties: Record<string, unknown> }
         >,
       );
-      expect(alarms).toHaveLength(4);
+      expect(alarms).toHaveLength(7);
 
       for (const alarm of alarms) {
         expect(alarm.Properties.AlarmActions).toEqual([{ Ref: expect.any(String) }]);
@@ -183,6 +183,18 @@ describe('OpsStack', () => {
         Namespace: 'MaxHeight',
       });
     });
+
+    test.each(['SettlementFailures', 'UnmeteredRequests', 'SessionWriteFailures'])(
+      '%s raises an alarm on the runtime custom metric',
+      (metricName) => {
+        const { template } = synth();
+
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+          MetricName: metricName,
+          Namespace: 'MaxHeight',
+        });
+      },
+    );
 
     test('runtime server errors raise an alarm', () => {
       const { template } = synth();

@@ -4,15 +4,15 @@
  * These bypass the HTTP layer and call `handleInvocations` directly with
  * doubles, so the per-session token, turn and duration gates (constitution
  * P2 / FR-010) can be exercised deterministically. Caps are keyed to the
- * verified `sub`, never to anything the browser sends.
+ * verified `sub` and held in the control table, never taken from the browser.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { fakeControlTable } from './fixtures/controlTable.js';
+import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, bearerHeaders, TEST_SUB, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf, textDelta } from './fixtures/strands.js';
-import type { Session } from '../src/handlers/sessionManager.js';
+import type { CountedSession } from '../src/session/controlTable.js';
 
 const streamMock = vi.hoisted(() => vi.fn());
 
@@ -53,6 +53,8 @@ const { __test } = await import('../src/index.js');
 /** The reply usage every test shares: 7 generated tokens. */
 const REPLY_OUTPUT_TOKENS = 7;
 
+let table: FakeControlTable;
+
 async function turn(message: string, runtimeSessionId = TEST_RUNTIME_SESSION_ID) {
   const double = makeRes();
   await __test.handleInvocations(
@@ -70,27 +72,24 @@ async function turn(message: string, runtimeSessionId = TEST_RUNTIME_SESSION_ID)
 }
 
 /** Seeds a counted session for `TEST_SUB` that is already at some usage. */
-function seedSession(overrides: Partial<Session>): void {
-  __test.sessions.set(TEST_SUB, {
+function seedSession(overrides: Partial<CountedSession>): void {
+  table.sessions.set(TEST_SUB, {
     sessionId: 'sess-seeded',
-    actorId: TEST_SUB,
-    greetingId: 'g',
-    state: 'ACTIVE',
-    turnCount: 0,
-    tokenCount: 0,
-    idleNudgeDelivered: false,
-    reEngagementCount: 0,
-    startedAt: new Date(),
-    endedAt: null,
+    state: 'Active',
+    openedAt: new Date().toISOString(),
+    turns: 0,
+    conversationalTokens: 0,
+    ttl: 0,
     ...overrides,
-  } as Session);
+  });
 }
 
 describe('handleInvocations — per-session cap enforcement', () => {
   beforeEach(() => {
     __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
-    __test.setControlTable(fakeControlTable());
+    table = fakeControlTable();
+    __test.setControlTable(table);
     vi.clearAllMocks();
     streamMock.mockImplementation(
       streamOf(['Hi there from Max!'], {
@@ -102,24 +101,16 @@ describe('handleInvocations — per-session cap enforcement', () => {
   it('opens a counted session on the first turn when none exists', async () => {
     const { events } = await turn('hello');
 
-    const session = __test.sessions.get(TEST_SUB);
+    const session = table.sessions.get(TEST_SUB);
     expect(session).toBeDefined();
-    expect(session!.turnCount).toBe(1);
-    expect(session!.tokenCount).toBeGreaterThan(0);
+    expect(session!.turns).toBe(1);
+    expect(session!.conversationalTokens).toBeGreaterThan(0);
     expect(events()[0]).toMatchObject({ type: 'session', opened: true });
   });
 
-  it('counts conversational tokens as the reply outputTokens plus the message at chars/4', async () => {
-    // P-09 (spec 003 data-model.md § Counted Session): outputTokens comes from
-    // result.invocationContext.usage; the friend's message is estimated.
-    await turn('hello there');
-
-    expect(__test.sessions.get(TEST_SUB)!.tokenCount).toBe(
-      REPLY_OUTPUT_TOKENS + Math.ceil('hello there'.length / 4),
-    );
-  });
-
   it('fails the turn loudly, without counting it, when the result carries no usage', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     streamMock.mockImplementation(async function* () {
       yield textDelta('Hi');
       return { lastMessage: { content: [{ type: 'textBlock', text: 'Hi' }] } };
@@ -130,18 +121,18 @@ describe('handleInvocations — per-session cap enforcement', () => {
     // The friend is told the stream failed, never why: the detail names an
     // internal field and belongs in the log, not in the browser.
     expect(events().at(-1)).toMatchObject({ type: 'error', code: 'internal' });
-    expect(__test.sessions.get(TEST_SUB)!.turnCount).toBe(0);
+    expect(table.sessions.get(TEST_SUB)!.turns).toBe(0);
   });
 
   it('accumulates token and turn counts across turns for the same subject', async () => {
     await turn('first');
     await turn('second');
 
-    expect(__test.sessions.get(TEST_SUB)!.turnCount).toBe(2);
+    expect(table.sessions.get(TEST_SUB)!.turns).toBe(2);
   });
 
   it('refuses with session_cap_exceeded when the token cap is exceeded', async () => {
-    seedSession({ turnCount: 5, tokenCount: 25_000 });
+    seedSession({ turns: 5, conversationalTokens: 25_000 });
 
     const { head, events } = await turn('still talking?');
 
@@ -151,18 +142,16 @@ describe('handleInvocations — per-session cap enforcement', () => {
     expect(events()).toEqual([
       expect.objectContaining({ type: 'error', code: 'session_cap_exceeded', retryable: false }),
     ]);
-    expect(events()[0]).not.toHaveProperty('tokenCount');
+    expect(events()[0]).not.toHaveProperty('conversationalTokens');
     expect(streamMock).not.toHaveBeenCalled();
 
-    // The over-budget session is marked ENDED, so later attempts keep being
-    // refused and never re-enter the model path.
-    const ended = __test.sessions.get(TEST_SUB)!;
-    expect(ended.state).toBe('ENDED');
-    expect(ended.endedAt).not.toBeNull();
+    // The over-budget session is signed off in the table, so every instance
+    // sees it and the next message opens a fresh one.
+    expect(table.sessions.get(TEST_SUB)!.state).toBe('SignedOff');
   });
 
   it('refuses when the turn cap is exceeded', async () => {
-    seedSession({ turnCount: 60, tokenCount: 100 });
+    seedSession({ turns: 60, conversationalTokens: 100 });
 
     const { events } = await turn('hi');
 
@@ -182,8 +171,8 @@ describe('handleInvocations — per-session cap enforcement', () => {
 
     expect(events().at(-1)).toMatchObject({ type: 'error', code: 'session_cap_exceeded' });
     // Billed work is counted whether or not the turn produced a usable reply.
-    expect(__test.sessions.get(TEST_SUB)!.turnCount).toBe(1);
-    expect(__test.sessions.get(TEST_SUB)!.tokenCount).toBeGreaterThan(0);
+    expect(table.sessions.get(TEST_SUB)!.turns).toBe(1);
+    expect(table.sessions.get(TEST_SUB)!.conversationalTokens).toBeGreaterThan(0);
   });
 
   it('never sends spend figures to the browser', async () => {

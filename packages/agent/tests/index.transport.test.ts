@@ -56,7 +56,6 @@ async function invoke(body: unknown, headers?: Record<string, string>) {
 
 describe('POST /invocations — SSE transport', () => {
   beforeEach(() => {
-    __test.sessions.clear();
     __test.setRuntimeConfig(testRuntimeConfig());
     __test.setControlTable(fakeControlTable());
     streamMock.mockReset();

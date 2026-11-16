@@ -133,15 +133,6 @@ describe('handleInvocations — rate limiting', () => {
     expect(table.getSpend).not.toHaveBeenCalled();
   });
 
-  it('does not consume a message from someone no longer on the list', async () => {
-    const table = install({ allow: null });
-
-    const { events } = await turn();
-
-    expect(errorCodeOf(events)).toBe('not_allowlisted');
-    expect(table.consumeRate).not.toHaveBeenCalled();
-  });
-
   it('fails closed when the windows cannot be read', async () => {
     const table = install();
     table.consumeRate.mockRejectedValue(new Error('ProvisionedThroughputExceededException'));

@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { fakeControlTable } from './fixtures/controlTable.js';
+import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, bearerHeaders, TEST_RUNTIME_SESSION_ID } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
@@ -51,6 +51,8 @@ vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
 
 const { __test } = await import('../src/index.js');
 
+let table: FakeControlTable;
+
 /** Drive one turn for a fresh friend and return the counted session id. */
 async function mintSessionId(sub: string, runtimeSessionId: string): Promise<string> {
   const double = makeRes();
@@ -75,7 +77,8 @@ describe('handleInvocations — minted session identifiers', () => {
   beforeEach(() => {
     __test.reset();
     __test.setRuntimeConfig(testRuntimeConfig());
-    __test.setControlTable(fakeControlTable());
+    table = fakeControlTable();
+    __test.setControlTable(table);
     vi.clearAllMocks();
     streamMock.mockImplementation(streamOf(['Hi there from Max!']));
   });
@@ -116,7 +119,7 @@ describe('handleInvocations — minted session identifiers', () => {
     );
     await double.end;
 
-    expect(__test.sessions.has('sess-supplied')).toBe(false);
+    expect(table.sessions.has('sess-supplied')).toBe(false);
     expect(double.event('session')).toMatchObject({
       countedSessionId: expect.not.stringContaining('sess-supplied'),
     });

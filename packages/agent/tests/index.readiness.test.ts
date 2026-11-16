@@ -122,6 +122,7 @@ const RUNTIME_ENV: Record<string, string> = {
   TURN_MAX_GENERATED_TOKENS: '1000',
   TURN_MAX_BILLED_TOKENS: '64000',
   TURN_DEADLINE_MS: '60000',
+  GLOBAL_MAX_ACTIVE_REQUESTS: '2',
   PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD: '1000000',
   PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD: '5000000',
   PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD: '0',
@@ -267,8 +268,8 @@ describe('initialization warm-up', () => {
 });
 
 describe('runtime configuration at startup (spec 003 T015)', () => {
-  it('lists all 37 runtime variables from contracts/runtime-config.md', () => {
-    expect(Object.keys(RUNTIME_ENV)).toHaveLength(37);
+  it('lists all 38 runtime variables from contracts/runtime-config.md', () => {
+    expect(Object.keys(RUNTIME_ENV)).toHaveLength(38);
   });
 
   it.each(Object.keys(RUNTIME_ENV))(

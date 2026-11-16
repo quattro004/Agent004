@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
-import { fakeControlTable } from './fixtures/controlTable.js';
+import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
 import { makeReq, TEST_SUB } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
@@ -57,12 +57,15 @@ async function turn(body: unknown) {
   return double;
 }
 
+let table: FakeControlTable;
+
 describe('handleInvocations — approved per-turn bounds', () => {
   beforeEach(() => {
     __test.reset();
     vi.clearAllMocks();
     __test.setRuntimeConfig(testRuntimeConfig());
-    __test.setControlTable(fakeControlTable());
+    table = fakeControlTable();
+    __test.setControlTable(table);
     streamMock.mockImplementation(
       streamOf(['Hi there from Max!'], {
         usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 },
@@ -104,17 +107,13 @@ describe('handleInvocations — approved per-turn bounds', () => {
   it('shrinks the generated-token ceiling to the capacity the session has left', async () => {
     const config = testRuntimeConfig();
     __test.setRuntimeConfig(config);
-    __test.sessions.set(TEST_SUB, {
+    table.sessions.set(TEST_SUB, {
       sessionId: 'sess-nearly-spent',
-      actorId: TEST_SUB,
-      greetingId: 'g',
-      state: 'ACTIVE',
-      turnCount: 1,
-      tokenCount: config.sessionMaxTokens - 120,
-      idleNudgeDelivered: false,
-      reEngagementCount: 0,
-      startedAt: new Date(),
-      endedAt: null,
+      state: 'Active',
+      openedAt: new Date().toISOString(),
+      turns: 1,
+      conversationalTokens: config.sessionMaxTokens - 120,
+      ttl: 0,
     });
 
     await turn({ message: 'hi' });
@@ -162,7 +161,7 @@ describe('handleInvocations — approved per-turn bounds', () => {
     await turn({ message: 'hi' });
 
     // Spending money and not counting it is the failure mode that matters.
-    expect(__test.sessions.get(TEST_SUB)!.tokenCount).toBeGreaterThanOrEqual(40);
+    expect(table.sessions.get(TEST_SUB)!.conversationalTokens).toBeGreaterThanOrEqual(40);
   });
 
   it('abandons the turn at the configured deadline', async () => {
