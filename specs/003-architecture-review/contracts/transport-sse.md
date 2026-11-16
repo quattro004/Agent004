@@ -20,8 +20,8 @@ Browser ──fetch POST──▶ CloudFront  max.recipieces.com/runtimes/*
 | --- | --- | --- |
 | Origin | `bedrock-agentcore.us-west-2.amazonaws.com`, HTTPS only | Research Q4 |
 | Allowed methods | All (POST is needed) | — |
-| Cache policy | Caching disabled | CloudFront developer guide, "Add custom headers to origin requests": with `Authorization` outside the cache key, disable caching |
-| Origin request policy | Custom, with an explicit header list: `Authorization`, `Content-Type`, `Accept`, `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`. Query string: `qualifier`. No cookies. `Host` is **not** forwarded. | Same guide: `Authorization` reaches the origin only when a policy names it |
+| Cache policy | Caching disabled (managed `CachingDisabled`) | CloudFront developer guide, "Add custom headers to origin requests": with `Authorization` outside the cache key, disable caching |
+| Origin request policy | Managed **`AllViewerExceptHostHeader`**. Forwards every viewer header except `Host`, and all query strings, so `Authorization`, `Content-Type`, `Accept`, `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` and `qualifier` all reach the origin. **A custom allow-list was tried first and is not buildable**: CloudFront rejects `Authorization` in an origin request policy's header list, and CDK fails synthesis with `CannotPassAuthorizationOrAcceptEncodingHeaders`. With caching off, this managed policy is AWS's documented way to forward `Authorization` ([knowledge-center/cloudfront-authorization-header](https://repost.aws/knowledge-center/cloudfront-authorization-header)). `Host` is still **not** forwarded, which is what matters: `max.recipieces.com` would not resolve at `bedrock-agentcore`. Tasks deviation C25 | Same guide; verified against CDK 2.275.0 at T034 |
 | Origin read timeout | 120 s, the CloudFormation maximum (default 30 s) | `CustomOriginConfig.originReadTimeout` (minimum 1, maximum 120) |
 | Viewer protocol | Redirect to HTTPS | [csp-and-hosting.md](./csp-and-hosting.md) |
 

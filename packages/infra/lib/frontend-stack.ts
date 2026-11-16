@@ -41,11 +41,39 @@ export class FrontendStack extends cdk.Stack {
       },
     });
 
+    // The browser must reach the AgentCore runtime through our own origin: a
+    // cross-origin call would need CORS on a service we do not control, and
+    // the CSP's connect-src is 'self'. CloudFront forwards the SSE POST
+    // unchanged (contracts/transport-sse.md § CloudFront behavior).
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         responseHeadersPolicy: securityHeaders,
+      },
+      additionalBehaviors: {
+        '/runtimes/*': {
+          origin: new origins.HttpOrigin(`bedrock-agentcore.${this.region}.amazonaws.com`, {
+            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+            // A turn holds the connection open for the whole stream. 120s is
+            // the CloudFormation maximum; the default 30s would cut off a
+            // long reply mid-sentence.
+            readTimeout: cdk.Duration.seconds(120),
+          }),
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          // Authorization is outside the cache key, so caching must be off:
+          // a cached reply would be served to the wrong friend.
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          // CloudFront rejects `Authorization` in a custom origin request
+          // policy's allow-list; with caching off, the managed
+          // AllViewerExceptHostHeader policy is the supported way to forward
+          // it (repost.aws/knowledge-center/cloudfront-authorization-header).
+          // It also omits Host, which matters here: forwarding
+          // max.recipieces.com to bedrock-agentcore would reach a host it does
+          // not serve. See deviation C25.
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        },
       },
       defaultRootObject: 'index.html',
       errorResponses: [
