@@ -1,12 +1,46 @@
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Construct } from 'constructs';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+/** `packages/frontend/dist`, resolved from this file rather than the cwd. */
+const DEFAULT_SITE_CONTENT = path.resolve(here, '..', '..', 'frontend', 'dist');
+
+export interface FrontendStackProps extends cdk.StackProps {
+  /** The one site domain (contracts/csp-and-hosting.md § One site domain). */
+  domainName: string;
+  /** From `certificate-stack.ts` in us-east-1, by cross-region reference. */
+  certificate: acm.ICertificate;
+  /** `<prefix>.auth.<region>.amazoncognito.com`, for the CSP's connect-src. */
+  cognitoHost: string;
+  /** The built site. Defaults to `packages/frontend/dist`. */
+  siteContentPath?: string;
+}
+
+/**
+ * The public face of Max Height: the S3 origin, the distribution that fronts
+ * both it and the AgentCore runtime, and the headers the browser is held to
+ * (contracts/csp-and-hosting.md).
+ */
 export class FrontendStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
+  constructor(scope: Construct, id: string, props: FrontendStackProps) {
+    super(scope, id, { ...props, crossRegionReferences: true });
+
+    const siteContentPath = props.siteContentPath ?? DEFAULT_SITE_CONTENT;
+    if (!fs.existsSync(siteContentPath)) {
+      throw new Error(
+        `The built site is not at ${siteContentPath}. ` +
+          `Run \`pnpm --filter @max-height/frontend build\` before deploying the frontend stack.`,
+      );
+    }
 
     const siteBucket = new s3.Bucket(this, 'SiteBucket', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -20,8 +54,7 @@ export class FrontendStack extends cdk.Stack {
       responseHeadersPolicyName: 'MaxHeightSecurityHeaders',
       securityHeadersBehavior: {
         contentSecurityPolicy: {
-          contentSecurityPolicy:
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss://*.execute-api.*.amazonaws.com https://cognito-identity.*.amazonaws.com; media-src 'self' blob:; img-src 'self' data:",
+          contentSecurityPolicy: contentSecurityPolicy(props.cognitoHost),
           override: true,
         },
         contentTypeOptions: { override: true },
@@ -41,15 +74,36 @@ export class FrontendStack extends cdk.Stack {
       },
     });
 
+    // SPA routes used to come from distribution-wide `errorResponses`, which
+    // also rewrote the runtime authorizer's 403 into a 200 HTML page — the one
+    // response the browser must see to refresh its token
+    // (contracts/csp-and-hosting.md § SPA routing without errorResponses).
+    // The runtime is pinned because the CDK default is still JS 1.0.
+    const spaRewrite = new cloudfront.Function(this, 'SpaRewrite', {
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromFile({
+        filePath: path.join(here, 'functions', 'spa-rewrite.js'),
+      }),
+      comment: 'Rewrites extensionless paths to /index.html',
+    });
+
     // The browser must reach the AgentCore runtime through our own origin: a
     // cross-origin call would need CORS on a service we do not control, and
     // the CSP's connect-src is 'self'. CloudFront forwards the SSE POST
     // unchanged (contracts/transport-sse.md § CloudFront behavior).
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
+      domainNames: [props.domainName],
+      certificate: props.certificate,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(siteBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         responseHeadersPolicy: securityHeaders,
+        functionAssociations: [
+          {
+            function: spaRewrite,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
       },
       additionalBehaviors: {
         '/runtimes/*': {
@@ -62,6 +116,7 @@ export class FrontendStack extends cdk.Stack {
           }),
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          responseHeadersPolicy: securityHeaders,
           // Authorization is outside the cache key, so caching must be off:
           // a cached reply would be served to the wrong friend.
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
@@ -76,26 +131,49 @@ export class FrontendStack extends cdk.Stack {
         },
       },
       defaultRootObject: 'index.html',
-      errorResponses: [
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-        },
-        {
-          httpStatus: 403,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
-        },
-      ],
     });
 
-    new cdk.CfnOutput(this, 'DistributionUrl', {
-      value: `https://${distribution.distributionDomainName}`,
+    new s3deploy.BucketDeployment(this, 'SiteContent', {
+      sources: [s3deploy.Source.asset(siteContentPath)],
+      destinationBucket: siteBucket,
+      distribution,
+      // The SPA's entry point keeps its name across deploys, so a stale cached
+      // index.html would keep serving the previous build's asset hashes.
+      distributionPaths: ['/*'],
+    });
+
+    new cdk.CfnOutput(this, 'SiteUrl', { value: `https://${props.domainName}` });
+
+    // The GoDaddy CNAME for `max` points at this (csp-and-hosting.md
+    // § GoDaddy records).
+    new cdk.CfnOutput(this, 'DistributionDomainName', {
+      value: distribution.distributionDomainName,
     });
 
     new cdk.CfnOutput(this, 'BucketName', {
       value: siteBucket.bucketName,
     });
   }
+}
+
+/**
+ * FR-036 and FR-050. Built here rather than written out, so the Cognito host
+ * is the exact one the user pool serves instead of a wildcard.
+ *
+ * `form-action`, `base-uri` and `frame-ancestors` are set explicitly because
+ * none of them falls back to `default-src`. Sign-in is a top-level navigation
+ * rather than a form post, so `form-action` needs no Cognito host.
+ */
+function contentSecurityPolicy(cognitoHost: string): string {
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    `connect-src 'self' https://${cognitoHost}`,
+    "media-src 'self' blob:",
+    "img-src 'self' data:",
+    "form-action 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
 }

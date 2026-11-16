@@ -188,12 +188,12 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 - [x] T047 [P] [US2] RED: create `packages/infra/test/pre-token-generation.test.ts`. It denies when `CONTROL#HALT` exists or `ALLOW#<email>` is missing, and writes `FRIEND#<sub>` (`email`, `provider`, `createdAt`) on success. It fails closed when DynamoDB errors
 - [x] T048 [P] [US2] RED: create `packages/infra/test/idp-secret.test.ts`. The custom resource reads `/max-height/google-client-secret` (SecureString) and applies it to the Google IdP. A missing parameter fails the deploy with a message naming it, and the secret never appears in the template or in logs
 - [x] T049 [P] [US2] RED: in `packages/agent/tests/index.test.ts`, a counted session opens only when `ALLOW#<email>` exists. Otherwise the reply is `not_allowlisted`, and an already-open session continues until it ends (the revocation timeline in auth-and-allowlist.md)
-- [ ] T050 [P] [US2] RED: in `packages/infra/test/frontend-stack.test.ts`, the distribution has these settings:
+- [x] T050 [P] [US2] RED: in `packages/infra/test/frontend-stack.test.ts`, the distribution has these settings:
   - no `errorResponses`; the alias `max.recipieces.com` with the Certificate-stack certificate; viewer protocol `redirect-to-https`
   - a CSP whose `connect-src` is `'self'` plus the exact Cognito host, with no `wss:` and no `cognito-identity`, and `form-action 'self'`, `base-uri 'self'` and `frame-ancestors 'none'`
   - the SPA rewrite function on the default behavior only, with runtime `cloudfront-js-2.0`
   - a `BucketDeployment` invalidating `/*`
-- [ ] T051 [P] [US2] RED: create `packages/infra/test/spa-rewrite.test.ts`. `/`, `/privacy` and `/auth/callback` are rewritten to `/index.html`; a path with a file extension is not rewritten
+- [x] T051 [P] [US2] RED: create `packages/infra/test/spa-rewrite.test.ts`. `/`, `/privacy` and `/auth/callback` are rewritten to `/index.html`; a path with a file extension is not rewritten
 - [x] T052 [P] [US2] RED: create `packages/frontend/tests/services/auth.test.ts`. It covers these:
   - PKCE verifier and challenge, and `state` generation and check
   - a code exchange at the Cognito token endpoint
@@ -211,8 +211,8 @@ Recorded per `AGENTS.md` § Trust, but verify. Add new rows (`C2`, `C3`, …) wh
 - [x] T057 [P] [US2] Implement `packages/infra/lib/handlers/idp-secret.ts` until T048 passes (SSM SecureString, per T005)
 - [x] T058 [US2] Rewrite `packages/infra/lib/cognito-stack.ts`, removing the Identity Pool and the unauth role, until T045 passes. Remove the stale `CognitoUnauthRoleDefaultPolicy` reference from `packages/infra/lib/budget-stack.ts` at the same time; T068 replaces the hard stop it fed
 - [x] T059 [US2] Add the session-open allowlist check to `packages/agent/src/index.ts` until T049 passes
-- [ ] T060 [P] [US2] Create `packages/infra/lib/functions/spa-rewrite.js` until T051 passes
-- [ ] T061 [US2] Change `packages/infra/lib/frontend-stack.ts` (custom domain, certificate, CSP, the SPA function in place of `errorResponses`, `BucketDeployment`) until T050 passes
+- [x] T060 [P] [US2] Create `packages/infra/lib/functions/spa-rewrite.js` until T051 passes
+- [x] T061 [US2] Change `packages/infra/lib/frontend-stack.ts` (custom domain, certificate, CSP, the SPA function in place of `errorResponses`, `BucketDeployment`) until T050 passes
 - [x] T062 [US2] Implement `packages/frontend/src/services/auth.ts` with no third-party auth library, until T052 passes
 - [x] T063 [US2] Create `packages/frontend/src/components/SignIn.tsx` and `packages/frontend/src/components/SignInError.tsx`, and route `/auth/callback` in `packages/frontend/src/App.tsx`, until T053 passes
 - [x] T064 [US2] Create `packages/frontend/src/components/PrivacyPage.tsx` and route `/privacy` in `packages/frontend/src/App.tsx` until T054 passes

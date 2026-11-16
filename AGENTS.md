@@ -100,7 +100,7 @@ Package-level commands:
 
 - Frontend: `cd packages/frontend && pnpm run dev` / `pnpm run test` / `pnpm run test:e2e`
 - Agent: `cd packages/agent && pnpm run dev` / `pnpm run test`
-- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email>` (every `cdk synth`, `diff` and `deploy` needs it; never commit the address)
+- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email> -c cognitoDomainPrefix=<prefix> -c googleClientId=<client id>` (every `cdk synth`, `diff` and `deploy` needs all three; never commit the owner address)
 - Repo tools: `cd packages/repo-tools && pnpm run test`
 
 ## Required engineering workflow

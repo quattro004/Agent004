@@ -27,4 +27,14 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
+  {
+    // CloudFront Functions are plain scripts the edge runtime loads and calls
+    // by convention: `handler` is the entry point, never imported, and the
+    // file must stay module-free (contracts/csp-and-hosting.md § SPA routing).
+    files: ['packages/infra/lib/functions/*.js'],
+    rules: {
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
 );

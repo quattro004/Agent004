@@ -18,7 +18,7 @@ export { SITE_DOMAIN };
  * assert app-wide properties (Region, tags, log retention) on the real app.
  */
 export function buildMaxHeightApp(app: cdk.App): void {
-  new CertificateStack(app, 'MaxHeight-Certificate', {
+  const certificateStack = new CertificateStack(app, 'MaxHeight-Certificate', {
     env: { region: 'us-east-1' },
     domainName: SITE_DOMAIN,
   });
@@ -49,7 +49,15 @@ export function buildMaxHeightApp(app: cdk.App): void {
     alertEmail: app.node.tryGetContext('budgetAlertEmail'),
   });
 
-  new FrontendStack(app, 'MaxHeight-Frontend', { env });
+  new FrontendStack(app, 'MaxHeight-Frontend', {
+    env,
+    domainName: SITE_DOMAIN,
+    certificate: certificateStack.certificate,
+    cognitoHost: cognitoStack.cognitoHost,
+    // Defaults to packages/frontend/dist; the infra tests point it at a
+    // fixture so they need no frontend build.
+    siteContentPath: app.node.tryGetContext('siteContentPath'),
+  });
 
   // research § R-deploy: the one cost-allocation tag.
   cdk.Tags.of(app).add('project', 'max-height');

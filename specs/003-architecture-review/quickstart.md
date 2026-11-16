@@ -10,8 +10,8 @@ This is a run and validation guide for the first deployment. It does not restate
   - Sign in to the console as the deploy user and open CloudShell.
   - Export the CloudShell session's credentials into the local shell ([research.md](./research.md) § R-deploy).
   - Never create access keys.
-- **CDK**: run from `packages/infra` as `pnpm exec cdk deploy <stack> -c budgetAlertEmail=<owner email>`.
-  - Every `synth`, `diff` and `deploy` needs that context value. Never commit the address (AGENTS.md).
+- **CDK**: run from `packages/infra` as `pnpm exec cdk deploy <stack> -c budgetAlertEmail=<owner email> -c cognitoDomainPrefix=<prefix> -c googleClientId=<client id>`.
+  - Every `synth`, `diff` and `deploy` needs those three context values; a missing one fails fast, naming the key and the prerequisite row (deviation C33). Never commit the owner address (AGENTS.md).
   - Add `--outputs-file "$env:TEMP\max-height-outputs.json"`. `.gitignore` does not cover an outputs file, so it stays out of the working tree.
 - **Personal data**: friends' emails, `sub` values and message text go only in the operator's log, outside the repository and the wiki. [§ Results](#results) holds dates, outcomes and evidence pointers such as a trace ID.
 - **Placeholders** are in angle brackets. `<control table>`, `<runtime role>`, `<hard-stop topic>` and `<pruner>` come from the outputs file or the stack resources.
@@ -30,8 +30,8 @@ Record each one in [§ Results](#results) before the first spend-bearing stack d
 | 5 | One-time administrator setup | In CloudShell, as an administrator, once: `cdk bootstrap` for `us-west-2` and `us-east-1`. Create the deploy user, its deploy policy and the operator policy ([§ Operator permissions](#operator-permissions)), and the SSM parameters (row 7). | research § R-deploy (the `AdministratorAccess` default was accepted by the builder on 2026-11-13) |
 | 6 | ARM64 build path | Docker Desktop is running, and `docker buildx ls` lists `linux/arm64` | research § R-deploy |
 | 7 | SSM SecureStrings in `us-west-2` | `/max-height/weather-api-key`, `/max-height/news-api-key`, the two search parameters and `/max-height/google-client-secret`. A missing one fails the deploy or the runtime's startup. | [runtime-config.md](./contracts/runtime-config.md) § Agent runtime; [auth-and-allowlist.md](./contracts/auth-and-allowlist.md) § Google client secret |
-| 8 | Cognito domain prefix chosen | `aws cognito-idp describe-user-pool-domain --domain <prefix>` returns an empty `DomainDescription`. Commit the prefix as the constant. | auth-and-allowlist § Cognito resources (Deploy-time values) |
-| 9 | Google OAuth client registered | A web application client with the redirect URI and origin for `<prefix>`, and the scopes `openid email`. Read and record the "Testing" status limits, which are unverified. Commit the client ID; the secret goes in row 7. | auth-and-allowlist § Third-party registration; FR-054 |
+| 8 | Cognito domain prefix chosen | `aws cognito-idp describe-user-pool-domain --domain <prefix>` returns an empty `DomainDescription`. Pass it as `-c cognitoDomainPrefix=<prefix>` on every CDK command (deviation C33). | auth-and-allowlist § Cognito resources (Deploy-time values) |
+| 9 | Google OAuth client registered | A web application client with the redirect URI and origin for `<prefix>`, and the scopes `openid email`. Read and record the "Testing" status limits, which are unverified. Pass the client ID as `-c googleClientId=<client id>` on every CDK command (deviation C33); the secret goes in row 7. | auth-and-allowlist § Third-party registration; FR-054 |
 | 10 | A second Google account | Acts as "another friend" in V-04, V-05 and V-07. It is allowlisted only for those scenarios. | — |
 | 11 | `pnpm run validate` passes on the commit being deployed | Every RED test in [§ RED tests](#red-tests-p10) is green | constitution P10 |
 | 12 | Cost-allocation tag active | After deploy step 1, `project` appears on the Billing "Cost allocation tags" page; activate it. Allow up to 48 hours in all. | research § R-deploy; P-06 |
