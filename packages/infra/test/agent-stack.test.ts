@@ -112,6 +112,17 @@ describe('AgentStack (AgentCore Runtime, T024)', () => {
     expect(images[0].source.dockerFile).toBe('packages/agent/Dockerfile');
   });
 
+  test('configures ADOT tracing without message content, logs or metrics export', () => {
+    const vars = runtimeProps().EnvironmentVariables as Record<string, unknown>;
+    expect(vars).toMatchObject({
+      AGENT_OBSERVABILITY_ENABLED: 'true',
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: 'false',
+      OTEL_LOGS_EXPORTER: 'none',
+      OTEL_METRICS_EXPORTER: 'none',
+      UNIFIED_TRACES_DESTINATION_ENABLED: 'false',
+    });
+  });
+
   test('sets every decided runtime-config value', () => {
     const vars = runtimeProps().EnvironmentVariables as Record<string, unknown>;
     expect(vars).toMatchObject({

@@ -62,7 +62,19 @@ reservation remain T166/T167.
 | `SSM_PARAM_WEATHER_KEY` | `/max-height/weather-api-key` | `agent-stack.ts` (existing parameter) |
 | `SSM_PARAM_NEWS_KEY` | `/max-height/news-api-key` | Same |
 
-That is 38 variables, under the limit of 50. Web search needs no key: it is AgentCore's `InvokeWebSearch`, signed with the execution role (wiki `Decision-Web-Search-Provider`; tasks.md T178).
+That is 38 variables read by the agent. Web search needs no key: it is AgentCore's `InvokeWebSearch`, signed with the execution role (wiki `Decision-Web-Search-Provider`; tasks.md T178).
+
+### Tracing (read by ADOT, not the agent)
+
+The Dockerfile launches ADOT with `--require …/register` (research.md § R-obs, T169b). These five are set in `RUNTIME_CONFIG` and asserted in `agent-stack.test.ts`, bringing the total to 43 of the 50 allowed. AgentCore Runtime also injects its own OpenTelemetry variables; that ours take effect is checked live in T174.
+
+| Variable | Value | Source |
+| --- | --- | --- |
+| `AGENT_OBSERVABILITY_ENABLED` | `true`. Turns on ADOT's AgentCore defaults: OTLP to `https://xray.<region>.amazonaws.com/v1/traces` | ADOT 0.13.0 `register.js`; AgentCore observability guide |
+| `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` | `false`. ADOT defaults it to `true`; friends' messages never reach spans | P7, FR-053; C47 |
+| `OTEL_LOGS_EXPORTER` | `none`. Logs stay on stdout in the runtime's log group | C47 |
+| `OTEL_METRICS_EXPORTER` | `none`. Our own EMF is the metrics path | C47 |
+| `UNIFIED_TRACES_DESTINATION_ENABLED` | `false`. Spans go to `aws/spans`, which `OpsStack` keeps for 14 days, not the runtime log group, which would need `logs:PutResourcePolicy` on the execution role | AgentCore observability guide, § Span destination |
 
 No `PRICE_MEMORY_EXTRACTION_*` variable is needed. Built-in strategies include extraction in the long-term storage price (R-cost, resolved 2026-11-13 under T005a).
 

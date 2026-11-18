@@ -86,6 +86,16 @@ const RUNTIME_CONFIG: Record<string, string> = {
   // credited, and at most 10 searches a counted session.
   PRICE_WEB_SEARCH_MICRO_USD: '7000',
   SESSION_MAX_WEB_SEARCHES: '10',
+  // research.md § R-obs (T169b): ADOT, launched by the Dockerfile, defaults
+  // GenAI message-content capture on and exports logs and metrics; P7/FR-053
+  // and our own EMF rule those out. Spans go to `aws/spans`, which OpsStack
+  // keeps for 14 days, rather than the runtime's own log group, which would
+  // need `logs:PutResourcePolicy` on the execution role.
+  AGENT_OBSERVABILITY_ENABLED: 'true',
+  OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: 'false',
+  OTEL_LOGS_EXPORTER: 'none',
+  OTEL_METRICS_EXPORTER: 'none',
+  UNIFIED_TRACES_DESTINATION_ENABLED: 'false',
   ...SSM_PARAMS,
 };
 

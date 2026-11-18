@@ -51,4 +51,7 @@ EXPOSE 8080
 # initialize() exits the process.
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:8080/ping || exit 1
 
-CMD ["node", "dist/index.js"]
+# ADOT registers the tracer provider and OTLP exporter our API spans reach
+# (research.md § R-obs, T169b). Its require()-hook auto-instrumentation does not
+# patch this ESM build; the runtime's tracing settings come from CDK.
+CMD ["node", "--require", "@aws/aws-distro-opentelemetry-node-autoinstrumentation/register", "dist/index.js"]
