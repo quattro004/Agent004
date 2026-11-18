@@ -7,7 +7,7 @@
  * snapshot captures an uninitialized process and every instance pays the
  * cold-start cost the snapshot was meant to remove.
  */
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, type Mock } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
@@ -131,6 +131,18 @@ const RUNTIME_ENV: Record<string, string> = {
   SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
   SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
 };
+
+/**
+ * Transform the agent's module graph once, before any test runs. Without
+ * this, the first `freshModule()` pays it inside a 5 s test budget, and under
+ * `pnpm run validate` — every workspace's suite at once — that cold load
+ * alone has exceeded it. `vi.resetModules()` keeps the transform cache, so
+ * each test still evaluates a freshly booted module, just without the
+ * one-off cost. The generous limit bounds a setup step, not a behavior.
+ */
+beforeAll(async () => {
+  await import('../src/index.js');
+}, 60_000);
 
 beforeEach(() => {
   for (const [name, value] of Object.entries(RUNTIME_ENV)) vi.stubEnv(name, value);
