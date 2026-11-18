@@ -35,10 +35,14 @@ export interface RuntimeConfig {
   secrets: ToolSecrets;
 }
 
-/** Loaded from SSM SecureStrings; never written back into `process.env`. */
+/**
+ * Loaded from SSM SecureStrings; never written back into `process.env`. A key
+ * whose parameter is absent or empty is `undefined`, and its tool answers
+ * `missingCredential` (spec 003 Session 2026-11-18).
+ */
 export interface ToolSecrets {
-  weatherApiKey: string;
-  newsApiKey: string;
+  weatherApiKey: string | undefined;
+  newsApiKey: string | undefined;
 }
 
 export class RuntimeConfigError extends Error {
@@ -134,7 +138,7 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
   }
 
   const ssm = new SSMClient({ region: awsRegion });
-  const read = async (name: string): Promise<string> => {
+  const read = async (name: string): Promise<string | undefined> => {
     let value: string | undefined;
     try {
       const { Parameter } = await ssm.send(
@@ -142,13 +146,18 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
       );
       value = Parameter?.Value;
     } catch (err) {
+      if (err instanceof Error && err.name === 'ParameterNotFound') {
+        console.warn(`SSM parameter ${name} does not exist; its tool will be unavailable`);
+        return undefined;
+      }
       const reason = err instanceof Error ? err.message : String(err);
       throw new RuntimeConfigError(`SSM parameter ${name} could not be read: ${reason}`, {
         cause: err,
       });
     }
     if (value === undefined || value === '') {
-      throw new RuntimeConfigError(`SSM parameter ${name} has no value`);
+      console.warn(`SSM parameter ${name} has no value; its tool will be unavailable`);
+      return undefined;
     }
     return value;
   };

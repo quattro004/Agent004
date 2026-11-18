@@ -91,6 +91,41 @@ describe('loadRuntimeConfig — approved per-turn bounds', () => {
     expect(sendMock).toHaveBeenCalledTimes(2);
   });
 
+  // Spec 003 Session 2026-11-18: a key left out disables one tool, not the runtime.
+  it('boots without a weather key whose parameter does not exist', async () => {
+    const notFound = Object.assign(new Error('Parameter not found'), {
+      name: 'ParameterNotFound',
+    });
+    sendMock.mockImplementation(async (command: { input: { Name: string } }) => {
+      if (command.input.Name === '/max-height/weather-api-key') throw notFound;
+      return { Parameter: { Value: 'news-secret' } };
+    });
+
+    const config = await loadRuntimeConfig(validEnv());
+
+    expect(config.secrets).toEqual({ weatherApiKey: undefined, newsApiKey: 'news-secret' });
+  });
+
+  it('boots without a news key whose parameter has no value', async () => {
+    sendMock.mockImplementation(async (command: { input: { Name: string } }) =>
+      command.input.Name === '/max-height/news-api-key'
+        ? { Parameter: { Value: '' } }
+        : { Parameter: { Value: 'weather-secret' } },
+    );
+
+    const config = await loadRuntimeConfig(validEnv());
+
+    expect(config.secrets).toEqual({ weatherApiKey: 'weather-secret', newsApiKey: undefined });
+  });
+
+  it('still fails startup when a key cannot be read for any other reason', async () => {
+    sendMock.mockRejectedValue(
+      Object.assign(new Error('not authorized'), { name: 'AccessDeniedException' }),
+    );
+
+    await expect(loadRuntimeConfig(validEnv())).rejects.toThrow(RuntimeConfigError);
+  });
+
   it('reads the global active-request limit from the environment', async () => {
     const config = await loadRuntimeConfig(validEnv());
     expect(config.maxActiveRequests).toBe(2);

@@ -106,6 +106,14 @@ Wiki pages read as inputs:
 - **Memory:** enforce a true 30-day data-retention window even while a friend remains active, not merely 30 days of inactivity. Verify the available AgentCore/source timestamps before choosing the implementation; do not silently reset retention through housekeeping or consolidation.
 - **Review boundary:** prepare a bounded foundation-safety batch first, with remaining migration work visible in `tasks.md`. No production deployment, new live probes, issue creation or wiki publication is authorized by this approval.
 
+### Session 2026-11-18
+
+- Q: How are traces exported (T169b, C47)? → A: **ADOT, with scoped overrides.** Builder: "I'd rather not create our own especially since AWS has one". Use `@aws/aws-distro-opentelemetry-node-autoinstrumentation`. Its exact OpenTelemetry pins carry advisories that fail `Audit`, so override them in `pnpm-workspace.yaml`, scoped to ADOT, and verify compatibility. Remove the overrides once an ADOT release ships patched pins. If compatibility fails, stop and report back rather than accepting the advisories. The launcher must set message-content capture to `false` and the logs and metrics exporters to `none` (research.md § R-obs, ADOT review).
+- Q: How is CloudWatch Transaction Search enabled? → A: **As a CDK resource**, so it is versioned and repeatable, rather than as a one-time CLI step.
+- Q: What happens when the weather or news key is absent (T178b)? → A: **The key is optional.** A parameter that does not exist, or has no value, leaves that one tool returning `missingCredential`, and Max says the feed is unavailable. The runtime still boots. Any other failure to read a parameter (access denied, throttling) still fails startup, because it means the deployment is misconfigured, not that a key was left out.
+- Q: Where are web-search source links shown (T181)? → A: **In the on-screen text beside the reply.** Every result passed to the model reaches the browser as a source link next to that turn's reply. Max is not required to read URLs aloud.
+- Q: How are searches metered (T181)? → A: **They are priced, and capped per session.** A new `PRICE_WEB_SEARCH_MICRO_USD` is set to 7,000: $7 per 1,000 queries (research.md, Verified). The 5,000 free queries a month are not credited, so the tally overstates search spend rather than understating it. The reservation prices the worst case: one search per allowed tool execution. A new `SESSION_MAX_WEB_SEARCHES` is set to 10. Builder: "Let's go with 10 searches for now". A search past the cap is refused before it is sent, and the tool tells Max the limit is reached.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An invited friend holds a conversation on the first real deployment (Priority: P1)

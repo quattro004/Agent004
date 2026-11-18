@@ -10,8 +10,8 @@
 export type FetchFn = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export interface ToolCallOptions {
-  /** The API key for this tool's provider, from `RuntimeConfig.secrets`. */
-  apiKey: string;
+  /** The API key for this tool's provider, from `RuntimeConfig.secrets`; absent when not configured. */
+  apiKey: string | undefined;
   /** Injected for tests; defaults to the global `fetch`. */
   fetch?: FetchFn;
   /** Cancels the outbound request when the friend's turn is cancelled. */
