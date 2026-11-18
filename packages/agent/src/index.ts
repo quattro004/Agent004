@@ -10,7 +10,12 @@ import { buildSystemPrompt } from './personality/systemPrompt.js';
 import { probeBedrockRuntime } from './bedrock/warmup.js';
 import { newsToolSchema, fetchNews } from './tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from './tools/weatherTool.js';
-import { webSearchToolSchema, fetchWebSearch } from './tools/webSearchTool.js';
+import {
+  webSearchToolSchema,
+  searchForTurn,
+  WebSearchTurn,
+  WEB_SEARCH_TURN,
+} from './tools/webSearchTool.js';
 import { startSpan, endSpan, withRequestTrace } from './handlers/observability.js';
 import { randomUUID } from 'node:crypto';
 import { readModelUsage, computeTurnUsage, MissingUsageError } from './spend/usage.js';
@@ -237,9 +242,14 @@ const webSearchTool = tool({
     'Search the web for current information. Use when the user asks about recent events, facts you are unsure about, or anything requiring up-to-date information beyond your training data. Returns real search results — never fabricate URLs or content.',
   inputSchema: webSearchToolSchema,
   callback: async (input, context) => {
-    const result = await fetchWebSearch(input, {
+    const turn = context?.invocationState[WEB_SEARCH_TURN];
+    if (!(turn instanceof WebSearchTurn)) {
+      throw new Error('web_search ran without a WebSearchTurn in invocationState');
+    }
+    const result = await searchForTurn(input, {
       client: agentCoreWebSearchClient(getRuntimeConfig()),
       signal: context?.cancelSignal,
+      turn,
     });
     return result as unknown as JSONValue;
   },
@@ -619,6 +629,11 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
     let pollyCharacters = 0;
     let memoryEvents = 0;
     let turnDelivered = false;
+    // This turn's share of the session's search allowance (Session 2026-11-18).
+    const searchTurn = new WebSearchTurn(
+      Math.max(0, config.sessionMaxWebSearches - session.webSearches),
+      (sources) => sse.send({ type: 'sources', sources }),
+    );
     // Set the moment the model reports usage, so a turn that fails afterwards
     // is still counted: the tokens were billed either way.
     let modelUsage: ReturnType<typeof readModelUsage> | undefined;
@@ -642,6 +657,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       const stream = agent.stream(message, {
         cancelSignal: cancellation.signal,
         limits: invokeLimitsFor(limits, { remainingGeneratedTokens }),
+        invocationState: { [WEB_SEARCH_TURN]: searchTurn },
       });
 
       // `stream()` *returns* the AgentResult rather than yielding it, so the
@@ -676,6 +692,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       const counted = recordTurn(
         session,
         usage.outputTokens + estimateMessageTokens(message),
+        searchTurn.sent,
         caps,
       );
       try {
@@ -781,7 +798,13 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       if (modelUsage) {
         settleMicroUsd =
           meteredMicroUsd(
-            { model: modelUsage, pollyCharacters, memoryEvents, memoryRetrievals },
+            {
+              model: modelUsage,
+              pollyCharacters,
+              memoryEvents,
+              memoryRetrievals,
+              webSearches: searchTurn.sent,
+            },
             config.prices,
           ) ?? settleMicroUsd;
       }
@@ -840,6 +863,7 @@ function withState(session: CountedSessionWrite, state: CountedSessionWrite['sta
     openedAt: session.openedAt,
     turns: session.turns,
     conversationalTokens: session.conversationalTokens,
+    webSearches: session.webSearches,
   };
 }
 

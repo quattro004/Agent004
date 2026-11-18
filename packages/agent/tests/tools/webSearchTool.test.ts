@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InvokeWebSearchCommand } from '@aws-sdk/client-bedrock-agentcore';
-import { webSearchToolSchema, fetchWebSearch } from '../../src/tools/webSearchTool.js';
+import {
+  webSearchToolSchema,
+  fetchWebSearch,
+  searchForTurn,
+  WebSearchTurn,
+  SEARCH_LIMIT_REACHED,
+} from '../../src/tools/webSearchTool.js';
 
 /**
  * Web search is AgentCore's AWS-managed `InvokeWebSearch` operation, signed
@@ -157,6 +163,67 @@ describe('webSearchTool', () => {
       );
 
       expect(result.results).toHaveLength(5);
+    });
+  });
+
+  // Spec 003 Session 2026-11-18 (T181): searches are capped per session, and
+  // every result's source link reaches the friend's screen.
+  describe('searchForTurn', () => {
+    const hit = { title: 'Example', text: 'Snippet', url: 'https://example.com/a' };
+
+    it('sends the search, counts it, and reports each source shown to the model', async () => {
+      const client = clientReturning({ results: [hit] });
+      const onSources = vi.fn();
+      const turn = new WebSearchTurn(10, onSources);
+
+      const result = await searchForTurn({ query: 'news' }, { client, turn });
+
+      expect(result.success).toBe(true);
+      expect(turn.sent).toBe(1);
+      expect(onSources).toHaveBeenCalledWith([{ title: 'Example', url: 'https://example.com/a' }]);
+    });
+
+    it('refuses without sending once the session allowance is spent', async () => {
+      const client = clientReturning({ results: [hit] });
+      const turn = new WebSearchTurn(1, vi.fn());
+
+      await searchForTurn({ query: 'one' }, { client, turn });
+      const refused = await searchForTurn({ query: 'two' }, { client, turn });
+
+      expect(refused).toEqual({ success: false, error: SEARCH_LIMIT_REACHED });
+      expect(client.send).toHaveBeenCalledTimes(1);
+      expect(turn.sent).toBe(1);
+    });
+
+    it('refuses the first search when the session has none left', async () => {
+      const client = clientReturning({ results: [hit] });
+      const turn = new WebSearchTurn(0, vi.fn());
+
+      const refused = await searchForTurn({ query: 'news' }, { client, turn });
+
+      expect(refused.success).toBe(false);
+      expect(client.send).not.toHaveBeenCalled();
+    });
+
+    it('counts a search that failed, because it was sent', async () => {
+      const client = { send: vi.fn().mockRejectedValue(new Error('throttled')) };
+      const onSources = vi.fn();
+      const turn = new WebSearchTurn(10, onSources);
+
+      const result = await searchForTurn({ query: 'news' }, { client, turn });
+
+      expect(result.success).toBe(false);
+      expect(turn.sent).toBe(1);
+      expect(onSources).not.toHaveBeenCalled();
+    });
+
+    it('reports nothing when the search found no usable result', async () => {
+      const onSources = vi.fn();
+      const turn = new WebSearchTurn(10, onSources);
+
+      await searchForTurn({ query: 'news' }, { client: clientReturning({ results: [] }), turn });
+
+      expect(onSources).not.toHaveBeenCalled();
     });
   });
 });

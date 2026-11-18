@@ -133,6 +133,7 @@ export function App() {
   const sessionState = useConnectionStore((s) => s.sessionState);
   const tokens = useConversationStore((s) => s.currentResponseText);
   const fullText = useConversationStore((s) => (s.isStreaming ? null : s.currentResponseText));
+  const sources = useConversationStore((s) => s.sources);
   const isMouthOpen = useVoiceStore((s) => s.isMouthOpen);
   const isGreeting = useVoiceStore((s) => s.isGreeting);
   const currentTheme = AVATAR_THEMES[themeIndex];
@@ -411,6 +412,7 @@ export function App() {
             <BroadcastText
               tokens={displayText.split('')}
               fullText={greetingText ? null : fullText}
+              sources={greetingText ? [] : sources}
             />
           )}
           {isTvOn && <SessionStateOverlay state={overlayState} />}

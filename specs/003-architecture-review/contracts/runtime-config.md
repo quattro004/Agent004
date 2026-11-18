@@ -35,6 +35,7 @@ reservation remain T166/T167.
 | `SESSION_MAX_TURNS` | `50` | Spec 001 FR-010 |
 | `SESSION_MAX_TOKENS` | `20000` (conversational, P-09) | Spec 001 FR-010 |
 | `SESSION_MAX_MINUTES` | `30` | Spec 001 FR-010 |
+| `SESSION_MAX_WEB_SEARCHES` | `10`. Searches sent per counted session. One past the cap is refused before it is sent, and the tool tells Max the limit is reached | Spec Session 2026-11-18 (T181) |
 | `RATE_LIMIT_PER_HOUR` | `60` | Spec 001 `contracts/websocket-api.md:207` |
 | `RATE_LIMIT_PER_DAY` | `500` | Spec 001 `contracts/websocket-api.md:208` |
 | `MESSAGE_MAX_CHARS` | `2000` | P-08; spec 001 `contracts/websocket-api.md:209` |
@@ -57,10 +58,11 @@ reservation remain T166/T167.
 | `PRICE_MEMORY_EVENT_MICRO_USD` | `13`. **Derived**: $1.00 per GB at the 12 KiB billing minimum (11.44 µUSD read as GiB, 12.29 µUSD read as a decimal GB; the larger is rounded up so the tally cannot undercount). `MESSAGE_MAX_CHARS` and `MAX_OUTPUT_TOKENS` keep every event under the minimum, so the 64 KB maximum is unreachable | R-cost (verified 2026-10-11) |
 | `PRICE_MEMORY_RETRIEVAL_MICRO_USD` | **Derived**: $0.50 per 1,000 → 500 | R-cost (verified) |
 | `PRICE_RUNTIME_PER_TURN_MICRO_USD` | `831`. **Derived**: R-cost's § F Runtime V2 lines, CPU $0.06 plus memory $0.60, over the average case's 795 turns = $0.00083019. The average case is the dearer per turn; the full case spreads $0.33 across 800 | R-cost § F |
+| `PRICE_WEB_SEARCH_MICRO_USD` | `7000`. **Derived**: $7 per 1,000 queries. The 5,000 free queries a month are not credited, so the tally overstates search spend rather than understating it | R-cost (verified); spec Session 2026-11-18 (T181) |
 | `SSM_PARAM_WEATHER_KEY` | `/max-height/weather-api-key` | `agent-stack.ts` (existing parameter) |
 | `SSM_PARAM_NEWS_KEY` | `/max-height/news-api-key` | Same |
 
-That is 36 variables, under the limit of 50. Web search has none: it is AgentCore's `InvokeWebSearch`, signed with the execution role (wiki `Decision-Web-Search-Provider`; tasks.md T178).
+That is 38 variables, under the limit of 50. Web search needs no key: it is AgentCore's `InvokeWebSearch`, signed with the execution role (wiki `Decision-Web-Search-Provider`; tasks.md T178).
 
 No `PRICE_MEMORY_EXTRACTION_*` variable is needed. Built-in strategies include extraction in the long-term storage price (R-cost, resolved 2026-11-13 under T005a).
 
@@ -68,7 +70,7 @@ The breaker's estimate is a **floor**, not the bill: lines that are not per-turn
 
 ### Secrets loaded at startup
 
-`initialize()` reads each `SSM_PARAM_*` with `GetParameter` (`WithDecryption: true`) and passes the values to the tool factories. It does not write them back into `process.env`. A missing parameter **fails initialization**. The tools that read `process.env.*_API_KEY` today (`weatherTool.ts:24`, `newsTool.ts:29`) take their keys as arguments instead. The web search tool takes no key at all.
+`initialize()` reads each `SSM_PARAM_*` with `GetParameter` (`WithDecryption: true`) and passes the values to the tool factories. It does not write them back into `process.env`. A parameter that **does not exist or has no value** leaves its key `undefined`: startup logs a warning, and that tool answers `missingCredential`, so Max says the feed is unavailable (spec Session 2026-11-18, T178b). This is the one exception to "fail loud", and it is narrow. Any other read failure, such as access denied or throttling, still **fails initialization**, because it means the deployment is misconfigured. The tools take their keys as arguments, not from `process.env`. The web search tool takes no key at all.
 
 ### Runtime resource settings
 

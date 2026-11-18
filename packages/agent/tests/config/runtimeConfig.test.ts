@@ -49,6 +49,8 @@ function validEnv(): Record<string, string> {
     PRICE_MEMORY_EVENT_MICRO_USD: '12',
     PRICE_MEMORY_RETRIEVAL_MICRO_USD: '500',
     PRICE_RUNTIME_PER_TURN_MICRO_USD: '300',
+    PRICE_WEB_SEARCH_MICRO_USD: '7000',
+    SESSION_MAX_WEB_SEARCHES: '10',
     REQUEST_BODY_MAX_BYTES: '16384',
     MODEL_INPUT_MAX_BYTES: '32768',
     TOOL_RESULT_MAX_BYTES: '8192',
@@ -131,6 +133,12 @@ describe('loadRuntimeConfig — approved per-turn bounds', () => {
     expect(config.maxActiveRequests).toBe(2);
   });
 
+  it('reads the web search price and the per-session search cap (T181)', async () => {
+    const config = await loadRuntimeConfig(validEnv());
+    expect(config.prices.webSearchMicroUsd).toBe(7000);
+    expect(config.sessionMaxWebSearches).toBe(10);
+  });
+
   it('rejects a global active-request limit below one, which would refuse every request', async () => {
     const env = { ...validEnv(), GLOBAL_MAX_ACTIVE_REQUESTS: '0' };
     await expect(loadRuntimeConfig(env)).rejects.toThrow(/GLOBAL_MAX_ACTIVE_REQUESTS/);
@@ -146,6 +154,8 @@ describe('loadRuntimeConfig — approved per-turn bounds', () => {
     'TURN_MAX_GENERATED_TOKENS',
     'TURN_MAX_BILLED_TOKENS',
     'TURN_DEADLINE_MS',
+    'PRICE_WEB_SEARCH_MICRO_USD',
+    'SESSION_MAX_WEB_SEARCHES',
   ])('fails loudly when %s is missing rather than defaulting', async (name) => {
     const env = validEnv();
     delete env[name];

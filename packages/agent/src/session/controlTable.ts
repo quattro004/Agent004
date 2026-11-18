@@ -48,6 +48,8 @@ export interface CountedSessionWrite {
   openedAt: string;
   turns: number;
   conversationalTokens: number;
+  /** Web searches sent in this session, against `SESSION_MAX_WEB_SEARCHES`. */
+  webSearches: number;
 }
 
 export interface CountedSession extends CountedSessionWrite {
@@ -195,6 +197,7 @@ export class ControlTable {
           openedAt: { S: session.openedAt },
           turns: { N: String(session.turns) },
           conversationalTokens: { N: String(session.conversationalTokens) },
+          webSearches: { N: String(session.webSearches) },
           ttl: { N: String(ttl) },
         },
         ...condition,
@@ -215,6 +218,7 @@ export class ControlTable {
       openedAt: str(item, 'openedAt'),
       turns: num(item, 'turns'),
       conversationalTokens: num(item, 'conversationalTokens'),
+      webSearches: num(item, 'webSearches'),
       ttl: num(item, 'ttl'),
     };
   }

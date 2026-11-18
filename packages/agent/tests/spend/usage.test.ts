@@ -18,6 +18,7 @@ const RATES: UsageRates = {
   memoryEventMicroUsd: 12,
   memoryRetrievalMicroUsd: 500,
   runtimePerTurnMicroUsd: 300,
+  webSearchMicroUsd: 7000,
 };
 
 describe('readModelUsage', () => {
@@ -136,6 +137,7 @@ describe('computeTurnUsage', () => {
         pollyCharacters: 250,
         memoryEvents: 1,
         memoryRetrievals: 2,
+        webSearches: 0,
       },
       RATES,
     );
@@ -161,6 +163,7 @@ describe('computeTurnUsage', () => {
         pollyCharacters: 0,
         memoryEvents: 0,
         memoryRetrievals: 0,
+        webSearches: 0,
       },
       { ...RATES, runtimePerTurnMicroUsd: 0 },
     );
@@ -176,9 +179,25 @@ describe('computeTurnUsage', () => {
           pollyCharacters: 0,
           memoryEvents: 0,
           memoryRetrievals: 0,
+          webSearches: 0,
         },
         RATES,
       ),
     ).toThrow('cacheWriteInputTokens');
+  });
+
+  // Spec 003 Session 2026-11-18 (T181): every search sent is billed, at list price.
+  it('prices each web search sent this turn', () => {
+    const counts = {
+      model: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      pollyCharacters: 0,
+      memoryEvents: 0,
+      memoryRetrievals: 0,
+    };
+    const without = computeTurnUsage({ ...counts, webSearches: 0 }, RATES);
+    const withThree = computeTurnUsage({ ...counts, webSearches: 3 }, RATES);
+
+    expect(withThree.estimatedMicroUsd - without.estimatedMicroUsd).toBe(3 * 7000);
+    expect(withThree.webSearches).toBe(3);
   });
 });

@@ -11,6 +11,7 @@ const RATES: UsageRates = {
   memoryEventMicroUsd: 12,
   memoryRetrievalMicroUsd: 500,
   runtimePerTurnMicroUsd: 300,
+  webSearchMicroUsd: 7000,
 };
 
 const MAX_OUTPUT_PER_CALL = 250;
@@ -41,11 +42,18 @@ describe('estimateReservationMicroUsd', () => {
         pollyCharacters: 1_000 * 8,
         memoryEvents: 1,
         memoryRetrievals: 1,
+        webSearches: TURN_LIMIT_DEFAULTS.maxToolExecutions,
       },
       RATES,
     ).estimatedMicroUsd;
 
     expect(estimate()).toBeGreaterThanOrEqual(worstCase);
+  });
+
+  // Spec 003 Session 2026-11-18 (T181): any tool execution may be a search.
+  it('reserves a search for every tool execution the turn allows', () => {
+    const free = estimate({}, { ...RATES, webSearchMicroUsd: 0 });
+    expect(estimate() - free).toBe(TURN_LIMIT_DEFAULTS.maxToolExecutions * 7000);
   });
 
   it('never assumes more input than the model-call count allows', () => {

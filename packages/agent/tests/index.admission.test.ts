@@ -39,9 +39,9 @@ vi.mock('@strands-agents/sdk/models/bedrock', () => ({
 
 vi.mock('../src/tools/newsTool.js', () => ({ newsToolSchema: {}, fetchNews: vi.fn() }));
 vi.mock('../src/tools/weatherTool.js', () => ({ weatherToolSchema: {}, fetchWeather: vi.fn() }));
-vi.mock('../src/tools/webSearchTool.js', () => ({
-  webSearchToolSchema: {},
-  fetchWebSearch: vi.fn(),
+vi.mock('../src/tools/webSearchTool.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  searchForTurn: vi.fn(),
 }));
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
@@ -147,7 +147,7 @@ describe('handleInvocations — admission and settlement', () => {
     const config = testRuntimeConfig();
     const table = boot(config);
     const expected = computeTurnUsage(
-      { model: USAGE, pollyCharacters: 0, memoryEvents: 1, memoryRetrievals: 1 },
+      { model: USAGE, pollyCharacters: 0, memoryEvents: 1, memoryRetrievals: 1, webSearches: 0 },
       config.prices,
     ).estimatedMicroUsd;
 

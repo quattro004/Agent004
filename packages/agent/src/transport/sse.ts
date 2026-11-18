@@ -9,12 +9,14 @@
  */
 import type { ServerResponse } from 'node:http';
 import type { AudioEvent } from '../voice/pollyStream.js';
+import type { SearchSource } from '../tools/webSearchTool.js';
 
 export type SessionLifecycleState = 'ACTIVE' | 'SIGNED_OFF';
 
 export type SseEvent =
   | { type: 'session'; countedSessionId: string; opened: boolean; voice: 'on' | 'off' }
   | { type: 'text'; delta: string }
+  | { type: 'sources'; sources: SearchSource[] }
   | ({ type: 'audio' } & AudioEvent)
   | { type: 'done'; turnsUsed: number; state: SessionLifecycleState }
   | { type: 'result'; action: string; data: unknown }

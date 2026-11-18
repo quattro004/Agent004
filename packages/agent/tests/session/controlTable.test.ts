@@ -172,6 +172,7 @@ describe('SESSION#<sub>', () => {
     openedAt,
     turns: 0,
     conversationalTokens: 0,
+    webSearches: 0,
   };
 
   // Model the absence/expected-snapshot conditions against one stored item.
@@ -293,7 +294,7 @@ describe('SESSION#<sub>', () => {
     expect((await t.getSession('sub-1'))?.sessionId).toBe('counted-2');
   });
 
-  it('writes sessionId, state, openedAt, turns, conversationalTokens and ttl', async () => {
+  it('writes sessionId, state, openedAt, turns, conversationalTokens, webSearches and ttl', async () => {
     ddb.on(PutItemCommand).resolves({});
 
     await table().putSession('sub-1', {
@@ -302,6 +303,7 @@ describe('SESSION#<sub>', () => {
       openedAt,
       turns: 3,
       conversationalTokens: 412,
+      webSearches: 2,
     });
 
     const input = ddb.commandCalls(PutItemCommand)[0]!.args[0].input;
@@ -313,6 +315,7 @@ describe('SESSION#<sub>', () => {
       openedAt: { S: openedAt },
       turns: { N: '3' },
       conversationalTokens: { N: '412' },
+      webSearches: { N: '2' },
       ttl: { N: String(epoch(openedAt) + (30 + 15) * 60) },
     });
   });
@@ -326,6 +329,7 @@ describe('SESSION#<sub>', () => {
         openedAt: { S: openedAt },
         turns: { N: '50' },
         conversationalTokens: { N: '19999' },
+        webSearches: { N: '10' },
         ttl: { N: String(epoch(openedAt) + 45 * 60) },
       },
     });
@@ -336,6 +340,7 @@ describe('SESSION#<sub>', () => {
       openedAt,
       turns: 50,
       conversationalTokens: 19999,
+      webSearches: 10,
       ttl: epoch(openedAt) + 45 * 60,
     });
   });

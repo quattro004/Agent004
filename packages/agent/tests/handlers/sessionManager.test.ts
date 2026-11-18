@@ -17,6 +17,7 @@ function stored(overrides: Partial<CountedSession> = {}): CountedSession {
     openedAt: T0.toISOString(),
     turns: 0,
     conversationalTokens: 0,
+    webSearches: 0,
     ttl: 0,
     ...overrides,
   };
@@ -31,6 +32,7 @@ describe('openSession', () => {
       openedAt: T0.toISOString(),
       turns: 0,
       conversationalTokens: 0,
+      webSearches: 0,
     });
   });
 
@@ -102,24 +104,36 @@ describe('evaluateSession', () => {
 
 describe('recordTurn', () => {
   it('adds the turn and its conversational tokens, and stays Active under the caps', () => {
-    expect(recordTurn(stored({ turns: 2, conversationalTokens: 100 }), 40, CAPS)).toEqual({
+    expect(recordTurn(stored({ turns: 2, conversationalTokens: 100 }), 40, 0, CAPS)).toEqual({
       sessionId: 'sess-1',
       state: 'Active',
       openedAt: T0.toISOString(),
       turns: 3,
       conversationalTokens: 140,
+      webSearches: 0,
     });
   });
 
   it('signs the session off when the turn cap is reached by this turn', () => {
-    expect(recordTurn(stored({ turns: 49 }), 10, CAPS).state).toBe('SignedOff');
+    expect(recordTurn(stored({ turns: 49 }), 10, 0, CAPS).state).toBe('SignedOff');
   });
 
   it('signs the session off when the token cap is reached by this turn', () => {
-    expect(recordTurn(stored({ conversationalTokens: 19_990 }), 10, CAPS).state).toBe('SignedOff');
+    expect(recordTurn(stored({ conversationalTokens: 19_990 }), 10, 0, CAPS).state).toBe(
+      'SignedOff',
+    );
   });
 
   it('does not carry the stored ttl into the write', () => {
-    expect(recordTurn(stored({ ttl: 123 }), 1, CAPS)).not.toHaveProperty('ttl');
+    expect(recordTurn(stored({ ttl: 123 }), 1, 0, CAPS)).not.toHaveProperty('ttl');
+  });
+
+  // Spec 003 Session 2026-11-18 (T181): the per-session search cap needs a running count.
+  it("adds the searches this turn sent to the session's count", () => {
+    expect(recordTurn(stored({ webSearches: 4 }), 1, 3, CAPS).webSearches).toBe(7);
+  });
+
+  it('does not sign the session off at the search cap; only searching stops', () => {
+    expect(recordTurn(stored({ webSearches: 9 }), 1, 5, CAPS).state).toBe('Active');
   });
 });

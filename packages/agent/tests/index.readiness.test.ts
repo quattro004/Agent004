@@ -68,9 +68,9 @@ vi.mock('@aws-sdk/client-ssm', () => {
 
 vi.mock('../src/tools/newsTool.js', () => ({ newsToolSchema: {}, fetchNews: vi.fn() }));
 vi.mock('../src/tools/weatherTool.js', () => ({ weatherToolSchema: {}, fetchWeather: vi.fn() }));
-vi.mock('../src/tools/webSearchTool.js', () => ({
-  webSearchToolSchema: {},
-  fetchWebSearch: vi.fn(),
+vi.mock('../src/tools/webSearchTool.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  searchForTurn: vi.fn(),
 }));
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
@@ -128,6 +128,8 @@ const RUNTIME_ENV: Record<string, string> = {
   PRICE_MEMORY_EVENT_MICRO_USD: '12',
   PRICE_MEMORY_RETRIEVAL_MICRO_USD: '500',
   PRICE_RUNTIME_PER_TURN_MICRO_USD: '300',
+  PRICE_WEB_SEARCH_MICRO_USD: '7000',
+  SESSION_MAX_WEB_SEARCHES: '10',
   SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
   SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
 };
@@ -276,8 +278,8 @@ describe('initialization warm-up', () => {
 });
 
 describe('runtime configuration at startup (spec 003 T015)', () => {
-  it('lists all 36 runtime variables from contracts/runtime-config.md', () => {
-    expect(Object.keys(RUNTIME_ENV)).toHaveLength(36);
+  it('lists all 38 runtime variables from contracts/runtime-config.md', () => {
+    expect(Object.keys(RUNTIME_ENV)).toHaveLength(38);
   });
 
   it.each(Object.keys(RUNTIME_ENV))(
@@ -319,16 +321,17 @@ describe('runtime configuration at startup (spec 003 T015)', () => {
   });
 
   it.each(['/max-height/weather-api-key', '/max-height/news-api-key'])(
-    'fails initialize() naming SSM parameter %s when it is missing',
+    'becomes healthy without SSM parameter %s, since tool keys are optional (T178b)',
     async (parameter) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
       const mod = await freshModule();
       const { __parameters: parameters } = await ssmSdk();
       const value = parameters.get(parameter)!;
       parameters.delete(parameter);
 
       try {
-        await expect(mod.initialize()).rejects.toThrow(parameter);
-        expect(ping(mod).status).toBe(503);
+        await mod.initialize();
+        expect(ping(mod).status).toBe(200);
       } finally {
         parameters.set(parameter, value);
       }

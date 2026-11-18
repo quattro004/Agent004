@@ -29,6 +29,7 @@ export function openSession(now: Date): CountedSessionWrite {
     openedAt: now.toISOString(),
     turns: 0,
     conversationalTokens: 0,
+    webSearches: 0,
   };
 }
 
@@ -53,11 +54,13 @@ export function evaluateSession(
 
 /**
  * Counts one turn. A turn that reaches a cap is Max's in-character sign-off,
- * so the session ends here and the next message opens a fresh one.
+ * so the session ends here and the next message opens a fresh one. The search
+ * cap is not one of those: reaching it stops searching, not the conversation.
  */
 export function recordTurn(
   session: CountedSessionWrite,
   conversationalTokens: number,
+  webSearches: number,
   caps: SessionCaps,
 ): CountedSessionWrite {
   const turns = session.turns + 1;
@@ -70,5 +73,6 @@ export function recordTurn(
     openedAt: session.openedAt,
     turns,
     conversationalTokens: tokens,
+    webSearches: session.webSearches + webSearches,
   };
 }

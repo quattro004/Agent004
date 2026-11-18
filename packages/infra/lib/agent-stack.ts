@@ -81,6 +81,11 @@ const RUNTIME_CONFIG: Record<string, string> = {
   // because it is the dearer of the two per turn — the full case spreads a
   // longer session's billed memory across more turns ($0.33 over 800).
   PRICE_RUNTIME_PER_TURN_MICRO_USD: '831',
+  // Spec 003 § Clarifications, Session 2026-11-18: AgentCore web search at the
+  // research.md-verified $7 per 1,000 queries, the free monthly allowance not
+  // credited, and at most 10 searches a counted session.
+  PRICE_WEB_SEARCH_MICRO_USD: '7000',
+  SESSION_MAX_WEB_SEARCHES: '10',
   ...SSM_PARAMS,
 };
 

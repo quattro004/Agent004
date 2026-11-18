@@ -21,6 +21,8 @@ export interface RuntimeConfig {
   sessionMaxTurns: number;
   sessionMaxTokens: number;
   sessionMaxMinutes: number;
+  /** Searches one counted session may send (T181). */
+  sessionMaxWebSearches: number;
   rateLimitPerHour: number;
   rateLimitPerDay: number;
   messageMaxChars: number;
@@ -94,6 +96,7 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
     sessionMaxTurns: integer('SESSION_MAX_TURNS'),
     sessionMaxTokens: integer('SESSION_MAX_TOKENS'),
     sessionMaxMinutes: integer('SESSION_MAX_MINUTES'),
+    sessionMaxWebSearches: integer('SESSION_MAX_WEB_SEARCHES'),
     rateLimitPerHour: integer('RATE_LIMIT_PER_HOUR'),
     rateLimitPerDay: integer('RATE_LIMIT_PER_DAY'),
     messageMaxChars: integer('MESSAGE_MAX_CHARS'),
@@ -119,6 +122,7 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
       memoryEventMicroUsd: integer('PRICE_MEMORY_EVENT_MICRO_USD'),
       memoryRetrievalMicroUsd: integer('PRICE_MEMORY_RETRIEVAL_MICRO_USD'),
       runtimePerTurnMicroUsd: integer('PRICE_RUNTIME_PER_TURN_MICRO_USD'),
+      webSearchMicroUsd: integer('PRICE_WEB_SEARCH_MICRO_USD'),
     },
   };
   const parameterNames = {

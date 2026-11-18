@@ -22,6 +22,7 @@ export function testRuntimeConfig(overrides: Partial<RuntimeConfig> = {}): Runti
     sessionMaxTurns: 50,
     sessionMaxTokens: 20000,
     sessionMaxMinutes: 30,
+    sessionMaxWebSearches: 10,
     rateLimitPerHour: 60,
     rateLimitPerDay: 500,
     messageMaxChars: 2000,
@@ -38,6 +39,7 @@ export function testRuntimeConfig(overrides: Partial<RuntimeConfig> = {}): Runti
       memoryEventMicroUsd: 12,
       memoryRetrievalMicroUsd: 500,
       runtimePerTurnMicroUsd: 300,
+      webSearchMicroUsd: 7000,
     },
     secrets: {
       weatherApiKey: 'weather-key',

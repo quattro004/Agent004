@@ -19,7 +19,7 @@ The partition key is `pk` (string) and there is no sort key. The TTL attribute i
 | --- | --- | --- | --- |
 | `ALLOW#<email>` | `provider` (`google`), `addedAt`, `addedBy` | Operator (documented CLI command) | Pre sign-up, pre token generation, runtime at session open |
 | `FRIEND#<sub>` | `email`, `provider`, `createdAt`, `lastSeenAt`, `memoryPrunedAt` | Pre token generation (`email`, `provider`); runtime (`lastSeenAt` at session open); pruner (`memoryPrunedAt`) | Runtime, memory pruner |
-| `SESSION#<sub>` | `sessionId`, `state`, `openedAt`, `turns`, `conversationalTokens`, `ttl` | Runtime | Runtime |
+| `SESSION#<sub>` | `sessionId`, `state`, `openedAt`, `turns`, `conversationalTokens`, `webSearches`, `ttl` | Runtime | Runtime |
 | `RATE#<sub>#H#<yyyy-mm-ddThh>` and `RATE#<sub>#D#<yyyy-mm-dd>` (UTC) | `count`, `ttl` | Runtime (atomic `ADD`) | Runtime |
 | `SPEND#<yyyy-mm>` | `microUsd` (integer), `updatedAt` | Runtime (atomic `ADD`) | Runtime |
 | `CONTROL#HALT` | `haltedAt`, `reason` | Hard-stop Lambda; the operator deletes it on recovery | Runtime, pre token generation |
@@ -76,6 +76,7 @@ stateDiagram-v2
 ```
 
 - **`conversationalTokens`** is this invocation's `outputTokens`, measured from `result.invocationContext.usage`, plus the friend's message estimated at characters / 4 (P-09). Lifetime `metrics.accumulatedUsage` must not be added as per-turn usage when an Agent is reused. A message is at most 2,000 characters (P-08).
+- **`webSearches`** counts every web search a successful turn sent, including failed ones, which may still bill. A turn may send only what is left of `SESSION_MAX_WEB_SEARCHES` (10, spec § Clarifications Session 2026-11-18); past it the tool answers "limit reached" without searching. Reaching it does not sign the session off. A cancelled or failed turn does not add its searches here, though the month's spend still counts them through the reservation.
 - **A dropout** (runtime restart, redeploy or reclaim) does not change state. The friend's next message continues the same counted session under a new runtime session ID (strict continuity, P-05). In-session history is lost; long-term memories remain.
 - **`HALT`** refuses every request in every state without changing state.
 

@@ -163,6 +163,10 @@ describe('AgentStack (AgentCore Runtime, T024)', () => {
     ['PRICE_MEMORY_EVENT_MICRO_USD', '13'],
     // research.md § F: the average case's $0.66 of Runtime V2 over 795 turns.
     ['PRICE_RUNTIME_PER_TURN_MICRO_USD', '831'],
+    // Spec 003 Session 2026-11-18: web search priced at $7 per 1,000 queries,
+    // with the free monthly allowance not credited, and capped per session.
+    ['PRICE_WEB_SEARCH_MICRO_USD', '7000'],
+    ['SESSION_MAX_WEB_SEARCHES', '10'],
   ])('derives %s to %s', (name, value) => {
     expect(runtimeProps().EnvironmentVariables).toHaveProperty(name, value);
   });

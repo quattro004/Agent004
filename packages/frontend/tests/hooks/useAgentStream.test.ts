@@ -192,6 +192,35 @@ describe('useAgentStream', () => {
       expect(useVoiceStore.getState().audioQueue[0].data).toBe('AAAA');
     });
 
+    it('keeps the sources of every web search the turn made, for the reply to show', async () => {
+      const { stream } = makeStream({
+        fetchImpl: (async () =>
+          sseResponse([
+            SESSION_EVENT,
+            { type: 'sources', sources: [{ title: 'A', url: 'https://a.example/' }] },
+            { type: 'sources', sources: [{ title: 'B', url: 'https://b.example/' }] },
+            { type: 'text', delta: 'News.' },
+            { type: 'done', turnsUsed: 1, state: 'ACTIVE' },
+          ])) as unknown as typeof fetch,
+      });
+
+      await stream.send({ message: 'news?' });
+
+      expect(useConversationStore.getState().sources).toEqual([
+        { title: 'A', url: 'https://a.example/' },
+        { title: 'B', url: 'https://b.example/' },
+      ]);
+    });
+
+    it("clears the last turn's sources when a new turn starts", async () => {
+      useConversationStore.getState().addSources([{ title: 'Old', url: 'https://old.example/' }]);
+      const { stream } = makeStream();
+
+      await stream.send({ message: 'hi' });
+
+      expect(useConversationStore.getState().sources).toEqual([]);
+    });
+
     it('ends the session when Max signs off', async () => {
       const { stream } = makeStream({
         fetchImpl: (async () =>

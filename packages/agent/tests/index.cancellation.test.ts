@@ -32,9 +32,9 @@ vi.mock('@strands-agents/sdk/models/bedrock', () => ({
 
 vi.mock('../src/tools/newsTool.js', () => ({ newsToolSchema: {}, fetchNews: vi.fn() }));
 vi.mock('../src/tools/weatherTool.js', () => ({ weatherToolSchema: {}, fetchWeather: vi.fn() }));
-vi.mock('../src/tools/webSearchTool.js', () => ({
-  webSearchToolSchema: {},
-  fetchWebSearch: vi.fn(),
+vi.mock('../src/tools/webSearchTool.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  searchForTurn: vi.fn(),
 }));
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
@@ -57,9 +57,13 @@ const { fetchNews } = (await import('../src/tools/newsTool.js')) as unknown as {
 const { fetchWeather } = (await import('../src/tools/weatherTool.js')) as unknown as {
   fetchWeather: ReturnType<typeof vi.fn>;
 };
-const { fetchWebSearch } = (await import('../src/tools/webSearchTool.js')) as unknown as {
-  fetchWebSearch: ReturnType<typeof vi.fn>;
+const webSearchModule = (await import('../src/tools/webSearchTool.js')) as unknown as {
+  searchForTurn: ReturnType<typeof vi.fn>;
+  WebSearchTurn: typeof import('../src/tools/webSearchTool.js').WebSearchTurn;
+  WEB_SEARCH_TURN: string;
 };
+const { searchForTurn: fetchWebSearch, WebSearchTurn, WEB_SEARCH_TURN } = webSearchModule;
+const invocationState = () => ({ [WEB_SEARCH_TURN]: new WebSearchTurn(1, () => {}) });
 const { __test } = await import('../src/index.js');
 
 let table: FakeControlTable;
@@ -211,6 +215,7 @@ describe('tool callbacks — cancel signal forwarding', () => {
       { query: 'q', topic: 'q', location: 'q' },
       {
         cancelSignal: controller.signal,
+        invocationState: invocationState(),
       },
     );
 
@@ -235,11 +240,20 @@ describe('tool callbacks — cancel signal forwarding', () => {
     },
   );
 
+  it('web_search refuses to search without a turn allowance to count against', async () => {
+    fetchWebSearch.mockReset();
+
+    await expect(
+      callbackFor('web_search')({ query: 'q' }, { invocationState: {} }),
+    ).rejects.toThrow(/WebSearchTurn/);
+    expect(fetchWebSearch).not.toHaveBeenCalled();
+  });
+
   it('web_search gives its fetcher an AgentCore client for the runtime Region, not a key', async () => {
     fetchWebSearch.mockReset();
     fetchWebSearch.mockResolvedValue({ success: true });
 
-    await callbackFor('web_search')({ query: 'q' }, undefined);
+    await callbackFor('web_search')({ query: 'q' }, { invocationState: invocationState() });
 
     const options = fetchWebSearch.mock.calls[0]?.[1] as { client: unknown; apiKey?: unknown };
     expect(options.client).toBeInstanceOf(BedrockAgentCoreClient);

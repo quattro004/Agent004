@@ -10,7 +10,7 @@
 
 import { useMemo, useRef } from 'react';
 import { useConnectionStore } from '../stores/connectionStore';
-import { useConversationStore } from '../stores/conversationStore';
+import { useConversationStore, type SearchSource } from '../stores/conversationStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { createBudgetDegradation } from '../services/budgetDegradation';
 import type { SessionState } from '../types/domain';
@@ -35,6 +35,7 @@ export type SseErrorCode = (typeof SSE_ERROR_CODES)[number];
 export type AgentEvent =
   | { type: 'session'; countedSessionId: string; opened: boolean; voice: 'on' | 'off' }
   | { type: 'text'; delta: string }
+  | { type: 'sources'; sources: SearchSource[] }
   | { type: 'audio'; seq: number; format: 'mp3'; data: string }
   | { type: 'done'; turnsUsed: number; state: 'ACTIVE' | 'SIGNED_OFF' }
   | { type: 'result'; action: string; data: unknown }
@@ -297,6 +298,9 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
             conversation().appendToken(event.delta);
             streamed = true;
             break;
+          case 'sources':
+            conversation().addSources(event.sources);
+            break;
           case 'audio':
             voice().enqueueAudio({ seq: event.seq, format: event.format, data: event.data });
             break;
@@ -378,6 +382,7 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
 
     if (!capture) {
       conversation().setFullText('');
+      conversation().clearSources();
       voice().beginAudioTurn();
     }
 

@@ -48,6 +48,8 @@ export function estimateReservationMicroUsd({
       pollyCharacters: outputTokens * POLLY_CHARS_PER_TOKEN_CEILING,
       memoryEvents: 1,
       memoryRetrievals: 1,
+      // Only the model calls tools, so a turn with no model call sends no search.
+      webSearches: maxModelCalls === 0 ? 0 : limits.maxToolExecutions,
     },
     rates,
   ).estimatedMicroUsd;

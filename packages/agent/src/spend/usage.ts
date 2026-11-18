@@ -30,6 +30,8 @@ export interface UsageRates {
   memoryEventMicroUsd: number;
   memoryRetrievalMicroUsd: number;
   runtimePerTurnMicroUsd: number;
+  /** One `InvokeWebSearch` query at list price; the free monthly allowance is not credited. */
+  webSearchMicroUsd: number;
 }
 
 export interface TurnCounts {
@@ -37,12 +39,15 @@ export interface TurnCounts {
   pollyCharacters: number;
   memoryEvents: number;
   memoryRetrievals: number;
+  /** Searches sent, whether or not they succeeded. */
+  webSearches: number;
 }
 
 export interface TurnUsage extends ModelUsage {
   pollyCharacters: number;
   memoryEvents: number;
   memoryRetrievals: number;
+  webSearches: number;
   estimatedMicroUsd: number;
 }
 
@@ -91,6 +96,7 @@ export function computeTurnUsage(counts: TurnCounts, rates: UsageRates): TurnUsa
   const flat =
     counts.memoryEvents * rates.memoryEventMicroUsd +
     counts.memoryRetrievals * rates.memoryRetrievalMicroUsd +
+    counts.webSearches * rates.webSearchMicroUsd +
     rates.runtimePerTurnMicroUsd;
 
   return {
@@ -98,6 +104,7 @@ export function computeTurnUsage(counts: TurnCounts, rates: UsageRates): TurnUsa
     pollyCharacters: counts.pollyCharacters,
     memoryEvents: counts.memoryEvents,
     memoryRetrievals: counts.memoryRetrievals,
+    webSearches: counts.webSearches,
     estimatedMicroUsd: Math.ceil((perMillionTotal + flat * PER_MILLION) / PER_MILLION),
   };
 }
