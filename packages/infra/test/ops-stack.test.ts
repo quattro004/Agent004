@@ -205,4 +205,59 @@ describe('OpsStack', () => {
       });
     });
   });
+
+  // Spec 003 Session 2026-11-18: Transaction Search is a CDK resource, not a
+  // one-time CLI step. research.md § R-obs: indexing stays at its default and
+  // `aws/spans` keeps logs 14 days, like every other group (SC-011).
+  describe('Transaction Search', () => {
+    let template: Template;
+
+    beforeAll(() => {
+      ({ template } = synth());
+    });
+
+    function single(type: string): { Properties?: Record<string, unknown>; DependsOn?: string[] } {
+      const found = template.findResources(type);
+      expect(Object.keys(found)).toHaveLength(1);
+      return Object.values(found)[0] as never;
+    }
+
+    function logicalId(type: string): string {
+      return Object.keys(template.findResources(type))[0]!;
+    }
+
+    test('is enabled at the default indexing percentage', () => {
+      const config = single('AWS::XRay::TransactionSearchConfig');
+      expect(config.Properties?.IndexingPercentage).toBeUndefined();
+    });
+
+    test('lets only X-Ray, from this account, write spans to CloudWatch Logs first', () => {
+      const policy = single('AWS::Logs::ResourcePolicy');
+      const text = JSON.stringify(
+        (policy.Properties as { PolicyDocument: unknown }).PolicyDocument,
+      );
+      expect(text).toContain('xray.amazonaws.com');
+      expect(text).toContain('logs:PutLogEvents');
+      expect(text).toContain('log-group:aws/spans:*');
+      expect(text).toContain('log-group:/aws/application-signals/data:*');
+      expect(text).toContain('aws:SourceAccount');
+      expect(text).toContain('aws:SourceArn');
+
+      const config = single('AWS::XRay::TransactionSearchConfig');
+      expect(config.DependsOn).toContain(logicalId('AWS::Logs::ResourcePolicy'));
+    });
+
+    test('keeps aws/spans for 14 days, set once X-Ray has created the group', () => {
+      const retention = single('Custom::LogRetention');
+      expect(retention.Properties).toMatchObject({
+        LogGroupName: 'aws/spans',
+        RetentionInDays: 14,
+      });
+      expect(retention.DependsOn).toContain(logicalId('AWS::XRay::TransactionSearchConfig'));
+    });
+
+    test('is not created as a log group by the stack, which would make enabling fail', () => {
+      template.resourcePropertiesCountIs('AWS::Logs::LogGroup', { LogGroupName: 'aws/spans' }, 0);
+    });
+  });
 });

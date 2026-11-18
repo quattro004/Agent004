@@ -5,8 +5,10 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as xray from 'aws-cdk-lib/aws-xray';
 import { Construct } from 'constructs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -144,8 +146,52 @@ export class OpsStack extends cdk.Stack {
       }),
     });
 
+    this.enableTransactionSearch();
+
     new cdk.CfnOutput(this, 'OpsAlarmTopicArn', { value: this.alarmTopic.topicArn });
     new cdk.CfnOutput(this, 'HardStopFunctionName', { value: hardStop.functionName });
+  }
+
+  /**
+   * research § R-obs: X-Ray writes spans to the `aws/spans` log group, at the
+   * default indexing percentage. X-Ray creates that group itself, and enabling
+   * fails if it already exists, so retention is set after the config, not by
+   * declaring the group. Deleting the stack disables Transaction Search but
+   * leaves `aws/spans` in place.
+   */
+  private enableTransactionSearch(): void {
+    const { partition, region, account } = this;
+    const logGroupArn = (name: string): string =>
+      `arn:${partition}:logs:${region}:${account}:log-group:${name}:*`;
+
+    const policy = new logs.CfnResourcePolicy(this, 'TransactionSearchLogsPolicy', {
+      policyName: 'MaxHeightTransactionSearch',
+      policyDocument: cdk.Fn.toJsonString({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'TransactionSearchXRayAccess',
+            Effect: 'Allow',
+            Principal: { Service: 'xray.amazonaws.com' },
+            Action: 'logs:PutLogEvents',
+            Resource: [logGroupArn('aws/spans'), logGroupArn('/aws/application-signals/data')],
+            Condition: {
+              ArnLike: { 'aws:SourceArn': `arn:${partition}:xray:${region}:${account}:*` },
+              StringEquals: { 'aws:SourceAccount': account },
+            },
+          },
+        ],
+      }),
+    });
+
+    const config = new xray.CfnTransactionSearchConfig(this, 'TransactionSearch', {});
+    config.addDependency(policy);
+
+    const retention = new logs.LogRetention(this, 'SpansRetention', {
+      logGroupName: 'aws/spans',
+      retention: logs.RetentionDays.TWO_WEEKS,
+    });
+    retention.node.addDependency(config);
   }
 
   /** One failure is worth an email; missing data means nothing went wrong. */
