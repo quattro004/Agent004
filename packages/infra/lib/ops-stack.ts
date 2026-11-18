@@ -185,7 +185,7 @@ export class OpsStack extends cdk.Stack {
     });
 
     const config = new xray.CfnTransactionSearchConfig(this, 'TransactionSearch', {});
-    config.addDependency(policy);
+    config.addResourceDependency(policy);
 
     const retention = new logs.LogRetention(this, 'SpansRetention', {
       logGroupName: 'aws/spans',
