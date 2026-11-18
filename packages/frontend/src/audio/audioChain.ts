@@ -6,6 +6,11 @@
  * Provides mouth-open detection via AnalyserNode FFT.
  */
 import { createGlitcher, type Glitcher } from './glitchEngine';
+// `?worker&url` compiles each processor to its own same-origin script; a bare
+// `new URL('./x.ts', import.meta.url)` ships uncompiled TypeScript as a data: URL (#76).
+import eqProcessorUrl from './eqProcessor.ts?worker&url';
+import staticProcessorUrl from './staticProcessor.ts?worker&url';
+import stutterProcessorUrl from './stutterProcessor.ts?worker&url';
 
 export interface AudioChain {
   init(): Promise<void>;
@@ -100,9 +105,9 @@ export function createAudioChain(options: AudioChainOptions = {}): AudioChain {
         // iOS Safari autoplay unlock — resume suspended context
         await ctx.resume();
 
-        await ctx.audioWorklet.addModule(new URL('./stutterProcessor.ts', import.meta.url).href);
-        await ctx.audioWorklet.addModule(new URL('./eqProcessor.ts', import.meta.url).href);
-        await ctx.audioWorklet.addModule(new URL('./staticProcessor.ts', import.meta.url).href);
+        await ctx.audioWorklet.addModule(stutterProcessorUrl);
+        await ctx.audioWorklet.addModule(eqProcessorUrl);
+        await ctx.audioWorklet.addModule(staticProcessorUrl);
 
         stutterNode = new AudioWorkletNode(ctx, 'stutter-processor');
         eqNode = new AudioWorkletNode(ctx, 'eq-processor');
