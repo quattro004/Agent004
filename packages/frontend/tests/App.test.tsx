@@ -64,18 +64,31 @@ vi.mock('../src/components/TextInput', () => ({
 // Mock hooks
 const mockSend = vi.fn().mockResolvedValue(undefined);
 const mockCancel = vi.fn();
+const { mockAgentSignedOut } = vi.hoisted(() => ({
+  mockAgentSignedOut: vi.fn(),
+}));
 vi.mock('../src/hooks/useAgentStream', () => ({
-  useAgentStream: () => ({ send: mockSend, cancel: mockCancel }),
+  useAgentStream: (deps: { onSignedOut?: () => void }) => {
+    mockAgentSignedOut.mockImplementation(() => deps.onSignedOut?.());
+    return { send: mockSend, cancel: mockCancel };
+  },
 }));
 
-const { mockGetAccessToken, mockRefreshAccessToken, mockSignIn, mockHandleCallback, mockSignOut } =
-  vi.hoisted(() => ({
-    mockGetAccessToken: vi.fn().mockResolvedValue('access-token'),
-    mockRefreshAccessToken: vi.fn().mockResolvedValue('access-token'),
-    mockSignIn: vi.fn().mockResolvedValue(undefined),
-    mockHandleCallback: vi.fn().mockResolvedValue({ status: 'signed-in' }),
-    mockSignOut: vi.fn().mockResolvedValue(undefined),
-  }));
+const {
+  mockGetAccessToken,
+  mockRefreshAccessToken,
+  mockSignIn,
+  mockHandleCallback,
+  mockSignOut,
+  mockIsSignedIn,
+} = vi.hoisted(() => ({
+  mockGetAccessToken: vi.fn().mockResolvedValue('access-token'),
+  mockRefreshAccessToken: vi.fn().mockResolvedValue('access-token'),
+  mockSignIn: vi.fn().mockResolvedValue(undefined),
+  mockHandleCallback: vi.fn().mockResolvedValue({ status: 'signed-in' }),
+  mockSignOut: vi.fn().mockResolvedValue(undefined),
+  mockIsSignedIn: vi.fn().mockReturnValue(true),
+}));
 
 vi.mock('../src/services/authService', () => ({
   RUNTIME_ARN: 'arn:aws:bedrock-agentcore:us-west-2:111122223333:runtime/max-height',
@@ -85,7 +98,7 @@ vi.mock('../src/services/authService', () => ({
     getAccessToken: mockGetAccessToken,
     refreshAccessToken: mockRefreshAccessToken,
     signOut: mockSignOut,
-    isSignedIn: () => true,
+    isSignedIn: mockIsSignedIn,
   },
 }));
 
@@ -137,12 +150,23 @@ vi.mock('../src/hooks/useGreeting', () => ({
 
 // Mock stores
 vi.mock('../src/stores/connectionStore', () => {
-  let state = {
+  let state: {
+    sessionState: string;
+    sessionId: string;
+    isStreamReady: boolean;
+    setSessionState: (sessionState: string) => void;
+  };
+  const listeners = new Set<() => void>();
+  const setState = (s: Partial<typeof state>) => {
+    state = { ...state, ...s };
+    listeners.forEach((fn) => fn());
+  };
+  state = {
     sessionState: 'ACTIVE' as string,
     sessionId: 'test-session',
     isStreamReady: true,
+    setSessionState: (sessionState) => setState({ sessionState }),
   };
-  const listeners = new Set<() => void>();
   return {
     useConnectionStore: Object.assign(
       (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state),
@@ -152,10 +176,7 @@ vi.mock('../src/stores/connectionStore', () => {
           listeners.add(fn);
           return () => listeners.delete(fn);
         },
-        _setState: (s: Partial<typeof state>) => {
-          state = { ...state, ...s };
-          listeners.forEach((fn) => fn());
-        },
+        _setState: setState,
       },
     ),
   };
@@ -790,8 +811,10 @@ describe('App — the audio players', () => {
 
 describe('App — the gate in front of the broadcast', () => {
   beforeEach(() => {
+    vi.stubEnv('DEV', false);
     vi.clearAllMocks();
     mockGetAccessToken.mockResolvedValue('access-token');
+    mockIsSignedIn.mockReturnValue(true);
     mockHandleCallback.mockResolvedValue({ status: 'signed-in' });
     window.history.replaceState({}, '', '/');
   });
@@ -802,6 +825,31 @@ describe('App — the gate in front of the broadcast', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 250));
     });
+    vi.unstubAllEnvs();
+  });
+
+  it('lets local UI development reach the broadcast without sign-in or an agent token', async () => {
+    vi.stubEnv('DEV', true);
+    mockIsSignedIn.mockReturnValue(false);
+    mockGetAccessToken.mockResolvedValue(null);
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
+    expect(screen.queryByTestId('sign-in')).not.toBeInTheDocument();
+    expect(mockGetAccessToken).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockAgentSignedOut();
+    });
+
+    expect(screen.getByTestId('tv-knob')).toBeInTheDocument();
+    expect(screen.queryByTestId('sign-in')).not.toBeInTheDocument();
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    expect(
+      (useConnectionStore as unknown as { getState: () => { sessionState: string } }).getState()
+        .sessionState,
+    ).toBe('SIGNAL_LOST');
   });
 
   it('shows the sign-in panel instead of the TV when no token can be had', async () => {

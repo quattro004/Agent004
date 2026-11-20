@@ -97,7 +97,7 @@ export function App() {
   // corrects it. Starting at 'checking' instead would blank the screen on
   // every reload.
   const [authStatus, setAuthStatus] = useState<AuthStatus>(() =>
-    window.location.pathname !== CALLBACK_PATH && authService.isSignedIn()
+    import.meta.env.DEV || (window.location.pathname !== CALLBACK_PATH && authService.isSignedIn())
       ? 'signed-in'
       : 'checking',
   );
@@ -128,7 +128,13 @@ export function App() {
     runtimeArn: RUNTIME_ARN,
     getAccessToken: () => authService.getAccessToken(),
     refreshAccessToken: () => authService.refreshAccessToken(),
-    onSignedOut: () => setAuthStatus('signed-out'),
+    onSignedOut: () => {
+      if (import.meta.env.DEV) {
+        useConnectionStore.getState().setSessionState('SIGNAL_LOST');
+        return;
+      }
+      setAuthStatus('signed-out');
+    },
   });
   const sessionState = useConnectionStore((s) => s.sessionState);
   const tokens = useConversationStore((s) => s.currentResponseText);
@@ -148,7 +154,7 @@ export function App() {
   // On the callback route the code is exchanged first, then the URL is
   // cleaned so a reload cannot replay a spent code.
   useEffect(() => {
-    if (route === PRIVACY_PATH) return;
+    if (route === PRIVACY_PATH || import.meta.env.DEV) return;
     let cancelled = false;
 
     void (async () => {
