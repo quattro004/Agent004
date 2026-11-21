@@ -68,12 +68,32 @@ A body with an `action` field is not a chat turn, and `message` is not required:
 
 ```jsonc
 {
-  "action": "memory.list" | "memory.export" | "memory.delete" | "memory.forget",
+  "action":
+    "runtime.ready" |
+    "memory.list" |
+    "memory.export" |
+    "memory.delete" |
+    "memory.forget",
   "memoryRecordId": "string", // required for memory.delete only
 }
 ```
 
-An unknown `action` is `invalid_request`. Behavior, checks and payloads are in [memory-api.md](./memory-api.md) § Friend-facing operations. An action stream is a single `result` event or a single `error` event. It never opens or counts against a counted session.
+An unknown `action` is `invalid_request`. An action stream is a single `result`
+event or a single `error` event. It never opens or counts against a counted
+session.
+
+`runtime.ready` is a startup/health probe. The browser may call it while the
+pre-recorded greeting plays. It proves that the authenticated runtime handled
+the request and that runtime initialization is ready; it does not invoke the
+model, synthesize speech, retrieve/write memory, admit a chat turn, reserve
+spend, or consume a session/rate counter. It returns:
+
+```jsonc
+{ "type": "result", "action": "runtime.ready", "data": { "ready": true } }
+```
+
+Memory action behavior, checks and payloads are in
+[memory-api.md](./memory-api.md) § Friend-facing operations.
 
 ## Response
 

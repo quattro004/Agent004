@@ -64,13 +64,16 @@ vi.mock('../src/components/TextInput', () => ({
 // Mock hooks
 const mockSend = vi.fn().mockResolvedValue(undefined);
 const mockCancel = vi.fn();
+const mockRunAction = vi.fn();
+mockRunAction.mockResolvedValue({ ok: true, data: { ready: true } });
+const mockStream = { send: mockSend, cancel: mockCancel, runAction: mockRunAction };
 const { mockAgentSignedOut } = vi.hoisted(() => ({
   mockAgentSignedOut: vi.fn(),
 }));
 vi.mock('../src/hooks/useAgentStream', () => ({
   useAgentStream: (deps: { onSignedOut?: () => void }) => {
     mockAgentSignedOut.mockImplementation(() => deps.onSignedOut?.());
-    return { send: mockSend, cancel: mockCancel };
+    return mockStream;
   },
 }));
 
@@ -553,6 +556,7 @@ describe('App — Greeting Flow', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockPlayGreeting.mockResolvedValue({ id: 'g-001', text: 'Hello!' });
+    mockRunAction.mockResolvedValue({ ok: true, data: { ready: true } });
 
     // Reset shared store state to clean defaults (state leaks between tests)
     const { useConnectionStore } = await import('../src/stores/connectionStore');
@@ -613,6 +617,7 @@ describe('App — Greeting Flow', () => {
       _setState: (s: Record<string, unknown>) => void;
     };
     connStore._setState({ sessionState: 'SIGNAL_LOST', isStreamReady: false });
+    mockRunAction.mockResolvedValue({ ok: false, code: 'transport' });
 
     const { App } = await import('../src/App');
     render(<App />);
@@ -629,6 +634,7 @@ describe('App — Greeting Flow', () => {
       _setState: (s: Record<string, unknown>) => void;
     };
     connStore._setState({ sessionState: 'SIGNAL_LOST', isStreamReady: false });
+    mockRunAction.mockResolvedValue({ ok: false, code: 'transport' });
 
     const { App } = await import('../src/App');
     render(<App />);
@@ -645,6 +651,87 @@ describe('App — Greeting Flow', () => {
       },
       { timeout: 2000 },
     );
+  });
+
+  it('transitions from INITIALIZING to SIGNAL_LOST when readiness fails before greeting completes', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+      getState: () => { sessionState: string };
+    };
+    connStore._setState({ sessionState: 'INITIALIZING', sessionId: null, isStreamReady: false });
+    mockRunAction.mockResolvedValue({ ok: false, code: 'transport' });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    expect(mockRunAction).toHaveBeenCalledTimes(1);
+    expect(mockRunAction.mock.calls[0]?.[0]).toEqual({ action: 'runtime.ready' });
+    expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
+
+    await vi.waitFor(
+      () => {
+        expect(connStore.getState().sessionState).toBe('SIGNAL_LOST');
+        expect(screen.getByTestId('session-state-overlay')).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it('leaves the happy path in idle greeting/listening mode when readiness succeeds', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+      getState: () => { sessionState: string };
+    };
+    connStore._setState({ sessionState: 'INITIALIZING', sessionId: null, isStreamReady: false });
+    mockRunAction.mockResolvedValue({ ok: true, data: { ready: true } });
+
+    const { App } = await import('../src/App');
+    render(<App />);
+
+    await powerOnTv();
+
+    expect(mockRunAction).toHaveBeenCalledTimes(1);
+    expect(mockRunAction.mock.calls[0]?.[0]).toEqual({ action: 'runtime.ready' });
+
+    await vi.waitFor(
+      () => {
+        expect(connStore.getState().sessionState).toBe('GREETING');
+        expect(screen.queryByTestId('session-state-overlay')).not.toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it('ignores a late readiness failure after the TV is powered off', async () => {
+    const { useConnectionStore } = await import('../src/stores/connectionStore');
+    const connStore = useConnectionStore as unknown as {
+      _setState: (s: Record<string, unknown>) => void;
+      getState: () => { sessionState: string };
+    };
+    connStore._setState({ sessionState: 'INITIALIZING', sessionId: null, isStreamReady: false });
+
+    let resolveAction!: (outcome: { ok: false; code: 'transport' }) => void;
+    const pendingAction = new Promise<{ ok: false; code: 'transport' }>((resolve) => {
+      resolveAction = resolve;
+    });
+    mockRunAction.mockReturnValue(pendingAction);
+
+    const { App } = await import('../src/App');
+    render(<App />);
+    await powerOnTv();
+
+    fireEvent.click(screen.getByTestId('tv-knob'));
+
+    await act(async () => {
+      resolveAction({ ok: false, code: 'transport' });
+      await Promise.resolve();
+    });
+
+    expect(connStore.getState().sessionState).not.toBe('SIGNAL_LOST');
   });
 
   it('should switch from greeting text to conversation tokens after greeting', async () => {

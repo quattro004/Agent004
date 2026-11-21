@@ -123,6 +123,8 @@ export function App() {
   const powerOnAbortRef = useRef<AbortController | null>(null);
   const tvPowerRef = useRef<TvPowerState>('off');
   const prevTvPowerRef = useRef<TvPowerState>('off');
+  const startupReadyRef = useRef(false);
+  const greetingDoneRef = useRef(false);
 
   const stream = useAgentStream({
     runtimeArn: RUNTIME_ARN,
@@ -149,6 +151,46 @@ export function App() {
   useEffect(() => {
     tvPowerRef.current = tvPower;
   }, [tvPower]);
+
+  // The SSE transport opens only for a request. Probe runtime readiness once
+  // while the power-on greeting gives it time to boot, without spending a model turn.
+  useEffect(() => {
+    if (!isTvOn) return undefined;
+
+    const sequenceId = powerSequenceIdRef.current;
+    const signal = powerOnAbortRef.current?.signal;
+    let cancelled = false;
+    startupReadyRef.current = false;
+
+    void stream.runAction({ action: 'runtime.ready' }, signal).then((outcome) => {
+      if (
+        cancelled ||
+        powerSequenceIdRef.current !== sequenceId ||
+        signal?.aborted ||
+        greetingDoneRef.current
+      ) {
+        return;
+      }
+
+      const currentState = useConnectionStore.getState().sessionState;
+      if (outcome.ok) {
+        startupReadyRef.current = true;
+        if (currentState === 'INITIALIZING' || currentState === 'SIGNAL_LOST') {
+          useConnectionStore.getState().setSessionState('GREETING');
+        }
+        return;
+      }
+
+      startupReadyRef.current = false;
+      if (!SEND_BLOCKED_STATES.includes(currentState)) {
+        useConnectionStore.getState().setSessionState('SIGNAL_LOST');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTvOn, stream]);
 
   // Decide whether the friend is signed in before anything else renders.
   // On the callback route the code is exchanged first, then the URL is
@@ -189,13 +231,21 @@ export function App() {
 
     const preloadedGreeting = preloadedGreetingRef.current;
     preloadedGreetingRef.current = null;
+    greetingDoneRef.current = false;
     let cancelled = false;
 
     void greeting.playGreeting(preloadedGreeting).then((result) => {
       if (cancelled) return;
       if (!result?.text) {
+        greetingDoneRef.current = true;
         setIsGreetingDone(true);
         setGreetingText(null);
+        if (
+          !startupReadyRef.current &&
+          !SEND_BLOCKED_STATES.includes(useConnectionStore.getState().sessionState)
+        ) {
+          useConnectionStore.getState().setSessionState('SIGNAL_LOST');
+        }
         return;
       }
 
@@ -203,8 +253,15 @@ export function App() {
       const completion = result.completion ?? delay(GREETING_DISPLAY_MS);
       void completion.then(() => {
         if (!cancelled) {
+          greetingDoneRef.current = true;
           setIsGreetingDone(true);
           setGreetingText(null);
+          if (
+            !startupReadyRef.current &&
+            !SEND_BLOCKED_STATES.includes(useConnectionStore.getState().sessionState)
+          ) {
+            useConnectionStore.getState().setSessionState('SIGNAL_LOST');
+          }
         }
       });
     });
@@ -275,6 +332,8 @@ export function App() {
       powerOnAbortRef.current?.abort();
       powerOnAbortRef.current = abortController;
       preloadedGreetingRef.current = null;
+      startupReadyRef.current = false;
+      greetingDoneRef.current = false;
       tvPowerRef.current = 'tuning';
       setTvPower('tuning');
       setIsGreetingDone(false);
@@ -334,6 +393,8 @@ export function App() {
       powerOnAbortRef.current?.abort();
       powerOnAbortRef.current = null;
       preloadedGreetingRef.current = null;
+      startupReadyRef.current = false;
+      greetingDoneRef.current = false;
       // A turn still streaming is a turn still being paid for.
       stream.cancel();
       audioChain.stopStatic();
@@ -349,6 +410,7 @@ export function App() {
 
     greeting.stopGreeting();
     preloadedGreetingRef.current = null;
+    greetingDoneRef.current = false;
     setIsGreetingDone(false);
     setGreetingText(null);
     setThemeIndex((currentIndex) => {

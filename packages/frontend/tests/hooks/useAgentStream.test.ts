@@ -482,6 +482,22 @@ describe('useAgentStream', () => {
       });
     });
 
+    it('passes an optional abort signal through a readiness action', async () => {
+      const fetchImpl = vi.fn(async () =>
+        sseResponse([{ type: 'result', action: 'runtime.ready', data: { ready: true } }]),
+      );
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+      const controller = new AbortController();
+
+      await expect(
+        stream.runAction({ action: 'runtime.ready' }, controller.signal),
+      ).resolves.toEqual({ ok: true, data: { ready: true } });
+
+      const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({ action: 'runtime.ready' });
+      expect(init.signal).toBe(controller.signal);
+    });
+
     it('resolves with the error code instead of rendering Max line over the conversation', async () => {
       useConversationStore.getState().setFullText('Earlier reply');
       const fetchImpl = vi.fn(async () =>

@@ -81,7 +81,7 @@ export interface AgentStreamDeps {
 export interface AgentStream {
   send: (input: SendInput) => Promise<void>;
   /** Runs a memory action on its own request: it never cancels a streaming turn or edits the conversation. */
-  runAction: (input: ActionInput) => Promise<ActionOutcome>;
+  runAction: (input: ActionInput, signal?: AbortSignal) => Promise<ActionOutcome>;
   cancel: () => void;
 }
 
@@ -427,9 +427,9 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
     await exchange(input, current.signal);
   }
 
-  async function runAction(input: ActionInput): Promise<ActionOutcome> {
+  async function runAction(input: ActionInput, signal?: AbortSignal): Promise<ActionOutcome> {
     const capture: ActionCapture = { outcome: null };
-    await exchange(input, new AbortController().signal, capture);
+    await exchange(input, signal ?? new AbortController().signal, capture);
     return capture.outcome ?? { ok: false, code: 'transport' };
   }
 

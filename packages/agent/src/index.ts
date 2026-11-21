@@ -867,7 +867,13 @@ function withState(session: CountedSessionWrite, state: CountedSessionWrite['sta
   };
 }
 
-const KNOWN_ACTIONS = new Set(['memory.list', 'memory.export', 'memory.delete', 'memory.forget']);
+const KNOWN_ACTIONS = new Set([
+  'runtime.ready',
+  'memory.list',
+  'memory.export',
+  'memory.delete',
+  'memory.forget',
+]);
 
 async function handleAction(
   action: string,
@@ -884,6 +890,10 @@ async function handleAction(
 
   try {
     if (!KNOWN_ACTIONS.has(action)) return sse.fail('invalid_request');
+    if (action === 'runtime.ready') {
+      sse.send({ type: 'result', action, data: { ready: true } });
+      return 'done';
+    }
     if (action === 'memory.delete' && !memoryRecordId) return sse.fail('invalid_request');
 
     const refusal = await admitToNewSession(table, sub);

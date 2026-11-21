@@ -88,8 +88,11 @@ vi.mock('../src/components/TextInput', () => ({
 }));
 
 const mockSend = vi.fn().mockResolvedValue(undefined);
+const mockCancel = vi.fn();
+const mockRunAction = vi.fn().mockResolvedValue({ ok: true, data: { ready: true } });
+const mockStream = { send: mockSend, cancel: mockCancel, runAction: mockRunAction };
 vi.mock('../src/hooks/useAgentStream', () => ({
-  useAgentStream: () => ({ send: mockSend, cancel: vi.fn() }),
+  useAgentStream: () => mockStream,
 }));
 
 vi.mock('../src/services/authService', () => ({
@@ -176,12 +179,23 @@ vi.mock('../src/hooks/useGreeting', () => ({
 }));
 
 vi.mock('../src/stores/connectionStore', () => {
-  let state = {
+  let state: {
+    sessionState: string;
+    sessionId: string | null;
+    isStreamReady: boolean;
+    setSessionState: (sessionState: string) => void;
+  };
+  const listeners = new Set<() => void>();
+  const setState = (s: Partial<typeof state>) => {
+    state = { ...state, ...s };
+    listeners.forEach((fn) => fn());
+  };
+  state = {
     sessionState: 'ACTIVE' as string,
     sessionId: 'test-session',
     isStreamReady: true,
+    setSessionState: (sessionState) => setState({ sessionState }),
   };
-  const listeners = new Set<() => void>();
   return {
     useConnectionStore: Object.assign(
       (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state),
@@ -191,10 +205,7 @@ vi.mock('../src/stores/connectionStore', () => {
           listeners.add(fn);
           return () => listeners.delete(fn);
         },
-        _setState: (s: Partial<typeof state>) => {
-          state = { ...state, ...s };
-          listeners.forEach((fn) => fn());
-        },
+        _setState: setState,
       },
     ),
   };

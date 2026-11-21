@@ -81,6 +81,22 @@ async function turn(message = 'hello') {
   return double;
 }
 
+async function action(actionName: string) {
+  const double = makeRes();
+  await __test.handleInvocations(
+    makeReq(
+      { action: actionName },
+      {
+        ...bearerHeaders({ sub: TEST_SUB }),
+        'x-amzn-bedrock-agentcore-runtime-session-id': TEST_RUNTIME_SESSION_ID,
+      },
+    ),
+    double.res,
+  );
+  await double.end;
+  return double;
+}
+
 const errorCodeOf = (events: () => Array<Record<string, unknown>>) =>
   events().find((e) => e.type === 'error')?.code;
 
@@ -451,5 +467,28 @@ describe('handleInvocations — the counted session in the control table', () =>
 
     expect(events().some((e) => e.type === 'done')).toBe(true);
     expect(errorCodeOf(events)).toBeUndefined();
+  });
+});
+
+describe('handleInvocations — runtime readiness action', () => {
+  it('returns ready without a model call, counted session, or spend reservation', async () => {
+    const table = boot();
+
+    const response = await action('runtime.ready');
+
+    expect(response.events()).toContainEqual({
+      type: 'result',
+      action: 'runtime.ready',
+      data: { ready: true },
+    });
+    expect(streamMock).not.toHaveBeenCalled();
+    expect(memorySdk.createEvent).not.toHaveBeenCalled();
+    expect(table.getFriend).not.toHaveBeenCalled();
+    expect(table.getAllow).not.toHaveBeenCalled();
+    expect(table.getSession).not.toHaveBeenCalled();
+    expect(table.putSession).not.toHaveBeenCalled();
+    expect(table.admitRequest).not.toHaveBeenCalled();
+    expect(table.settleRequest).not.toHaveBeenCalled();
+    expect(table.addSpend).not.toHaveBeenCalled();
   });
 });
