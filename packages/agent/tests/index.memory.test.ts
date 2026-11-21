@@ -124,18 +124,14 @@ describe('handleInvocations — AgentCore memory', () => {
     });
 
     const { buildSystemPrompt } = await import('../src/personality/systemPrompt.js');
-    expect(buildSystemPrompt).toHaveBeenCalledWith({
-      displayAlias: undefined,
-      memories: [
-        {
-          memoryRecordId: 'fact-1',
-          content: 'The viewer likes synthesizers.',
-          type: 'FACT',
-          namespace: `/max-height/${TEST_SUB}/facts/`,
-          score: undefined,
-        },
-      ],
-    });
+    expect(buildSystemPrompt).toHaveBeenCalledWith({ displayAlias: undefined });
+    expect(streamMock.mock.calls[0]?.[0]).toEqual([
+      {
+        text: expect.stringContaining('The viewer likes synthesizers.'),
+      },
+      { text: 'Remember this from last time?' },
+    ]);
+    expect(JSON.stringify(streamMock.mock.calls[0]?.[0])).toContain('<prior-session-context>');
 
     expect(memorySdk.createEvent).toHaveBeenCalledTimes(2);
     expect(memorySdk.createEvent).toHaveBeenNthCalledWith(

@@ -159,7 +159,18 @@ describe('synthesizeToAudioEvents', () => {
     for (const call of calls) {
       const sent = call.args[0].input.Text as string;
       // Strip the SSML wrapper the way Polly's billing does.
-      expect(sent.replace(/<[^>]*>/g, '').length).toBeLessThanOrEqual(POLLY_MAX_BILLED_CHARACTERS);
+      let plainText = '';
+      let insideTag = false;
+      for (const char of sent) {
+        if (char === '<') {
+          insideTag = true;
+        } else if (char === '>') {
+          insideTag = false;
+        } else if (!insideTag) {
+          plainText += char;
+        }
+      }
+      expect(plainText.length).toBeLessThanOrEqual(POLLY_MAX_BILLED_CHARACTERS);
     }
   });
 

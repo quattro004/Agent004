@@ -128,6 +128,44 @@ describe('loadRuntimeConfig — approved per-turn bounds', () => {
     await expect(loadRuntimeConfig(validEnv())).rejects.toThrow(RuntimeConfigError);
   });
 
+  it('does not expose provider error details or a key value in startup errors', async () => {
+    sendMock.mockRejectedValue(
+      Object.assign(new Error('provider leak: super-secret-api-key'), {
+        name: 'AccessDeniedException',
+      }),
+    );
+
+    let error: unknown;
+    try {
+      await loadRuntimeConfig(validEnv());
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(RuntimeConfigError);
+    expect((error as Error).message).not.toContain('super-secret-api-key');
+    expect((error as Error).message).not.toContain('/max-height/');
+  });
+
+  it('does not log parameter names or values when optional SSM keys are unavailable', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    sendMock.mockImplementation(async (command: { input: { Name: string } }) => {
+      if (command.input.Name === '/max-height/weather-api-key') {
+        throw Object.assign(new Error('Parameter not found'), { name: 'ParameterNotFound' });
+      }
+      return { Parameter: { Value: '' } };
+    });
+
+    await loadRuntimeConfig(validEnv());
+
+    for (const [message] of warn.mock.calls) {
+      expect(String(message)).not.toContain('/max-height/');
+      expect(String(message)).not.toContain('weather-secret');
+      expect(String(message)).not.toContain('news-secret');
+    }
+    warn.mockRestore();
+  });
+
   it('reads the global active-request limit from the environment', async () => {
     const config = await loadRuntimeConfig(validEnv());
     expect(config.maxActiveRequests).toBe(2);

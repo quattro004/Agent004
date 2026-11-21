@@ -151,16 +151,13 @@ export async function loadRuntimeConfig(env: Env = process.env): Promise<Runtime
       value = Parameter?.Value;
     } catch (err) {
       if (err instanceof Error && err.name === 'ParameterNotFound') {
-        console.warn(`SSM parameter ${name} does not exist; its tool will be unavailable`);
+        console.warn('An optional SSM tool parameter does not exist; its tool will be unavailable');
         return undefined;
       }
-      const reason = err instanceof Error ? err.message : String(err);
-      throw new RuntimeConfigError(`SSM parameter ${name} could not be read: ${reason}`, {
-        cause: err,
-      });
+      throw new RuntimeConfigError('An SSM tool parameter could not be read');
     }
     if (value === undefined || value === '') {
-      console.warn(`SSM parameter ${name} has no value; its tool will be unavailable`);
+      console.warn('An optional SSM tool parameter has no value; its tool will be unavailable');
       return undefined;
     }
     return value;

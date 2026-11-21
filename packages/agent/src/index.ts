@@ -1,5 +1,5 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
-import { Agent, SlidingWindowConversationManager } from '@strands-agents/sdk';
+import { Agent, Message, SlidingWindowConversationManager, TextBlock } from '@strands-agents/sdk';
 import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { tool } from '@strands-agents/sdk';
 import type { JSONValue } from '@strands-agents/sdk';
@@ -38,6 +38,10 @@ import {
   type MemoryAdapter,
   type MemorySearchResult,
 } from './memory/memoryAdapter.js';
+import {
+  buildPriorSessionContext,
+  PRIOR_SESSION_CONTEXT_MARKER,
+} from './memory/untrustedMemoryContext.js';
 import { handleDeleteMemory, handleForgetMe, handleListMemories } from './memory/memoryHandlers.js';
 import {
   readBoundedBody,
@@ -80,11 +84,11 @@ const runtimeSessionOwners = new Map<string, string>();
  * One `Agent` per runtime session, so a friend's conversation history is not
  * rebuilt on every turn and never leaks into another friend's reply.
  */
-let registry: AgentRegistry<Agent, MemorySearchResult[]> | undefined;
+let registry: AgentRegistry<Agent> | undefined;
 
-function agentRegistry(config: RuntimeConfig): AgentRegistry<Agent, MemorySearchResult[]> {
-  registry ??= new AgentRegistry<Agent, MemorySearchResult[]>({
-    create: (_countedSessionId, memories) => createMaxHeightAgent({ config, memories }),
+function agentRegistry(config: RuntimeConfig): AgentRegistry<Agent> {
+  registry ??= new AgentRegistry<Agent>({
+    create: (_countedSessionId) => createMaxHeightAgent({ config }),
   });
   return registry;
 }
@@ -257,15 +261,10 @@ const webSearchTool = tool({
 
 // --- Agent Factory ---
 
-export function createMaxHeightAgent(options?: {
-  displayAlias?: string;
-  config?: RuntimeConfig;
-  memories?: MemorySearchResult[];
-}) {
+export function createMaxHeightAgent(options?: { displayAlias?: string; config?: RuntimeConfig }) {
   const config = options?.config ?? getRuntimeConfig();
   const systemPrompt = buildSystemPrompt({
     displayAlias: options?.displayAlias,
-    ...(options?.memories === undefined ? {} : { memories: options.memories }),
   });
 
   const model = new BedrockModel({
@@ -289,6 +288,29 @@ export function createMaxHeightAgent(options?: {
   registerTurnLimits(agent, config.limits);
 
   return agent;
+}
+
+function removePriorSessionContextFromHistory(
+  agent: Agent,
+  historyLength: number,
+  originalMessage: string,
+): void {
+  const history = (agent as unknown as { messages?: unknown[] }).messages;
+  if (!history) return;
+
+  const input = history[historyLength] as
+    { role?: unknown; content?: Array<{ text?: unknown }> } | undefined;
+  const firstText = input?.content?.[0]?.text;
+  if (
+    input?.role === 'user' &&
+    typeof firstText === 'string' &&
+    firstText.startsWith(PRIOR_SESSION_CONTEXT_MARKER)
+  ) {
+    history[historyLength] = new Message({
+      role: 'user',
+      content: [new TextBlock(originalMessage)],
+    });
+  }
 }
 
 // --- HTTP Server ---
@@ -599,11 +621,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       voice: voiceEnabled ? 'on' : 'off',
     });
 
-    const agent = agentRegistry(config).acquire(
-      runtimeSessionId,
-      countedSessionId,
-      memories,
-    ) as Agent;
+    const agent = agentRegistry(config).acquire(runtimeSessionId, countedSessionId) as Agent;
     runtimeSessionOwners.set(runtimeSessionId, sub);
 
     // A friend who closes the tab mid-turn must stop costing us tokens. The
@@ -646,6 +664,12 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         pollyCharacters,
       });
 
+    const memoryContext = opened ? buildPriorSessionContext(memories) : '';
+    const memoryContextAdded = memoryContext !== '';
+    const historyLength = (agent as unknown as { messages?: unknown[] }).messages?.length ?? 0;
+    const invocationInput =
+      memoryContext === '' ? message : [{ text: memoryContext }, { text: message }];
+
     try {
       const remainingGeneratedTokens = Math.max(
         0,
@@ -654,7 +678,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       // From here the model may bill us, and until it reports usage the only
       // safe price for the request is its full reservation.
       settleMicroUsd = lease.reservedMicroUsd;
-      const stream = agent.stream(message, {
+      const stream = agent.stream(invocationInput, {
         cancelSignal: cancellation.signal,
         limits: invokeLimitsFor(limits, { remainingGeneratedTokens }),
         invocationState: { [WEB_SEARCH_TURN]: searchTurn },
@@ -772,6 +796,9 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       }
     } finally {
       clearTimeout(deadline);
+      if (memoryContextAdded) {
+        removePriorSessionContextFromHistory(agent, historyLength, message);
+      }
       if (turnDelivered && !cancelled) {
         memoryEvents = 1;
         startSpan('memory.create_event');
