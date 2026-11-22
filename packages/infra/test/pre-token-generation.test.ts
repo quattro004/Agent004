@@ -158,23 +158,48 @@ describe('pre token generation trigger', () => {
     expect(keys).toContain('ALLOW#friend@example.com');
   });
 
-  it('fails closed when a read fails', async () => {
-    send.mockRejectedValue(new Error('ResourceNotFoundException'));
+  it('uses strongly consistent reads for HALT and allowlist authorization', async () => {
+    admitted();
     const handler = await loadHandler();
 
-    await expect(handler(event())).rejects.toThrow();
+    await handler(event());
+
+    const gets = calls().filter((call) => call.kind === 'get');
+    expect(gets).toHaveLength(2);
+    expect(gets.every((call) => call.input.ConsistentRead === true)).toBe(true);
+  });
+
+  it('fails closed when a read fails', async () => {
+    const operationalError = new Error('ResourceNotFoundException');
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+    send.mockRejectedValue(operationalError);
+    const handler = await loadHandler();
+
+    await expect(handler(event())).rejects.toThrow('DENIED');
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.stringContaining('pre-token-generation'),
+      operationalError,
+    );
+    errorLog.mockRestore();
   });
 
   it('fails closed when the FRIEND write fails', async () => {
+    const operationalError = new Error('ConditionalCheckFailedException');
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
     send.mockImplementation(async (command) => {
       const { kind, input } = command as Captured;
-      if (kind === 'update') throw new Error('ConditionalCheckFailedException');
+      if (kind === 'update') throw operationalError;
       const pk = (input.Key as { pk: { S: string } }).pk.S;
       return pk.startsWith('ALLOW#') ? { Item: { pk: { S: pk } } } : {};
     });
     const handler = await loadHandler();
 
-    await expect(handler(event())).rejects.toThrow();
+    await expect(handler(event())).rejects.toThrow('DENIED');
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.stringContaining('pre-token-generation'),
+      operationalError,
+    );
+    errorLog.mockRestore();
   });
 
   it('throws when the control table name is not configured', async () => {

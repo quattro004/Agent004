@@ -27,7 +27,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 
 ## Technical Context
 
-**Language/Version**: TypeScript ^6.0.3. The agent targets Node.js >=24 in an ARM64 container; Lambda handlers run on the Node.js 22 managed runtime; pnpm 11.24.0.
+**Language/Version**: TypeScript ^6.0.3. The agent targets Node.js >=24 in an ARM64 container; Lambda handlers run on the Node.js 22 managed runtime; pnpm 11.28.13.
 
 **Primary Dependencies**:
 

@@ -47,9 +47,19 @@ export async function handler(event: PreSignUpEvent): Promise<PreSignUpEvent> {
   const email = (attributes.email ?? '').trim().toLowerCase();
   if (email === '') deny();
 
-  const listed = await dynamo.send(
-    new GetItemCommand({ TableName: tableName, Key: { pk: { S: `ALLOW#${email}` } } }),
-  );
+  let listed;
+  try {
+    listed = await dynamo.send(
+      new GetItemCommand({
+        TableName: tableName,
+        Key: { pk: { S: `ALLOW#${email}` } },
+        ConsistentRead: true,
+      }),
+    );
+  } catch (error) {
+    console.error('pre-sign-up control-table read failed', error);
+    throw new Error(DENIAL_MESSAGE, { cause: error });
+  }
   if (!listed.Item) deny();
 
   // Federated users are confirmed by the provider, so this stays false.

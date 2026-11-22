@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { TURN_LIMIT_DEFAULTS, type TurnLimits } from '../../src/limits/turnLimits.js';
+import {
+  completeModelRequestBytes,
+  TURN_LIMIT_DEFAULTS,
+  type TurnLimits,
+} from '../../src/limits/turnLimits.js';
 import { estimateReservationMicroUsd } from '../../src/spend/reservation.js';
 import { computeTurnUsage, type UsageRates } from '../../src/spend/usage.js';
 
@@ -48,6 +52,17 @@ describe('estimateReservationMicroUsd', () => {
     ).estimatedMicroUsd;
 
     expect(estimate()).toBeGreaterThanOrEqual(worstCase);
+  });
+
+  it('prices the complete request at no more than the enforced byte ceiling', () => {
+    const completeBytes = completeModelRequestBytes({
+      systemPrompt: 'Static system prompt.',
+      toolSpecs: [{ name: 'get_news', description: 'Get news.', inputSchema: { query: 'query' } }],
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
+    });
+
+    expect(completeBytes).toBeLessThanOrEqual(TURN_LIMIT_DEFAULTS.modelInputMaxBytes);
+    expect(estimate({ maxModelCalls: 1, modelInputMaxBytes: completeBytes })).toBeGreaterThan(0);
   });
 
   // Spec 003 Session 2026-11-18 (T181): any tool execution may be a search.

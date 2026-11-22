@@ -113,4 +113,39 @@ describe('registerTurnLimits', () => {
     // answer a different question than the one that was asked.
     expect(agent.messages.at(-1)).toBe(newest);
   });
+
+  it('cancels a model call when the system prompt and tools exceed the complete-request bound', () => {
+    const messages = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello' }],
+      },
+    ];
+    const { agent, fire } = fakeAgent(messages);
+    (agent as unknown as { systemPrompt: string }).systemPrompt = 'Static system prompt. '.repeat(
+      300,
+    );
+    (agent as unknown as { toolRegistry: { toolSpecs: () => unknown[] } }).toolRegistry = {
+      toolSpecs: () => [
+        {
+          name: 'get_news',
+          description: 'Get news.',
+          inputSchema: { query: 'x'.repeat(400) },
+        },
+      ],
+    };
+    registerTurnLimits(agent as never, {
+      ...TURN_LIMIT_DEFAULTS,
+      modelInputMaxBytes: 512,
+    });
+
+    const event = {
+      agent,
+      cancel: false as boolean | string,
+    };
+    fire(BeforeModelCallEvent, event);
+
+    expect(event.cancel).not.toBe(false);
+    expect(String(event.cancel)).toMatch(/complete model request|model input/i);
+  });
 });

@@ -33,10 +33,19 @@ function deny(): never {
 }
 
 async function exists(tableName: string, pk: string): Promise<boolean> {
-  const result = await dynamo.send(
-    new GetItemCommand({ TableName: tableName, Key: { pk: { S: pk } } }),
-  );
-  return result.Item !== undefined;
+  try {
+    const result = await dynamo.send(
+      new GetItemCommand({
+        TableName: tableName,
+        Key: { pk: { S: pk } },
+        ConsistentRead: true,
+      }),
+    );
+    return result.Item !== undefined;
+  } catch (error) {
+    console.error('pre-token-generation control-table read failed', error);
+    throw new Error(DENIAL_MESSAGE, { cause: error });
+  }
 }
 
 export interface PreTokenGenerationEvent {
@@ -59,19 +68,24 @@ export async function handler(event: PreTokenGenerationEvent): Promise<PreTokenG
   if (!(await exists(tableName, `ALLOW#${email}`))) deny();
 
   const now = new Date().toISOString();
-  await dynamo.send(
-    new UpdateItemCommand({
-      TableName: tableName,
-      Key: { pk: { S: `FRIEND#${sub}` } },
-      UpdateExpression:
-        'SET email = :email, provider = :provider, createdAt = if_not_exists(createdAt, :createdAt)',
-      ExpressionAttributeValues: {
-        ':email': { S: email },
-        ':provider': { S: 'google' },
-        ':createdAt': { S: now },
-      },
-    }),
-  );
+  try {
+    await dynamo.send(
+      new UpdateItemCommand({
+        TableName: tableName,
+        Key: { pk: { S: `FRIEND#${sub}` } },
+        UpdateExpression:
+          'SET email = :email, provider = :provider, createdAt = if_not_exists(createdAt, :createdAt)',
+        ExpressionAttributeValues: {
+          ':email': { S: email },
+          ':provider': { S: 'google' },
+          ':createdAt': { S: now },
+        },
+      }),
+    );
+  } catch (error) {
+    console.error('pre-token-generation FRIEND write failed', error);
+    throw new Error(DENIAL_MESSAGE, { cause: error });
+  }
 
   return event;
 }

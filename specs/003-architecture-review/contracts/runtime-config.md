@@ -41,7 +41,7 @@ reservation remain T166/T167.
 | `MESSAGE_MAX_CHARS` | `2000` | P-08; spec 001 `contracts/websocket-api.md:209` |
 | `HISTORY_WINDOW` | `40` | Strands `SlidingWindowConversationManager` default (`agent.d.ts:113`) |
 | `REQUEST_BODY_MAX_BYTES` | `16384` (16 KiB, UTF-8). Refused **while reading**, before the body is parsed | Spec Session 2026-11-15; T163 |
-| `MODEL_INPUT_MAX_BYTES` | `32768` (32 KiB serialized). Oldest messages are dropped first; the current request never is | Same |
+| `MODEL_INPUT_MAX_BYTES` | `32768` (32 KiB serialized complete request). The hook includes system prompt, tool specifications and messages; oldest messages are dropped first, the current request is preserved, and a still-over-limit request cancels before Bedrock | PR 92 review fix; same 32 KiB ceiling |
 | `TOOL_RESULT_MAX_BYTES` | `8192` (8 KiB per serialized tool result). Truncated results are marked so the model does not treat them as complete | Same |
 | `TURN_MAX_MODEL_CALLS` | `4` → SDK `InvokeLimits.turns` | Same |
 | `TURN_MAX_TOOL_EXECUTIONS` | `4`. The SDK has no tool-count limit; enforced with a `BeforeToolCallEvent` hook | Same |

@@ -370,6 +370,17 @@ around a red build.
   without updating the ruleset leaves the old check pending and blocks merging.
   See the wiki's `Guide-Validation-Gate`.
 
+## TypeScript types
+
+- Prefer the SDK, API, or domain type that already defines a value. Use
+  `unknown` only at an untrusted external boundary, then validate and narrow
+  before reading fields. Prefer `unknown` over `any` when the shape is truly
+  not known.
+- Do not replace a known SDK/API type with `unknown` merely to make code compile.
+  Import exported types such as `SystemPrompt` and `ToolSpec` instead.
+- For test doubles and test-only casts, keep the minimum boundary shape explicit
+  instead of adding `unknown` or `any` broadly.
+
 ## Keep this file current
 
 When you learn something durable about this repo — a convention, a constraint, a

@@ -71,8 +71,12 @@ Runs once, when a federated user is first created (`triggerSource = PreSignUp_Ex
 | --- | --- |
 | `email_verified` is not exactly `"true"` | Throw `DENIED` |
 | `ALLOW#<lowercased email>` does not exist | Throw `DENIED` |
-| A control-table read fails | Throw (deny) |
+| A control-table read fails | Log the operational cause server-side, then throw exactly `DENIED` |
 | Otherwise | Allow. `autoConfirmUser` stays false: federated users are confirmed by the provider. |
+
+All authorization `GetItem` calls use `ConsistentRead: true`, so revocation and
+new allowlist entries take effect at the next Cognito trigger rather than waiting
+for DynamoDB's eventual-consistency window.
 
 ### Pre token generation (`handlers/pre-token-generation.ts`)
 
@@ -83,7 +87,7 @@ Runs at every sign-in and every refresh (V1 event; Lite plan).
 | `CONTROL#HALT` exists | Throw `DENIED` (hard stop; constitution P2) |
 | `email_verified` is not exactly `"true"` | Throw `DENIED` |
 | `ALLOW#<lowercased email>` does not exist | Throw `DENIED` (revocation at refresh) |
-| A control-table read or write fails | Throw (deny) |
+| A control-table read or write fails | Log the operational cause server-side, then throw exactly `DENIED` |
 | Otherwise | Upsert `FRIEND#<sub>` with `email` and `provider`, and set `createdAt` if absent. Issue tokens unchanged; no claims are added. |
 
 ### Denial copy (FR-043)

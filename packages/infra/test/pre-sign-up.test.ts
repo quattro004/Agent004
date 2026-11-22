@@ -74,6 +74,7 @@ describe('pre sign-up trigger', () => {
     expect(captured.input).toEqual({
       TableName: 'MaxHeight-Control',
       Key: { pk: { S: 'ALLOW#friend@example.com' } },
+      ConsistentRead: true,
     });
   });
 
@@ -101,10 +102,14 @@ describe('pre sign-up trigger', () => {
   });
 
   it('fails closed when the table read fails', async () => {
-    send.mockRejectedValue(new Error('ProvisionedThroughputExceededException'));
+    const operationalError = new Error('ProvisionedThroughputExceededException');
+    const errorLog = jest.spyOn(console, 'error').mockImplementation(() => {});
+    send.mockRejectedValue(operationalError);
     const handler = await loadHandler();
 
-    await expect(handler(event(LISTED))).rejects.toThrow();
+    await expect(handler(event(LISTED))).rejects.toThrow('DENIED');
+    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining('pre-sign-up'), operationalError);
+    errorLog.mockRestore();
   });
 
   it('uses the same message for every denial', async () => {

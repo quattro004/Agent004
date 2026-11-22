@@ -17,6 +17,7 @@ import {
   readBoundedBody,
   truncateToolResult,
   boundModelInput,
+  completeModelRequestBytes,
   invokeLimitsFor,
   TURN_LIMIT_DEFAULTS,
 } from '../../src/limits/turnLimits.js';
@@ -165,6 +166,27 @@ describe('boundModelInput — 32 KiB serialized model input', () => {
 
     expect(bounded).toHaveLength(1);
     expect(bounded[0].role).toBe('user');
+  });
+
+  it('counts the system prompt and tool specifications in the complete request', () => {
+    const toolSpecs = [
+      { name: 'get_news', description: 'Get news.', inputSchema: { query: 'x'.repeat(300) } },
+    ];
+    const messages = [message('hello')];
+    const bytes = completeModelRequestBytes({
+      systemPrompt: 'Static prompt '.repeat(100),
+      toolSpecs,
+      messages,
+    });
+    const bounded = boundModelInput(messages, {
+      maxBytes: 512,
+      systemPrompt: 'Static prompt '.repeat(100),
+      toolSpecs,
+    });
+
+    expect(bytes).toBeGreaterThan(512);
+    expect(bounded.completeBytes).toBe(bytes);
+    expect(bounded.fits).toBe(false);
   });
 
   it('reports how many messages it dropped, so the turn can be observed', () => {

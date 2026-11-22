@@ -18,6 +18,8 @@ import {
   BeforeModelCallEvent,
   ToolResultBlock,
   TextBlock,
+  type SystemPrompt,
+  type ToolSpec,
 } from '@strands-agents/sdk';
 
 /** Every approved per-turn bound, in one place. */
@@ -119,6 +121,18 @@ function serializedBytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8');
 }
 
+export function completeModelRequestBytes(options: {
+  messages: unknown[];
+  systemPrompt?: SystemPrompt;
+  toolSpecs?: ToolSpec[];
+}): number {
+  return serializedBytes({
+    systemPrompt: options.systemPrompt ?? '',
+    toolSpecs: options.toolSpecs ?? [],
+    messages: options.messages,
+  });
+}
+
 /**
  * Bounds one tool result to `maxBytes` of serialized JSON.
  *
@@ -173,12 +187,15 @@ export interface MessageLike {
 
 export interface BoundModelInputOptions {
   maxBytes: number;
-  systemPrompt?: string;
+  systemPrompt?: SystemPrompt;
+  toolSpecs?: ToolSpec[];
 }
 
 export interface BoundModelInputResult<T> {
   messages: T[];
   dropped: number;
+  completeBytes: number;
+  fits: boolean;
 }
 
 /**
@@ -196,18 +213,27 @@ export function boundModelInput<T extends MessageLike>(
   messages: T[],
   options: BoundModelInputOptions,
 ): BoundModelInputResult<T> {
-  const { maxBytes, systemPrompt = '' } = options;
-  const promptBytes = Buffer.byteLength(systemPrompt, 'utf8');
+  const { maxBytes, systemPrompt = '', toolSpecs = [] } = options;
+
+  const completeBytes = (candidate: T[]) =>
+    completeModelRequestBytes({
+      systemPrompt,
+      toolSpecs,
+      messages: candidate,
+    });
 
   const turnStarts = messages.flatMap((message, index) => (startsATurn(message) ? [index] : []));
   const currentTurn = turnStarts.at(-1);
-  if (currentTurn === undefined) return { messages, dropped: 0 };
+  if (currentTurn === undefined) {
+    const bytes = completeBytes(messages);
+    return { messages, dropped: 0, completeBytes: bytes, fits: bytes <= maxBytes };
+  }
 
   const start =
-    turnStarts.find((index) => serializedBytes(messages.slice(index)) + promptBytes <= maxBytes) ??
-    currentTurn;
-
-  return { messages: start === 0 ? messages : messages.slice(start), dropped: start };
+    turnStarts.find((index) => completeBytes(messages.slice(index)) <= maxBytes) ?? currentTurn;
+  const bounded = start === 0 ? messages : messages.slice(start);
+  const bytes = completeBytes(bounded);
+  return { messages: bounded, dropped: start, completeBytes: bytes, fits: bytes <= maxBytes };
 }
 
 /** A user message that is the friend speaking, not the return of a tool call. */
@@ -255,6 +281,10 @@ export function invokeLimitsFor(
 interface HookableAgent {
   messages: unknown[];
   addHook(eventType: unknown, callback: (event: never) => void): unknown;
+  systemPrompt?: SystemPrompt;
+  toolRegistry?: {
+    toolSpecs?: () => ToolSpec[];
+  };
 }
 
 /**
@@ -302,8 +332,18 @@ export function registerTurnLimits(agent: HookableAgent, limits: TurnLimits): vo
   });
 
   agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
-    const messages = (event.agent as unknown as HookableAgent).messages as MessageLike[];
-    const { dropped } = boundModelInput(messages, { maxBytes: limits.modelInputMaxBytes });
+    const hookAgent = event.agent as unknown as HookableAgent;
+    const messages = hookAgent.messages as MessageLike[];
+    const toolSpecs = hookAgent.toolRegistry?.toolSpecs?.() ?? [];
+    const { dropped, fits } = boundModelInput(messages, {
+      maxBytes: limits.modelInputMaxBytes,
+      systemPrompt: hookAgent.systemPrompt ?? '',
+      toolSpecs,
+    });
     if (dropped > 0) messages.splice(0, dropped);
+    if (!fits) {
+      event.cancel =
+        'Complete model request exceeds the configured model input limit; answer with what you already have.';
+    }
   });
 }

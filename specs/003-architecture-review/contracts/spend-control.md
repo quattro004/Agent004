@@ -107,6 +107,12 @@ after turn (done, error after model start, or cancelled):
 
 ## Admission and settlement (T166/T167)
 
+The reservation ceiling assumes the complete model request can consume
+`MODEL_INPUT_MAX_BYTES`, including system prompt, tool specifications and
+messages. The agent cancels a call that remains above that ceiling instead of
+letting it reach Bedrock. The byte ceiling is therefore the same invariant used
+by reservation and pre-model enforcement; it is not a messages-only bound.
+
 The breaker's check-then-add race is closed by one `TransactWriteItems` at each end of a chat turn (`ControlTable.admitRequest` / `settleRequest`).
 
 ```text

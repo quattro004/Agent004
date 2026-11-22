@@ -14,7 +14,7 @@
 # resolves without the lockfile.
 
 FROM node:24-alpine AS base
-RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.28.13 --activate
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc .pnpmfile.cjs ./
 COPY packages/agent/package.json packages/agent/

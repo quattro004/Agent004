@@ -31,8 +31,9 @@ export function estimateReservationMicroUsd({
 }: ReservationInputs): number {
   const { maxModelCalls, modelInputMaxBytes, maxBilledTokens, maxGeneratedTokens } = limits;
 
-  // Serialized bytes bound tokens from above, so a model input of N bytes is
-  // at most N tokens.
+  // The complete model request (system prompt, tools and messages) is bounded
+  // to modelInputMaxBytes before Bedrock receives it. Serialized bytes bound
+  // tokens from above, so a complete input of N bytes is at most N tokens.
   const inputTokens = Math.min(
     maxBilledTokens + modelInputMaxBytes,
     maxModelCalls * modelInputMaxBytes,
