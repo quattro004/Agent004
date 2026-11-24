@@ -29,7 +29,12 @@ export interface WipeResult {
 
 export interface MemoryAdapter {
   getNamespace(sub: string): string;
-  retrieveMemories(sub: string, searchQuery: string, topK: number): Promise<MemorySearchResult[]>;
+  retrieveMemories(
+    sub: string,
+    searchQuery: string,
+    topK: number,
+    signal?: AbortSignal,
+  ): Promise<MemorySearchResult[]>;
   createEvent(
     sub: string,
     sessionId: string,
@@ -66,6 +71,7 @@ export function createMemoryAdapter(config: MemoryAdapterConfig): MemoryAdapter 
     sub: string,
     searchQuery: string,
     topK: number,
+    signal?: AbortSignal,
   ): Promise<MemorySearchResult[]> {
     const namespace = getNamespace(sub);
     const records = await client.retrieveRecords({
@@ -73,6 +79,7 @@ export function createMemoryAdapter(config: MemoryAdapterConfig): MemoryAdapter 
       namespace,
       searchQuery,
       topK,
+      ...(signal ? { abortSignal: signal } : {}),
     });
 
     return records.map((record) => {

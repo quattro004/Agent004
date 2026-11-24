@@ -62,6 +62,24 @@ describe('dataManager', () => {
 
       await expect(listMemories(run)).rejects.toMatchObject({ code: 'malformed' });
     });
+
+    it('rejects records with missing or invalid fields', async () => {
+      const run = runner({
+        ok: true,
+        data: {
+          records: [
+            {
+              id: 'fact-1',
+              text: 'The viewer likes synthesizers.',
+              kind: 'unknown',
+              createdAt: '',
+            },
+          ],
+        },
+      });
+
+      await expect(listMemories(run)).rejects.toMatchObject({ code: 'malformed' });
+    });
   });
 
   describe('exportMemories', () => {
@@ -113,6 +131,15 @@ describe('dataManager', () => {
 
       expect(await textOf(createObjectURL.mock.calls[0][0] as Blob)).not.toContain('local-actor');
     });
+
+    it('rejects an export payload without an exportedAt timestamp', async () => {
+      const { createObjectURL } = stubDownload();
+
+      await expect(
+        exportMemories(runner({ ok: true, data: { records: [] } })),
+      ).rejects.toMatchObject({ code: 'malformed' });
+      expect(createObjectURL).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteMemory', () => {
@@ -122,6 +149,12 @@ describe('dataManager', () => {
       await deleteMemory(run, 'fact-1');
 
       expect(run).toHaveBeenCalledWith({ action: 'memory.delete', memoryRecordId: 'fact-1' });
+    });
+
+    it('rejects a delete payload that does not confirm one deletion', async () => {
+      await expect(
+        deleteMemory(runner({ ok: true, data: { deleted: 0 } }), 'fact-1'),
+      ).rejects.toMatchObject({ code: 'malformed' });
     });
 
     it("throws not_found for a record that is not the friend's", async () => {

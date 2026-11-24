@@ -16,11 +16,8 @@ export interface SearchResult {
   url: string;
 }
 
-export interface WebSearchResult {
-  success: boolean;
-  results?: SearchResult[];
-  error?: string;
-}
+export type WebSearchResult =
+  { success: true; results: SearchResult[] } | { success: false; error: string };
 
 const MAX_RESULTS = 5;
 

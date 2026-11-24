@@ -7,13 +7,14 @@ export const weatherToolSchema = z.object({
 
 export type WeatherInput = z.infer<typeof weatherToolSchema>;
 
-export interface WeatherResult {
-  success: boolean;
-  temperature?: number;
-  conditions?: string;
-  location?: string;
-  error?: string;
-}
+export type WeatherResult =
+  | {
+      success: true;
+      temperature: number;
+      conditions: string;
+      location: string;
+    }
+  | { success: false; error: string };
 
 export async function fetchWeather(
   input: WeatherInput,

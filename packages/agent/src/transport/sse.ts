@@ -10,6 +10,7 @@
 import type { ServerResponse } from 'node:http';
 import type { AudioEvent } from '../voice/pollyStream.js';
 import type { SearchSource } from '../tools/webSearchTool.js';
+import type { MemoryListItem } from '../memory/memoryAdapter.js';
 
 export type SessionLifecycleState = 'ACTIVE' | 'SIGNED_OFF';
 
@@ -19,7 +20,19 @@ export type SseEvent =
   | { type: 'sources'; sources: SearchSource[] }
   | ({ type: 'audio' } & AudioEvent)
   | { type: 'done'; turnsUsed: number; state: SessionLifecycleState }
-  | { type: 'result'; action: string; data: unknown }
+  | { type: 'result'; action: 'runtime.ready'; data: { ready: true } }
+  | { type: 'result'; action: 'memory.list'; data: { records: MemoryListItem[] } }
+  | {
+      type: 'result';
+      action: 'memory.export';
+      data: { exportedAt: string; records: MemoryListItem[] };
+    }
+  | { type: 'result'; action: 'memory.delete'; data: { deleted: 1 } }
+  | {
+      type: 'result';
+      action: 'memory.forget';
+      data: { recordsDeleted: number; eventsDeleted: number };
+    }
   | { type: 'error'; code: SseErrorCode; retryable: boolean; inCharacterMessage: string | null };
 
 export type SseErrorCode =

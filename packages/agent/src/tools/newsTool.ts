@@ -13,11 +13,8 @@ export interface NewsHeadline {
   source: string;
 }
 
-export interface NewsResult {
-  success: boolean;
-  headlines?: NewsHeadline[];
-  error?: string;
-}
+export type NewsResult =
+  { success: true; headlines: NewsHeadline[] } | { success: false; error: string };
 
 export async function fetchNews(input: NewsInput, options: ToolCallOptions): Promise<NewsResult> {
   const topic = input.topic ?? 'general';

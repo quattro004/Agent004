@@ -7,7 +7,13 @@
  * disagree with the service, and "forgotten" has to mean the service forgot.
  */
 
-import type { ActionOutcome, ActionInput } from '../hooks/useAgentStream';
+import type {
+  ActionData,
+  ActionOutcome,
+  ActionInput,
+  MemoryRecordData,
+  SseErrorCode,
+} from '../hooks/useAgentStream';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useConnectionStore } from '../stores/connectionStore';
@@ -17,12 +23,7 @@ const STORAGE_PREFIX = 'max-height-';
 
 export type ActionRunner = (input: ActionInput) => Promise<ActionOutcome>;
 
-export interface MemoryRecord {
-  id: string;
-  text: string;
-  kind: 'fact' | 'preference' | 'summary';
-  createdAt: string;
-}
+export type MemoryRecord = MemoryRecordData;
 
 export interface ForgetResult {
   recordsDeleted: number;
@@ -31,13 +32,13 @@ export interface ForgetResult {
 
 /** `code` is the SSE error code, `transport`, `signed_out`, or `malformed` for an unusable reply. */
 export class MemoryActionError extends Error {
-  constructor(readonly code: string) {
+  constructor(readonly code: SseErrorCode | 'transport' | 'signed_out' | 'malformed') {
     super(`Memory action failed: ${code}`);
     this.name = 'MemoryActionError';
   }
 }
 
-async function runOrThrow(run: ActionRunner, input: ActionInput): Promise<unknown> {
+async function runOrThrow(run: ActionRunner, input: ActionInput): Promise<ActionData> {
   const outcome = await run(input);
   if (!outcome.ok) throw new MemoryActionError(outcome.code);
   return outcome.data;
@@ -48,8 +49,28 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function recordsOf(data: unknown): MemoryRecord[] {
-  if (!isObject(data) || !Array.isArray(data.records)) throw new MemoryActionError('malformed');
-  return data.records as MemoryRecord[];
+  if (!isObject(data) || !Array.isArray(data.records)) {
+    throw new MemoryActionError('malformed');
+  }
+  const records: MemoryRecord[] = [];
+  for (const value of data.records) {
+    if (
+      !isObject(value) ||
+      typeof value.id !== 'string' ||
+      typeof value.text !== 'string' ||
+      (value.kind !== 'fact' && value.kind !== 'preference' && value.kind !== 'summary') ||
+      typeof value.createdAt !== 'string'
+    ) {
+      throw new MemoryActionError('malformed');
+    }
+    records.push({
+      id: value.id,
+      text: value.text,
+      kind: value.kind,
+      createdAt: value.createdAt,
+    });
+  }
+  return records;
 }
 
 export async function listMemories(run: ActionRunner): Promise<MemoryRecord[]> {
@@ -59,7 +80,16 @@ export async function listMemories(run: ActionRunner): Promise<MemoryRecord[]> {
 /** Saves what the agent exports as a `.json` download; nothing is saved if the export fails. */
 export async function exportMemories(run: ActionRunner): Promise<void> {
   const data = await runOrThrow(run, { action: 'memory.export' });
-  recordsOf(data);
+  if (
+    !isObject(data) ||
+    !('exportedAt' in data) ||
+    typeof data.exportedAt !== 'string' ||
+    !('records' in data) ||
+    !Array.isArray(data.records)
+  ) {
+    throw new MemoryActionError('malformed');
+  }
+  recordsOf({ records: data.records });
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -71,7 +101,10 @@ export async function exportMemories(run: ActionRunner): Promise<void> {
 }
 
 export async function deleteMemory(run: ActionRunner, memoryRecordId: string): Promise<void> {
-  await runOrThrow(run, { action: 'memory.delete', memoryRecordId });
+  const data = await runOrThrow(run, { action: 'memory.delete', memoryRecordId });
+  if (!isObject(data) || !('deleted' in data) || data.deleted !== 1) {
+    throw new MemoryActionError('malformed');
+  }
 }
 
 /**
@@ -83,7 +116,9 @@ export async function forgetMe(run: ActionRunner): Promise<ForgetResult> {
   const data = await runOrThrow(run, { action: 'memory.forget' });
   if (
     !isObject(data) ||
+    !('recordsDeleted' in data) ||
     typeof data.recordsDeleted !== 'number' ||
+    !('eventsDeleted' in data) ||
     typeof data.eventsDeleted !== 'number'
   ) {
     throw new MemoryActionError('malformed');

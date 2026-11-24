@@ -17,14 +17,17 @@ import { computeTurnUsage } from '../src/spend/usage.js';
 
 const streamMock = vi.hoisted(() => vi.fn());
 const synthesize = vi.hoisted(() => vi.fn());
+const agentFactory = vi.hoisted(() => vi.fn());
 const memorySdk = vi.hoisted(() => ({
   createEvent: vi.fn(),
   retrieveRecords: vi.fn(),
+  listRecords: vi.fn(),
 }));
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const Agent = vi.fn(function () {
+    agentFactory();
     return { stream: streamMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
@@ -118,7 +121,38 @@ describe('handleInvocations — admission and settlement', () => {
     synthesize.mockResolvedValue({ pollyCharacters: 0, segments: 0 });
     memorySdk.createEvent.mockResolvedValue(undefined);
     memorySdk.retrieveRecords.mockResolvedValue([]);
+    memorySdk.listRecords.mockResolvedValue([]);
     streamMock.mockImplementation(streamOf(['Hi there from Max!'], { usage: USAGE }));
+  });
+
+  it('refuses memory actions at the trip threshold without calling Memory', async () => {
+    const config = testRuntimeConfig();
+    const table = boot(config, fakeControlTable({ spendMicroUsd: config.breakerTripMicroUsd }));
+
+    const { events } = await action('memory.list');
+
+    expect(errorCodeOf(events)).toBe('breaker_tripped');
+    expect(memorySdk.listRecords).not.toHaveBeenCalled();
+    expect(table.admitRequest).not.toHaveBeenCalled();
+  });
+
+  it('evicts idle agents and owner entries before a later request', async () => {
+    const table = boot();
+    const start = Date.UTC(2026, 10, 22, 18);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(start);
+
+    try {
+      await turn('first');
+      expect(agentFactory).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(start + 31 * 60 * 1000);
+      await turn('second');
+
+      expect(agentFactory).toHaveBeenCalledTimes(2);
+      expect(table.sessions.size).toBeGreaterThan(0);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it('holds a lease and a reservation while the model runs', async () => {

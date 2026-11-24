@@ -14,6 +14,25 @@ import { makeRes } from './fixtures/sse.js';
 import { streamOf, fakeResult, textDelta } from './fixtures/strands.js';
 
 const streamMock = vi.hoisted(() => vi.fn());
+const synthesize = vi.hoisted(() => vi.fn());
+const PollySynthesisError = vi.hoisted(
+  () =>
+    class PollySynthesisError extends Error {
+      constructor(
+        message: string,
+        readonly pollyCharacters: number,
+        readonly emitted: number,
+        readonly cause?: unknown,
+      ) {
+        super(message);
+        this.name = 'PollySynthesisError';
+      }
+    },
+);
+const memorySdk = vi.hoisted(() => ({
+  createEvent: vi.fn(),
+  retrieveRecords: vi.fn(),
+}));
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -43,9 +62,13 @@ vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    synthesizeToAudioEvents: vi.fn().mockResolvedValue({ pollyCharacters: 0, segments: 0 }),
+    synthesizeToAudioEvents: synthesize,
+    PollySynthesisError,
   };
 });
+vi.mock('../src/memory/agentCoreMemoryClient.js', () => ({
+  createAgentCoreMemoryClient: () => memorySdk,
+}));
 
 const sdk = (await import('@strands-agents/sdk')) as unknown as {
   tool: ReturnType<typeof vi.fn>;
@@ -108,6 +131,9 @@ describe('handleInvocations — cancellation on client disconnect', () => {
     __test.setControlTable(table);
     vi.clearAllMocks();
     streamMock.mockImplementation(streamOf(['Hi there from Max!']));
+    synthesize.mockResolvedValue({ pollyCharacters: 0, segments: 0 });
+    memorySdk.createEvent.mockResolvedValue(undefined);
+    memorySdk.retrieveRecords.mockResolvedValue([]);
   });
 
   it('passes a cancelSignal to agent.stream', async () => {
@@ -169,6 +195,51 @@ describe('handleInvocations — cancellation on client disconnect', () => {
 
     expect(captured!.aborted).toBe(false);
     expect(double.event('done')).toBeDefined();
+  });
+
+  it('does not start the model when the client disconnects during memory retrieval', async () => {
+    let resolveRetrieve!: (records: []) => void;
+    memorySdk.retrieveRecords.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRetrieve = resolve;
+        }),
+    );
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+
+    await vi.waitFor(() => expect(memorySdk.retrieveRecords).toHaveBeenCalled());
+    double.disconnect();
+    resolveRetrieve([]);
+    await pending;
+    await double.end;
+
+    expect(streamMock).not.toHaveBeenCalled();
+    expect(double.event('done')).toBeUndefined();
+  });
+
+  it('does not send done when Polly throws after the turn was cancelled', async () => {
+    synthesize.mockImplementation(async (_reply: string, options: { signal?: AbortSignal }) => {
+      await new Promise<void>((resolve) => {
+        if (options.signal?.aborted) {
+          resolve();
+          return;
+        }
+        options.signal?.addEventListener('abort', () => resolve(), { once: true });
+      });
+      throw new PollySynthesisError('Polly synthesis was cancelled', 0, 0, new Error('aborted'));
+    });
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hello' }), double.res);
+    await vi.waitFor(() => expect(synthesize).toHaveBeenCalled());
+    double.disconnect();
+    await pending;
+    await double.end;
+
+    expect(synthesize).toHaveBeenCalled();
+    expect(double.event('done')).toBeUndefined();
   });
 
   it('leaves the counted session intact when the friend leaves mid-turn', async () => {

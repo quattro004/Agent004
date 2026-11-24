@@ -233,11 +233,20 @@ vi.mock('../src/stores/voiceStore', () => ({
 vi.mock('../src/stores/visitorStore', () => ({
   useVisitorStore: Object.assign(
     (selector?: (s: Record<string, unknown>) => unknown) => {
-      const state = { actorId: 'test-actor', displayAlias: null, greetingHistory: [] };
+      const state = {
+        actorId: 'test-actor',
+        displayAlias: 'ReturningVisitor',
+        greetingHistory: [],
+      };
       return selector ? selector(state) : state;
     },
     {
-      getState: () => ({ actorId: 'test-actor', greetingHistory: [], pushGreeting: vi.fn() }),
+      getState: () => ({
+        actorId: 'test-actor',
+        displayAlias: 'ReturningVisitor',
+        greetingHistory: [],
+        pushGreeting: vi.fn(),
+      }),
     },
   ),
 }));
@@ -428,7 +437,11 @@ describe('App — TV Power Lifecycle', () => {
     fireEvent.change(input, { target: { value: 'hello Max' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(mockSend).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'hello Max', voice: 'on' }),
+      expect.objectContaining({
+        message: 'hello Max',
+        displayAlias: 'ReturningVisitor',
+        voice: 'on',
+      }),
     );
   });
 

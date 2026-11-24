@@ -466,6 +466,17 @@ describe('useAgentStream', () => {
   });
 
   describe('runAction', () => {
+    it('rejects a malformed memory delete result instead of reporting success', async () => {
+      const fetchImpl = vi.fn(async () =>
+        sseResponse([{ type: 'result', action: 'memory.delete', data: {} }]),
+      );
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      await expect(
+        stream.runAction({ action: 'memory.delete', memoryRecordId: 'fact-1' }),
+      ).resolves.toEqual({ ok: false, code: 'malformed' });
+    });
+
     it('resolves with the result data and sends only the action and record id', async () => {
       const fetchImpl = vi.fn(async () =>
         sseResponse([{ type: 'result', action: 'memory.delete', data: { deleted: 1 } }]),

@@ -18,6 +18,8 @@ import {
   BeforeModelCallEvent,
   ToolResultBlock,
   TextBlock,
+  type JSONValue,
+  type LocalAgent,
   type SystemPrompt,
   type ToolSpec,
 } from '@strands-agents/sdk';
@@ -94,15 +96,13 @@ export async function readBoundedBody(
 interface ToolResultContentLike {
   type?: string;
   text?: string;
-  json?: unknown;
-  [key: string]: unknown;
+  json?: JSONValue;
 }
 
 export interface ToolResultLike {
   toolUseId: string;
   status: 'success' | 'error';
   content: ToolResultContentLike[];
-  [key: string]: unknown;
 }
 
 const TRUNCATION_MARKER = ' …[truncated]';
@@ -122,7 +122,7 @@ function serializedBytes(value: unknown): number {
 }
 
 export function completeModelRequestBytes(options: {
-  messages: unknown[];
+  messages: readonly object[];
   systemPrompt?: SystemPrompt;
   toolSpecs?: ToolSpec[];
 }): number {
@@ -181,8 +181,7 @@ export function truncateToolResult<T extends ToolResultLike>(
 
 export interface MessageLike {
   role: string;
-  content: unknown[];
-  [key: string]: unknown;
+  content: readonly object[];
 }
 
 export interface BoundModelInputOptions {
@@ -241,7 +240,11 @@ function startsATurn(message: MessageLike): boolean {
   return (
     message.role === 'user' &&
     !message.content.some(
-      (block) => (block as { type?: unknown } | null)?.type === 'toolResultBlock',
+      (block) =>
+        typeof block === 'object' &&
+        block !== null &&
+        'type' in block &&
+        block.type === 'toolResultBlock',
     )
   );
 }
@@ -277,16 +280,6 @@ export function invokeLimitsFor(
   };
 }
 
-/** The slice of the Agent surface these hooks need. Keeps tests honest. */
-interface HookableAgent {
-  messages: unknown[];
-  addHook(eventType: unknown, callback: (event: never) => void): unknown;
-  systemPrompt?: SystemPrompt;
-  toolRegistry?: {
-    toolSpecs?: () => ToolSpec[];
-  };
-}
-
 /**
  * Registers the bounds `InvokeOptions.limits` cannot express.
  *
@@ -295,7 +288,7 @@ interface HookableAgent {
  * without limit and a large tool result would arrive as input tokens on the
  * next call. Both are enforced here.
  */
-export function registerTurnLimits(agent: HookableAgent, limits: TurnLimits): void {
+export function registerTurnLimits(agent: LocalAgent, limits: TurnLimits): void {
   let toolExecutions = 0;
 
   agent.addHook(BeforeInvocationEvent, () => {
@@ -332,8 +325,8 @@ export function registerTurnLimits(agent: HookableAgent, limits: TurnLimits): vo
   });
 
   agent.addHook(BeforeModelCallEvent, (event: BeforeModelCallEvent) => {
-    const hookAgent = event.agent as unknown as HookableAgent;
-    const messages = hookAgent.messages as MessageLike[];
+    const hookAgent = event.agent;
+    const messages = hookAgent.messages;
     const toolSpecs = hookAgent.toolRegistry?.toolSpecs?.() ?? [];
     const { dropped, fits } = boundModelInput(messages, {
       maxBytes: limits.modelInputMaxBytes,

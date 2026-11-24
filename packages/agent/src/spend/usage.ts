@@ -53,9 +53,14 @@ export interface TurnUsage extends ModelUsage {
 
 const PER_MILLION = 1_000_000;
 
-export function readModelUsage(result: unknown): ModelUsage {
-  const usage = (result as { invocationContext?: { usage?: unknown } } | null | undefined)
-    ?.invocationContext?.usage;
+export interface InvocationUsageResult {
+  invocationContext?: {
+    usage?: unknown;
+  };
+}
+
+export function readModelUsage(result: InvocationUsageResult | null | undefined): ModelUsage {
+  const usage = result?.invocationContext?.usage;
   if (typeof usage !== 'object' || usage === null) {
     throw new MissingUsageError('Agent result has no invocationContext.usage');
   }

@@ -28,6 +28,7 @@ import { authService, RUNTIME_ARN } from './services/authService';
 import { useConnectionStore } from './stores/connectionStore';
 import { useConversationStore } from './stores/conversationStore';
 import { useVoiceStore } from './stores/voiceStore';
+import { useVisitorStore } from './stores/visitorStore';
 import type { SessionState } from './types/domain';
 import './effects/crtFallback.css';
 import './App.css';
@@ -423,8 +424,10 @@ export function App() {
   const handleSend = useCallback(
     (text: string) => {
       if (!text.trim() || !canSend) return;
+      const displayAlias = useVisitorStore.getState().displayAlias;
       void stream.send({
         message: text,
+        displayAlias: displayAlias ?? undefined,
         clientTimestamp: new Date().toISOString(),
         voice: 'on',
       });

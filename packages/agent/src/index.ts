@@ -1,8 +1,13 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
-import { Agent, Message, SlidingWindowConversationManager, TextBlock } from '@strands-agents/sdk';
+import {
+  Agent,
+  Message,
+  SlidingWindowConversationManager,
+  TextBlock,
+  type AgentStreamEvent,
+} from '@strands-agents/sdk';
 import { BedrockModel } from '@strands-agents/sdk/models/bedrock';
 import { tool } from '@strands-agents/sdk';
-import type { JSONValue } from '@strands-agents/sdk';
 import { PollyClient } from '@aws-sdk/client-polly';
 import { BedrockAgentCoreClient } from '@aws-sdk/client-bedrock-agentcore';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -19,7 +24,7 @@ import {
 import { startSpan, endSpan, withRequestTrace } from './handlers/observability.js';
 import { randomUUID } from 'node:crypto';
 import { readModelUsage, computeTurnUsage, MissingUsageError } from './spend/usage.js';
-import { checkBreaker, recordTurnSpend, BreakerReadError } from './spend/breaker.js';
+import { checkBreaker, BreakerReadError } from './spend/breaker.js';
 import { estimateReservationMicroUsd } from './spend/reservation.js';
 import {
   ControlTable,
@@ -84,11 +89,12 @@ const runtimeSessionOwners = new Map<string, string>();
  * One `Agent` per runtime session, so a friend's conversation history is not
  * rebuilt on every turn and never leaks into another friend's reply.
  */
-let registry: AgentRegistry<Agent> | undefined;
+let registry: AgentRegistry<Agent, string | undefined> | undefined;
 
-function agentRegistry(config: RuntimeConfig): AgentRegistry<Agent> {
-  registry ??= new AgentRegistry<Agent>({
-    create: (_countedSessionId) => createMaxHeightAgent({ config }),
+function agentRegistry(config: RuntimeConfig): AgentRegistry<Agent, string | undefined> {
+  registry ??= new AgentRegistry<Agent, string | undefined>({
+    create: (_countedSessionId, displayAlias) =>
+      createMaxHeightAgent({ displayAlias: displayAlias ?? undefined, config }),
   });
   return registry;
 }
@@ -222,7 +228,7 @@ const newsTool = tool({
       apiKey: getRuntimeConfig().secrets.newsApiKey,
       signal: context?.cancelSignal,
     });
-    return result as unknown as JSONValue;
+    return result;
   },
 });
 
@@ -236,7 +242,7 @@ const weatherTool = tool({
       apiKey: getRuntimeConfig().secrets.weatherApiKey,
       signal: context?.cancelSignal,
     });
-    return result as unknown as JSONValue;
+    return result;
   },
 });
 
@@ -255,7 +261,7 @@ const webSearchTool = tool({
       signal: context?.cancelSignal,
       turn,
     });
-    return result as unknown as JSONValue;
+    return result;
   },
 });
 
@@ -295,12 +301,10 @@ function removePriorSessionContextFromHistory(
   historyLength: number,
   originalMessage: string,
 ): void {
-  const history = (agent as unknown as { messages?: unknown[] }).messages;
-  if (!history) return;
-
-  const input = history[historyLength] as
-    { role?: unknown; content?: Array<{ text?: unknown }> } | undefined;
-  const firstText = input?.content?.[0]?.text;
+  const history = agent.messages;
+  const input = history[historyLength];
+  const firstBlock = input?.content[0];
+  const firstText = firstBlock instanceof TextBlock ? firstBlock.text : undefined;
   if (
     input?.role === 'user' &&
     typeof firstText === 'string' &&
@@ -336,6 +340,30 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
   const config = getRuntimeConfig();
   const { limits } = config;
   const sse = new SseStream(res);
+
+  // Idle local agents and owner mappings are process-local. Evict them on
+  // later requests, never in a background timer that could outlive AgentCore
+  // invocations or add a second scheduling cost.
+  const idleEvicted = registry?.evictIdle(config.sessionMaxMinutes * 60 * 1000) ?? 0;
+  if (idleEvicted > 0) {
+    for (const [runtimeSessionId] of runtimeSessionOwners) {
+      if (registry?.lastUsedAt(runtimeSessionId) === undefined) {
+        runtimeSessionOwners.delete(runtimeSessionId);
+      }
+    }
+  }
+
+  // Install disconnect and deadline state before session setup or memory
+  // retrieval, so a friend who leaves cannot continue a billable setup phase.
+  const cancellation = new AbortController();
+  res.on('close', () => {
+    if (!res.writableFinished) cancellation.abort();
+  });
+  let deadlineExceeded = false;
+  const deadline = setTimeout(() => {
+    deadlineExceeded = true;
+    cancellation.abort();
+  }, limits.deadlineMs);
 
   // Filled in as we learn them, and reported on the `invocation` span whatever
   // path the turn takes.
@@ -602,15 +630,28 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       memoryRetrievals = 1;
       startSpan('memory.retrieve');
       try {
-        memories = await memoryAdapter(config).retrieveMemories(sub, message, config.memoryTopK);
+        memories = await memoryAdapter(config).retrieveMemories(
+          sub,
+          message,
+          config.memoryTopK,
+          cancellation.signal,
+        );
         endSpan('memory.retrieve', { count: memories.length, failed: false });
       } catch (error) {
         emitMemoryFailureWarning('retrieve', error);
         emitCountMetric('MemoryRetrieveFailures');
         endSpan('memory.retrieve', { count: 0, failed: true });
       }
+      if (cancellation.signal.aborted) {
+        outcome = deadlineExceeded ? 'session_cap_exceeded' : 'cancelled';
+        return;
+      }
       // Retrieval was attempted, so it is billed even if nothing else runs.
       settleMicroUsd = memoryRetrievals * config.prices.memoryRetrievalMicroUsd;
+    }
+    if (cancellation.signal.aborted) {
+      outcome = deadlineExceeded ? 'session_cap_exceeded' : 'cancelled';
+      return;
     }
     endSpan('session.open', { opened });
 
@@ -621,24 +662,12 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       voice: voiceEnabled ? 'on' : 'off',
     });
 
-    const agent = agentRegistry(config).acquire(runtimeSessionId, countedSessionId) as Agent;
+    const agent = agentRegistry(config).acquire(
+      runtimeSessionId,
+      countedSessionId,
+      parsed.displayAlias,
+    ) as Agent;
     runtimeSessionOwners.set(runtimeSessionId, sub);
-
-    // A friend who closes the tab mid-turn must stop costing us tokens. The
-    // response emitting 'close' before it has finished writing is Node's
-    // signal that the client went away, not that we completed.
-    const cancellation = new AbortController();
-    res.on('close', () => {
-      if (!res.writableFinished) cancellation.abort();
-    });
-
-    // The turn deadline covers model, tool and voice work together. Reaching
-    // it is not completion, and work already billed is still counted.
-    let deadlineExceeded = false;
-    const deadline = setTimeout(() => {
-      deadlineExceeded = true;
-      cancellation.abort();
-    }, limits.deadlineMs);
 
     startSpan('first_token');
     startSpan('reply.complete');
@@ -666,7 +695,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
 
     const memoryContext = opened ? buildPriorSessionContext(memories) : '';
     const memoryContextAdded = memoryContext !== '';
-    const historyLength = (agent as unknown as { messages?: unknown[] }).messages?.length ?? 0;
+    const historyLength = agent.messages.length;
     const invocationInput =
       memoryContext === '' ? message : [{ text: memoryContext }, { text: message }];
 
@@ -700,7 +729,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         step = await stream.next();
       }
       const result = step.value;
-      const stopReason = (result as { stopReason?: string } | undefined)?.stopReason ?? '';
+      const stopReason = result?.stopReason ?? '';
 
       // Strands resolves, rather than throws, when the cancelSignal fires, and
       // the aborted model call never reported what it billed. Handle it as the
@@ -775,7 +804,14 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         // metric is how the builder learns the usage contract has changed.
         emitCountMetric('UnmeteredRequests');
       }
-      if (err instanceof PollySynthesisError) {
+      if (deadlineExceeded) {
+        console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
+        outcome = sse.fail('session_cap_exceeded');
+      } else if (cancelled) {
+        // A friend who left: there is no one to report it to, and the socket
+        // is already gone.
+        outcome = 'cancelled';
+      } else if (err instanceof PollySynthesisError) {
         // Polly already billed for part of the reply; the text the friend can
         // read is worth more than a refusal, so the turn still completes.
         pollyCharacters = err.pollyCharacters;
@@ -783,19 +819,11 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         sse.send({ type: 'done', turnsUsed: session.turns, state: lifecycleStateOf(session) });
         completeReply();
         turnDelivered = true;
-      } else if (deadlineExceeded) {
-        console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
-        outcome = sse.fail('session_cap_exceeded');
       } else if (!cancelled) {
         console.error('Turn failed:', err);
         outcome = sse.fail('internal');
-      } else {
-        // A friend who left: there is no one to report it to, and the socket
-        // is already gone.
-        outcome = 'cancelled';
       }
     } finally {
-      clearTimeout(deadline);
       if (memoryContextAdded) {
         removePriorSessionContextFromHistory(agent, historyLength, message);
       }
@@ -839,6 +867,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       if (!firstTokenSeen) endSpan('first_token');
     }
   } finally {
+    clearTimeout(deadline);
     // Settle before the stream closes, so the slot and the correction are not
     // left to a runtime that may freeze once the response ends. A settlement
     // failure never fails or replays the turn: the work is already done and
@@ -914,6 +943,8 @@ async function handleAction(
   let failed = true;
   let count = 0;
   let memoryCallAttempted = false;
+  let actionLease: Lease | undefined;
+  let actionStartedAt = new Date();
 
   try {
     if (!KNOWN_ACTIONS.has(action)) return sse.fail('invalid_request');
@@ -937,6 +968,41 @@ async function handleAction(
       if (!rate.allowed) return sse.fail('rate_limited');
     }
 
+    actionStartedAt = new Date();
+    let breaker;
+    try {
+      breaker = await checkBreaker({
+        table,
+        limits: {
+          degradeMicroUsd: config.breakerDegradeMicroUsd,
+          tripMicroUsd: config.breakerTripMicroUsd,
+        },
+        now: actionStartedAt,
+      });
+    } catch (error) {
+      console.error('Could not read the spend breaker for a memory action:', error);
+      return sse.fail('internal');
+    }
+    if (breaker.state === 'tripped') return sse.fail('breaker_tripped');
+
+    try {
+      const admission = await table.admitRequest({
+        sub,
+        requestId: randomUUID(),
+        reserveMicroUsd: config.prices.memoryRetrievalMicroUsd,
+        spendCeilingMicroUsd: config.breakerTripMicroUsd,
+        maxActiveRequests: config.maxActiveRequests,
+        now: actionStartedAt,
+      });
+      if (!admission.admitted) {
+        return sse.fail(admission.reason === 'spend_limit' ? 'breaker_tripped' : 'busy');
+      }
+      actionLease = admission.lease;
+    } catch (error) {
+      console.error('Could not admit a memory action:', error);
+      return sse.fail('internal');
+    }
+
     const adapter = memoryAdapter(config);
     memoryCallAttempted = true;
 
@@ -949,11 +1015,19 @@ async function handleAction(
 
       const records = result.memories ?? [];
       count = records.length;
-      const data =
-        action === 'memory.export'
-          ? { exportedAt: new Date().toISOString(), records }
-          : { records };
-      sse.send({ type: 'result', action, data });
+      if (action === 'memory.export') {
+        sse.send({
+          type: 'result',
+          action: 'memory.export',
+          data: { exportedAt: new Date().toISOString(), records },
+        });
+      } else {
+        sse.send({
+          type: 'result',
+          action: 'memory.list',
+          data: { records },
+        });
+      }
       failed = false;
       return 'done';
     }
@@ -966,8 +1040,8 @@ async function handleAction(
         return sse.fail(result.code ?? 'internal');
       }
 
-      count = result.deleted ?? 0;
-      sse.send({ type: 'result', action, data: { deleted: result.deleted } });
+      count = 1;
+      sse.send({ type: 'result', action: 'memory.delete', data: { deleted: 1 } });
       failed = false;
       return 'done';
     }
@@ -998,7 +1072,7 @@ async function handleAction(
 
     sse.send({
       type: 'result',
-      action,
+      action: 'memory.forget',
       data: {
         recordsDeleted: result.recordsDeleted ?? 0,
         eventsDeleted: result.eventsDeleted ?? 0,
@@ -1011,8 +1085,13 @@ async function handleAction(
     emitCountMetric('MemoryActionFailures');
     return sse.fail('internal');
   } finally {
-    if (memoryCallAttempted) {
-      await recordTurnSpend({ table, now: new Date() }, config.prices.memoryRetrievalMicroUsd);
+    if (actionLease) {
+      await settleLease(
+        table,
+        actionLease,
+        memoryCallAttempted ? config.prices.memoryRetrievalMicroUsd : 0,
+        actionStartedAt,
+      );
     }
     endSpan('memory.action', { count, failed });
   }
@@ -1029,12 +1108,11 @@ function lifecycleStateOf(session: CountedSessionWrite): SessionLifecycleState {
 }
 
 /** Pulls the text out of a model stream event, or `undefined` for anything else. */
-function textDeltaOf(event: unknown): string | undefined {
-  const wrapper = event as { type?: string; event?: { type?: string; delta?: unknown } };
-  if (wrapper?.type !== 'modelStreamUpdateEvent') return undefined;
-  if (wrapper.event?.type !== 'modelContentBlockDeltaEvent') return undefined;
-  const delta = wrapper.event.delta as { type?: string; text?: string } | undefined;
-  return delta?.type === 'textDelta' ? delta.text : undefined;
+function textDeltaOf(event: AgentStreamEvent): string | undefined {
+  if (event.type !== 'modelStreamUpdateEvent') return undefined;
+  if (event.event.type !== 'modelContentBlockDeltaEvent') return undefined;
+  const delta = event.event.delta;
+  return delta.type === 'textDelta' ? delta.text : undefined;
 }
 
 interface InvocationBody {

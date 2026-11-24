@@ -116,12 +116,14 @@ describe('handleInvocations — AgentCore memory', () => {
     await invoke({ message: 'And now another turn.' });
 
     expect(memorySdk.retrieveRecords).toHaveBeenCalledTimes(1);
-    expect(memorySdk.retrieveRecords).toHaveBeenCalledWith({
-      memoryId: 'mem-test',
-      namespace: `/max-height/${TEST_SUB}/`,
-      searchQuery: 'Remember this from last time?',
-      topK: 10,
-    });
+    expect(memorySdk.retrieveRecords).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memoryId: 'mem-test',
+        namespace: `/max-height/${TEST_SUB}/`,
+        searchQuery: 'Remember this from last time?',
+        topK: 10,
+      }),
+    );
 
     const { buildSystemPrompt } = await import('../src/personality/systemPrompt.js');
     expect(buildSystemPrompt).toHaveBeenCalledWith({ displayAlias: undefined });
@@ -312,5 +314,55 @@ describe('handleInvocations — AgentCore memory', () => {
       data: { recordsDeleted: 1, eventsDeleted: 1 },
     });
     expect(table.sessions.get(TEST_SUB)?.state).toBe('SignedOff');
+  });
+
+  it('does not let forget-me wipe while a chat turn holds the friend lease', async () => {
+    const table = install(fakeControlTable());
+    memorySdk.listRecords.mockResolvedValue([rememberedFact]);
+    memorySdk.batchDeleteRecords.mockResolvedValue({
+      successfulRecords: [{ memoryRecordId: 'fact-1' }],
+      failedRecords: [],
+    });
+
+    streamMock.mockImplementation((_message, { cancelSignal }: { cancelSignal: AbortSignal }) => ({
+      next: () =>
+        new Promise((_resolve, reject) => {
+          cancelSignal.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        }),
+    }));
+
+    const chat = makeRes();
+    const chatPending = __test.handleInvocations(
+      makeReq(
+        { message: 'Keep the turn alive.' },
+        {
+          ...bearerHeaders({ sub: TEST_SUB }),
+          'x-amzn-bedrock-agentcore-runtime-session-id': TEST_RUNTIME_SESSION_ID,
+        },
+      ),
+      chat.res,
+    );
+
+    await vi.waitFor(() => expect(table.leases.size).toBe(1));
+
+    const forget = await invoke({ action: 'memory.forget' });
+
+    expect(forget.event('error')?.code).toBe('busy');
+    expect(memorySdk.batchDeleteRecords).not.toHaveBeenCalled();
+
+    chat.disconnect();
+    await chatPending;
+    await chat.end;
+  });
+
+  it('passes a provided display alias into the system prompt', async () => {
+    install(fakeControlTable());
+
+    await invoke({ message: 'Hello.', displayAlias: 'ReturningVisitor' });
+
+    const { buildSystemPrompt } = await import('../src/personality/systemPrompt.js');
+    expect(buildSystemPrompt).toHaveBeenCalledWith({ displayAlias: 'ReturningVisitor' });
   });
 });

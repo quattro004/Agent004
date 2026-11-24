@@ -15,9 +15,10 @@
  */
 export const RUNTIME_SESSION_ID_MIN_LENGTH = 33;
 
-interface Entry<TAgent> {
+interface Entry<TAgent, TContext = void> {
   agent: TAgent;
   countedSessionId: string;
+  context?: TContext;
   lastUsedAt: number;
 }
 
@@ -28,8 +29,8 @@ export interface AgentRegistryOptions<TAgent, TContext = void> {
   now?: () => number;
 }
 
-export class AgentRegistry<TAgent = unknown, TContext = void> {
-  readonly #entries = new Map<string, Entry<TAgent>>();
+export class AgentRegistry<TAgent = object, TContext = void> {
+  readonly #entries = new Map<string, Entry<TAgent, TContext>>();
   readonly #create: (countedSessionId: string, context?: TContext) => TAgent;
   readonly #now: () => number;
 
@@ -54,9 +55,13 @@ export class AgentRegistry<TAgent = unknown, TContext = void> {
     }
 
     const existing = this.#entries.get(runtimeSessionId);
-    // A changed counted session means a new conversation, so the old history
-    // must go rather than carry over into it.
-    if (existing && existing.countedSessionId === countedSessionId) {
+    // A changed counted session or agent context means a new conversation,
+    // so the old history must go rather than carry over into it.
+    if (
+      existing &&
+      existing.countedSessionId === countedSessionId &&
+      existing.context === context
+    ) {
       existing.lastUsedAt = this.#now();
       return existing.agent;
     }
@@ -68,6 +73,7 @@ export class AgentRegistry<TAgent = unknown, TContext = void> {
     this.#entries.set(runtimeSessionId, {
       agent,
       countedSessionId,
+      context,
       lastUsedAt: this.#now(),
     });
     return agent;

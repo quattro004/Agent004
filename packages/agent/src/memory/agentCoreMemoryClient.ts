@@ -52,6 +52,7 @@ export interface AgentCoreMemoryClient {
     namespace: string;
     searchQuery: string;
     topK: number;
+    abortSignal?: AbortSignal;
   }): Promise<MemoryRecordSummary[]>;
 
   getRecord(params: {
@@ -202,7 +203,7 @@ export function createAgentCoreMemoryClient(
 
     listRecords,
 
-    async retrieveRecords({ memoryId, namespace, searchQuery, topK }) {
+    async retrieveRecords({ memoryId, namespace, searchQuery, topK, abortSignal }) {
       const page = await sdk.send(
         new RetrieveMemoryRecordsCommand({
           memoryId,
@@ -210,6 +211,7 @@ export function createAgentCoreMemoryClient(
           searchCriteria: { searchQuery, topK },
           maxResults: topK,
         }),
+        abortSignal ? { abortSignal } : undefined,
       );
       return (page.memoryRecordSummaries ?? []).map(toRecordSummary);
     },

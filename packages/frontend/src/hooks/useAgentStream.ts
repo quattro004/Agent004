@@ -32,14 +32,43 @@ export const SSE_ERROR_CODES = [
 
 export type SseErrorCode = (typeof SSE_ERROR_CODES)[number];
 
+export type MemoryKind = 'fact' | 'preference' | 'summary';
+
+export interface MemoryRecordData {
+  id: string;
+  text: string;
+  kind: MemoryKind;
+  createdAt: string;
+}
+
+export type ActionData =
+  | { ready: true }
+  | { records: MemoryRecordData[] }
+  | { exportedAt: string; records: MemoryRecordData[] }
+  | { deleted: 1 }
+  | { recordsDeleted: number; eventsDeleted: number };
+
 export type AgentEvent =
   | { type: 'session'; countedSessionId: string; opened: boolean; voice: 'on' | 'off' }
   | { type: 'text'; delta: string }
   | { type: 'sources'; sources: SearchSource[] }
   | { type: 'audio'; seq: number; format: 'mp3'; data: string }
   | { type: 'done'; turnsUsed: number; state: 'ACTIVE' | 'SIGNED_OFF' }
-  | { type: 'result'; action: string; data: unknown }
-  | { type: 'error'; code: SseErrorCode; retryable: boolean; inCharacterMessage: string | null };
+  | { type: 'result'; action: 'runtime.ready'; data: { ready: true } }
+  | { type: 'result'; action: 'memory.list'; data: { records: MemoryRecordData[] } }
+  | {
+      type: 'result';
+      action: 'memory.export';
+      data: { exportedAt: string; records: MemoryRecordData[] };
+    }
+  | { type: 'result'; action: 'memory.delete'; data: { deleted: 1 } }
+  | {
+      type: 'result';
+      action: 'memory.forget';
+      data: { recordsDeleted: number; eventsDeleted: number };
+    }
+  | { type: 'error'; code: SseErrorCode; retryable: boolean; inCharacterMessage: string | null }
+  | { type: 'malformed' };
 
 export interface SendInput {
   message?: string;
@@ -52,10 +81,12 @@ export interface SendInput {
 }
 
 /** A memory action (memory.list, memory.export, memory.delete, memory.forget). */
-export interface ActionInput {
-  action: string;
-  memoryRecordId?: string;
-}
+export type ActionInput =
+  | { action: 'runtime.ready' }
+  | { action: 'memory.list' }
+  | { action: 'memory.export' }
+  | { action: 'memory.delete'; memoryRecordId: string }
+  | { action: 'memory.forget' };
 
 /**
  * How an action ended. 	ransport covers a platform status, a dropped stream
@@ -63,7 +94,8 @@ export interface ActionInput {
  * usable token. Neither is ever reported as success.
  */
 export type ActionOutcome =
-  { ok: true; data: unknown } | { ok: false; code: SseErrorCode | 'transport' | 'signed_out' };
+  | { ok: true; data: ActionData }
+  | { ok: false; code: SseErrorCode | 'transport' | 'signed_out' | 'malformed' };
 
 interface ActionCapture {
   outcome: ActionOutcome | null;
@@ -146,17 +178,109 @@ const ERROR_OUTCOMES: Record<SseErrorCode, ErrorOutcome> = {
 
 /** An unknown code is treated as a transport failure rather than silently ignored. */
 export function outcomeForErrorCode(code: string): ErrorOutcome {
-  return (
-    ERROR_OUTCOMES[code as SseErrorCode] ?? {
+  if (!isSseErrorCode(code)) {
+    return {
       sessionState: 'SIGNAL_LOST',
       showAsReply: false,
       retryWithNewSessionId: false,
-    }
-  );
+    };
+  }
+  return ERROR_OUTCOMES[code];
 }
 
 function isAbort(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+function isSseErrorCode(code: string): code is SseErrorCode {
+  return (SSE_ERROR_CODES as readonly string[]).includes(code);
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isMemoryRecordData(value: unknown): value is MemoryRecordData {
+  if (!isObject(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.text === 'string' &&
+    (value.kind === 'fact' || value.kind === 'preference' || value.kind === 'summary') &&
+    typeof value.createdAt === 'string'
+  );
+}
+
+function isActionData(action: string, data: unknown): data is ActionData {
+  if (!isObject(data)) return false;
+  if (action === 'runtime.ready') return data.ready === true;
+  if (action === 'memory.delete') return data.deleted === 1;
+  if (action === 'memory.list') {
+    return Array.isArray(data.records) && data.records.every(isMemoryRecordData);
+  }
+  if (action === 'memory.export') {
+    return (
+      typeof data.exportedAt === 'string' &&
+      Array.isArray(data.records) &&
+      data.records.every(isMemoryRecordData)
+    );
+  }
+  if (action === 'memory.forget') {
+    return (
+      typeof data.recordsDeleted === 'number' &&
+      Number.isSafeInteger(data.recordsDeleted) &&
+      data.recordsDeleted >= 0 &&
+      typeof data.eventsDeleted === 'number' &&
+      Number.isSafeInteger(data.eventsDeleted) &&
+      data.eventsDeleted >= 0
+    );
+  }
+  return false;
+}
+
+function isAgentEvent(value: unknown): value is AgentEvent {
+  if (!isObject(value) || typeof value.type !== 'string') return false;
+  switch (value.type) {
+    case 'session':
+      return (
+        typeof value.countedSessionId === 'string' &&
+        typeof value.opened === 'boolean' &&
+        (value.voice === 'on' || value.voice === 'off')
+      );
+    case 'text':
+      return typeof value.delta === 'string';
+    case 'sources':
+      return (
+        Array.isArray(value.sources) &&
+        value.sources.every(
+          (source) =>
+            isObject(source) && typeof source.title === 'string' && typeof source.url === 'string',
+        )
+      );
+    case 'audio':
+      return (
+        typeof value.seq === 'number' &&
+        Number.isSafeInteger(value.seq) &&
+        value.format === 'mp3' &&
+        typeof value.data === 'string'
+      );
+    case 'done':
+      return (
+        typeof value.turnsUsed === 'number' &&
+        Number.isSafeInteger(value.turnsUsed) &&
+        (value.state === 'ACTIVE' || value.state === 'SIGNED_OFF')
+      );
+    case 'result':
+      return typeof value.action === 'string' && isActionData(value.action, value.data);
+    case 'error':
+      return (
+        typeof value.code === 'string' &&
+        isSseErrorCode(value.code) &&
+        typeof value.retryable === 'boolean' &&
+        (typeof value.inCharacterMessage === 'string' || value.inCharacterMessage === null)
+      );
+    default:
+      return false;
+  }
 }
 
 /** Yields one parsed event per `data:` block of the SSE stream. */
@@ -197,7 +321,10 @@ function parseBlock(block: string): AgentEvent | null {
     .join('');
   if (!data) return null;
   try {
-    return JSON.parse(data) as AgentEvent;
+    const value: unknown = JSON.parse(data);
+    if (isAgentEvent(value)) return value;
+    if (isObject(value) && value.type === 'result') return { type: 'malformed' };
+    return null;
   } catch {
     return null;
   }
@@ -267,10 +394,11 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
       return 'failed';
     }
 
-    return consume(response.body, signal, capture);
+    return consume(input, response.body, signal, capture);
   }
 
   async function consume(
+    input: SendInput,
     body: ReadableStream<Uint8Array>,
     signal: AbortSignal,
     capture?: ActionCapture,
@@ -312,7 +440,12 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
             break;
           case 'result':
             terminal = true;
-            if (capture) capture.outcome = { ok: true, data: event.data };
+            if (capture) {
+              capture.outcome =
+                input.action === event.action
+                  ? { ok: true, data: event.data }
+                  : { ok: false, code: 'malformed' };
+            }
             break;
           case 'error':
             terminal = true;
@@ -324,6 +457,10 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
             } else {
               outcome = applyError(event);
             }
+            break;
+          case 'malformed':
+            terminal = true;
+            if (capture) capture.outcome = { ok: false, code: 'malformed' };
             break;
         }
       }
