@@ -371,13 +371,34 @@ export class ControlTable {
       );
       return { admitted: true, lease };
     } catch (err) {
-      if (!(err instanceof TransactionCanceledException)) throw err;
-      const failed = (index: number) =>
-        err.CancellationReasons?.[index]?.Code === 'ConditionalCheckFailed';
-      if (failed(2)) return { admitted: false, reason: 'friend_busy' };
-      if (failed(1)) return { admitted: false, reason: 'capacity_busy' };
-      if (failed(0)) return { admitted: false, reason: 'spend_limit' };
-      throw err;
+      if (err instanceof TransactionCanceledException) {
+        const failed = (index: number) =>
+          err.CancellationReasons?.[index]?.Code === 'ConditionalCheckFailed';
+        if (failed(2)) return { admitted: false, reason: 'friend_busy' };
+        if (failed(1)) return { admitted: false, reason: 'capacity_busy' };
+        if (failed(0)) return { admitted: false, reason: 'spend_limit' };
+        throw err;
+      }
+
+      // A lost SDK response cannot prove whether DynamoDB committed. Reconcile
+      // this exact request with a strongly consistent lease read before either
+      // starting model work or refusing the turn. Never replay the transaction.
+      let observed: Item | undefined;
+      try {
+        observed = await this.get(leaseKey(sub));
+      } catch {
+        throw err;
+      }
+      if (!observed) throw err;
+
+      if (
+        observed.requestId?.S === requestId &&
+        observed.reservedMicroUsd?.N === String(reserveMicroUsd) &&
+        observed.month?.S === month
+      ) {
+        return { admitted: true, lease };
+      }
+      return { admitted: false, reason: 'friend_busy' };
     }
   }
 

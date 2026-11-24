@@ -124,7 +124,7 @@ vi.mock('../src/config/constants', () => ({
 }));
 
 vi.mock('../src/hooks/useAudio', () => ({
-  createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  createUseAudio: vi.fn().mockReturnValue({ cancel: vi.fn(), dispose: vi.fn() }),
 }));
 
 const { defaultPreloadedGreeting, mockPlayGreeting, mockPreloadGreeting, mockStopGreeting } =

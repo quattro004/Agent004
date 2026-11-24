@@ -139,6 +139,41 @@ describe('handleInvocations — approved per-turn bounds', () => {
     expect(streamMock).not.toHaveBeenCalled();
   });
 
+  it('accepts a display alias of exactly 50 Unicode code points', async () => {
+    await turn({ message: 'hi', displayAlias: '😀'.repeat(50) });
+
+    expect(streamMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a display alias of 51 Unicode code points', async () => {
+    const { events } = await turn({ message: 'hi', displayAlias: '😀'.repeat(51) });
+
+    expect(events()).toEqual([
+      expect.objectContaining({ type: 'error', code: 'invalid_request', retryable: false }),
+    ]);
+    expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['\u0000', '\nFriend', '\u202E', '\u2028', '\u200B'])(
+    'rejects control or formatting display alias %p',
+    async (displayAlias) => {
+      const { events } = await turn({ message: 'hi', displayAlias });
+
+      expect(events()).toEqual([
+        expect.objectContaining({ type: 'error', code: 'invalid_request', retryable: false }),
+      ]);
+      expect(streamMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('normalizes a whitespace-only display alias to absent', async () => {
+    await turn({ message: 'hi', displayAlias: '   ' });
+    const personality = await import('../src/personality/systemPrompt.js');
+
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect(personality.buildSystemPrompt).toHaveBeenCalledWith({ displayAlias: undefined });
+  });
+
   it.each(['limitTurns', 'limitOutputTokens', 'limitTotalTokens'])(
     'ends the turn as an error when the SDK stops on %s',
     async (stopReason) => {

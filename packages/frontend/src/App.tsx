@@ -12,7 +12,7 @@ import { TuningOverlay } from './components/TuningOverlay';
 import { TvKnob } from './components/TvKnob';
 import { VolumeKnob } from './components/VolumeKnob';
 import { useAgentStream } from './hooks/useAgentStream';
-import { createUseAudio } from './hooks/useAudio';
+import { createUseAudio, type UseAudioHandle } from './hooks/useAudio';
 import { createUseGreeting, type PreloadedGreeting } from './hooks/useGreeting';
 import { createAudioChain } from './audio/audioChain';
 import {
@@ -120,6 +120,7 @@ export function App() {
   const [audioChain] = useState(() => createAudioChain());
   const [greeting] = useState(() => createUseGreeting(audioChain));
   const preloadedGreetingRef = useRef<PreloadedGreeting | null>(null);
+  const voicePlayerRef = useRef<UseAudioHandle | null>(null);
   const powerSequenceIdRef = useRef(0);
   const powerOnAbortRef = useRef<AbortController | null>(null);
   const tvPowerRef = useRef<TvPowerState>('off');
@@ -285,9 +286,11 @@ export function App() {
   // disposed, so StrictMode's simulated unmount needs a fresh one per mount.
   useEffect(() => {
     const voicePlayer = createUseAudio(audioChain);
+    voicePlayerRef.current = voicePlayer;
     return () => {
       powerOnAbortRef.current?.abort();
       voicePlayer.dispose();
+      voicePlayerRef.current = null;
       audioChain.dispose();
     };
   }, [audioChain]);
@@ -316,6 +319,7 @@ export function App() {
   // Stop greeting audio on every transition to TV off
   useEffect(() => {
     if (prevTvPowerRef.current !== 'off' && tvPower === 'off') {
+      voicePlayerRef.current?.cancel();
       greeting.stopGreeting();
       audioChain.stopStatic();
     }
@@ -398,6 +402,7 @@ export function App() {
       greetingDoneRef.current = false;
       // A turn still streaming is a turn still being paid for.
       stream.cancel();
+      voicePlayerRef.current?.cancel();
       audioChain.stopStatic();
       tvPowerRef.current = 'off';
       setTvPower('off');
@@ -409,6 +414,7 @@ export function App() {
   const handleChannelChange = useCallback(() => {
     if (tvPower === 'off') return;
 
+    voicePlayerRef.current?.cancel();
     greeting.stopGreeting();
     preloadedGreetingRef.current = null;
     greetingDoneRef.current = false;
@@ -424,6 +430,7 @@ export function App() {
   const handleSend = useCallback(
     (text: string) => {
       if (!text.trim() || !canSend) return;
+      voicePlayerRef.current?.cancel();
       const displayAlias = useVisitorStore.getState().displayAlias;
       void stream.send({
         message: text,

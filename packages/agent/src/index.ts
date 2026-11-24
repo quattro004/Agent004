@@ -35,7 +35,7 @@ import {
 import { readVerifiedClaims, InvalidTokenError } from './identity/jwtClaims.js';
 import { loadRuntimeConfig, type RuntimeConfig } from './config/runtimeConfig.js';
 import { SseStream, type SessionLifecycleState, type SseErrorCode } from './transport/sse.js';
-import { AgentRegistry } from './session/agentRegistry.js';
+import { AgentRegistry, type AgentAcquisition } from './session/agentRegistry.js';
 import { synthesizeToAudioEvents, PollySynthesisError } from './voice/pollyStream.js';
 import { createAgentCoreMemoryClient } from './memory/agentCoreMemoryClient.js';
 import {
@@ -620,13 +620,22 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
     }
     countedSessionId = session.sessionId;
 
+    const acquisition = agentRegistry(config).acquire(
+      runtimeSessionId,
+      countedSessionId,
+      parsed.displayAlias,
+    ) as AgentAcquisition<Agent>;
+    const agent = acquisition.agent;
+    runtimeSessionOwners.set(runtimeSessionId, sub);
+
     // The browser decides whether it wants audio; synthesizing for a muted
     // friend is spend with no listener. A degraded breaker is the second
     // reason to answer "off": the reply still arrives, as text.
     const voiceEnabled = parsed.voice !== 'off' && breaker.state !== 'degraded';
     let memories: MemorySearchResult[] = [];
     let memoryRetrievals = 0;
-    if (opened) {
+    const shouldRetrieveMemories = opened || (acquisition.fresh && evaluation.kind === 'continue');
+    if (shouldRetrieveMemories) {
       memoryRetrievals = 1;
       startSpan('memory.retrieve');
       try {
@@ -662,13 +671,6 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       voice: voiceEnabled ? 'on' : 'off',
     });
 
-    const agent = agentRegistry(config).acquire(
-      runtimeSessionId,
-      countedSessionId,
-      parsed.displayAlias,
-    ) as Agent;
-    runtimeSessionOwners.set(runtimeSessionId, sub);
-
     startSpan('first_token');
     startSpan('reply.complete');
     let firstTokenSeen = false;
@@ -693,7 +695,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         pollyCharacters,
       });
 
-    const memoryContext = opened ? buildPriorSessionContext(memories) : '';
+    const memoryContext = shouldRetrieveMemories ? buildPriorSessionContext(memories) : '';
     const memoryContextAdded = memoryContext !== '';
     const historyLength = agent.messages.length;
     const invocationInput =
@@ -804,6 +806,9 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         // metric is how the builder learns the usage contract has changed.
         emitCountMetric('UnmeteredRequests');
       }
+      if (err instanceof PollySynthesisError) {
+        pollyCharacters = err.pollyCharacters;
+      }
       if (deadlineExceeded) {
         console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
         outcome = sse.fail('session_cap_exceeded');
@@ -814,7 +819,6 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       } else if (err instanceof PollySynthesisError) {
         // Polly already billed for part of the reply; the text the friend can
         // read is worth more than a refusal, so the turn still completes.
-        pollyCharacters = err.pollyCharacters;
         outcome = 'done';
         sse.send({ type: 'done', turnsUsed: session.turns, state: lifecycleStateOf(session) });
         completeReply();
@@ -1124,9 +1128,30 @@ interface InvocationBody {
   voice?: 'on' | 'off';
 }
 
+const UNSAFE_DISPLAY_ALIAS_CHARACTERS = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
+
+function normalizeDisplayAlias(value: string | undefined): string | undefined | null {
+  if (value === undefined) return undefined;
+  if (UNSAFE_DISPLAY_ALIAS_CHARACTERS.test(value)) return null;
+
+  const alias = value.trim();
+  if (alias === '') return undefined;
+  if (Array.from(alias).length > 50) return null;
+
+  return alias;
+}
+
 function isInvocationBody(value: unknown): value is InvocationBody {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const body = value as Record<string, unknown>;
+  if (body.displayAlias !== undefined && typeof body.displayAlias !== 'string') {
+    return false;
+  }
+  if (body.displayAlias !== undefined) {
+    const alias = normalizeDisplayAlias(body.displayAlias);
+    if (alias === null) return false;
+    body.displayAlias = alias;
+  }
   return (
     (body.message === undefined || typeof body.message === 'string') &&
     (body.action === undefined || typeof body.action === 'string') &&

@@ -275,11 +275,15 @@ describe('useAgentStream', () => {
     it('shows the busy state for a 429 and does not retry', async () => {
       const fetchImpl = vi.fn().mockResolvedValue(sseResponse([], 429));
       const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+      useConnectionStore.getState().setSessionState('ACTIVE');
 
       await stream.send({ message: 'hi' });
 
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      expect(useConnectionStore.getState().sessionState).toBe('RATE_LIMITED');
+      expect(useConnectionStore.getState().sessionState).toBe('ACTIVE');
+      expect(useConversationStore.getState().currentResponseText).toBe(
+        "One c-conversation at a time, friend — I'm still on the last one. Try again in a moment.",
+      );
     });
 
     it.each([500, 502, 503])('treats a %d as lost signal', async (status) => {

@@ -133,8 +133,9 @@ vi.mock('../src/config/constants', () => {
   };
 });
 
+const mockAudioCancel = vi.hoisted(() => vi.fn());
 vi.mock('../src/hooks/useAudio', () => ({
-  createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  createUseAudio: vi.fn().mockReturnValue({ cancel: mockAudioCancel, dispose: vi.fn() }),
 }));
 
 const { mockAudioInit, mockAudioDispose } = vi.hoisted(() => ({
@@ -300,6 +301,7 @@ describe('App — channel knob', () => {
     fireEvent.click(screen.getByTestId('channel-knob'));
 
     await vi.waitFor(() => {
+      expect(mockAudioCancel).toHaveBeenCalled();
       expect(mockStopGreeting).toHaveBeenCalledTimes(1);
       expect(mockPlayGreeting).toHaveBeenCalledTimes(2);
       expect(mockPlayGreeting.mock.calls[1]).toEqual([null]);

@@ -26,13 +26,23 @@ function makeRegistry(
 const RUNTIME_ID = 'rt-0123456789abcdef0123456789abcdef';
 
 describe('AgentRegistry', () => {
+  it('reports fresh creation once and reuse thereafter', () => {
+    const { registry } = makeRegistry();
+
+    const fresh = registry.acquire(RUNTIME_ID, 'counted-1');
+    const reused = registry.acquire(RUNTIME_ID, 'counted-1');
+
+    expect(fresh).toMatchObject({ fresh: true });
+    expect(reused).toMatchObject({ fresh: false });
+  });
+
   it('keeps one agent per runtime session, so a turn continues the same conversation', () => {
     const { registry, create } = makeRegistry();
 
     const first = registry.acquire(RUNTIME_ID, 'counted-1');
     const second = registry.acquire(RUNTIME_ID, 'counted-1');
 
-    expect(second).toBe(first);
+    expect(second.agent).toBe(first.agent);
     expect(create).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledWith('counted-1');
   });
@@ -44,7 +54,7 @@ describe('AgentRegistry', () => {
     const a = registry.acquire(RUNTIME_ID, 'counted-1');
     const b = registry.acquire(other, 'counted-1');
 
-    expect(b).not.toBe(a);
+    expect(b.agent).not.toBe(a.agent);
     expect(create).toHaveBeenCalledTimes(2);
     expect(registry.size).toBe(2);
   });
@@ -55,7 +65,7 @@ describe('AgentRegistry', () => {
     const first = registry.acquire(RUNTIME_ID, 'counted-1');
     const second = registry.acquire(RUNTIME_ID, 'counted-2');
 
-    expect(second).not.toBe(first);
+    expect(second.agent).not.toBe(first.agent);
     expect(create).toHaveBeenNthCalledWith(2, 'counted-2');
     // The stale entry is replaced, not accumulated.
     expect(registry.size).toBe(1);

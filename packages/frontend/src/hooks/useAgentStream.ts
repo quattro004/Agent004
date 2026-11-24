@@ -13,6 +13,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { useConversationStore, type SearchSource } from '../stores/conversationStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { createBudgetDegradation } from '../services/budgetDegradation';
+import { PLATFORM_BUSY_MESSAGE } from '../config/copy';
 import type { SessionState } from '../types/domain';
 
 export const SSE_ERROR_CODES = [
@@ -385,8 +386,11 @@ export function createAgentStream(deps: AgentStreamDeps): AgentStream {
 
     if (response.status === 401 || response.status === 403) return 'retry-auth';
     if (response.status === 429) {
-      if (capture) capture.outcome = { ok: false, code: 'rate_limited' };
-      setState('RATE_LIMITED');
+      if (capture) {
+        capture.outcome = { ok: false, code: 'busy' };
+      } else {
+        conversation().setFullText(PLATFORM_BUSY_MESSAGE);
+      }
       return 'failed';
     }
     if (!response.ok || !response.body) {

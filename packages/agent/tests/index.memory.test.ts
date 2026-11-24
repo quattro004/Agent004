@@ -152,6 +152,30 @@ describe('handleInvocations — AgentCore memory', () => {
     expect(table.settleRequest).toHaveBeenCalled();
   });
 
+  it('rehydrates long-term memory once when reclaim creates a fresh agent for an existing counted session', async () => {
+    const table = install(fakeControlTable());
+    table.sessions.set(TEST_SUB, {
+      sessionId: 'existing-counted-session',
+      state: 'Active',
+      openedAt: new Date().toISOString(),
+      turns: 0,
+      conversationalTokens: 0,
+      webSearches: 0,
+      ttl: 0,
+    });
+
+    await invoke({ message: 'What do you remember?' });
+    await invoke({ message: 'Use it again now.' });
+
+    expect(memorySdk.retrieveRecords).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(streamMock.mock.calls[0]?.[0])).toContain(
+      'The viewer likes synthesizers.',
+    );
+    expect(JSON.stringify(streamMock.mock.calls[1]?.[0])).not.toContain(
+      'The viewer likes synthesizers.',
+    );
+  });
+
   it('continues without recalled context and reports a retrieval failure', async () => {
     const table = install(fakeControlTable());
     memorySdk.retrieveRecords.mockRejectedValue(new Error('AgentCore unavailable'));

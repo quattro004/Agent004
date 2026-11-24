@@ -14,3 +14,6 @@ export const SIGNED_OUT_MESSAGE = "You're off the air, friend. Sign in and I'll 
 
 export const SIGN_IN_ERROR_MESSAGE =
   "Something scrambled the signal on the way in. Give it another shot and I'll be right here.";
+
+export const PLATFORM_BUSY_MESSAGE =
+  "One c-conversation at a time, friend — I'm still on the last one. Try again in a moment.";

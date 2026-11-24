@@ -188,6 +188,26 @@ describe('useAudio', () => {
     audio.dispose();
   });
 
+  it('cancels active and queued clips without disposing the player', async () => {
+    const audio = createUseAudio(audioChain);
+
+    useVoiceStore.getState().enqueueAudio(clip(0));
+    useVoiceStore.getState().enqueueAudio(clip(1));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(audioChain.play).toHaveBeenCalledTimes(1);
+
+    audio.cancel();
+    expect(audioChain.play).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(CLIP_MS * 3);
+
+    expect(audioChain.stop).toHaveBeenCalled();
+    expect(useVoiceStore.getState().audioQueue).toEqual([]);
+    expect(useVoiceStore.getState().isSpeaking).toBe(false);
+    expect(useVoiceStore.getState().isMouthOpen).toBe(false);
+    expect(audioChain.play).toHaveBeenCalledTimes(1);
+    audio.dispose();
+  });
+
   it('drives the mouth from the chain while speaking', async () => {
     (audioChain.getIsMouthOpen as ReturnType<typeof vi.fn>).mockReturnValue(true);
     const audio = createUseAudio(audioChain);

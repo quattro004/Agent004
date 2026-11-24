@@ -12,6 +12,7 @@ import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable
 import { makeReq, TEST_SUB } from './fixtures/http.js';
 import { makeRes } from './fixtures/sse.js';
 import { streamOf, fakeResult, textDelta } from './fixtures/strands.js';
+import { computeTurnUsage } from '../src/spend/usage.js';
 
 const streamMock = vi.hoisted(() => vi.fn());
 const synthesize = vi.hoisted(() => vi.fn());
@@ -240,6 +241,44 @@ describe('handleInvocations — cancellation on client disconnect', () => {
 
     expect(synthesize).toHaveBeenCalled();
     expect(double.event('done')).toBeUndefined();
+  });
+
+  it('counts billed Polly characters when synthesis throws after the client disconnects', async () => {
+    const config = testRuntimeConfig();
+    __test.setRuntimeConfig(config);
+    streamMock.mockImplementation(
+      streamOf(['Partial billed reply'], {
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      }),
+    );
+    synthesize.mockImplementation(async (_reply: string, options: { signal?: AbortSignal }) => {
+      await new Promise<void>((resolve) => {
+        options.signal?.addEventListener('abort', () => resolve(), { once: true });
+      });
+      throw new PollySynthesisError('Polly synthesis was cancelled', 17, 12, new Error('aborted'));
+    });
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hello' }), double.res);
+    await vi.waitFor(() => expect(synthesize).toHaveBeenCalled());
+    double.disconnect();
+    await pending;
+    await double.end;
+
+    const settlement = table.settleRequest.mock.calls[0];
+    expect(settlement).toBeDefined();
+    expect(settlement![1]).toBe(
+      computeTurnUsage(
+        {
+          model: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          pollyCharacters: 17,
+          memoryEvents: 0,
+          memoryRetrievals: 1,
+          webSearches: 0,
+        },
+        config.prices,
+      ).estimatedMicroUsd,
+    );
   });
 
   it('leaves the counted session intact when the friend leaves mid-turn', async () => {

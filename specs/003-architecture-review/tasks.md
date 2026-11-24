@@ -657,3 +657,53 @@ batch is T159-T162; it is not deployment readiness.
 - [ ] T180 Part of T174: make one real `InvokeWebSearch` call from the deployed role (it falls inside the 5,000 free queries, but spends the builder's quota, so ask first). Confirm the role's permission works, the quality of the results for the persona's typical questions, that a Free-plan account gets the free queries (AWS says "every AWS account"; not verified), and the real text-extract length against `TOOL_RESULT_MAX_BYTES`. Do this before T130.
 - [x] T181 Decide two things the swap leaves open, and record each as a spec 003 clarification before coding. (1) **Citations**: AWS's acceptable-use terms require the source link to be retained and displayed with each result shown to a friend. Today the persona may relay a result without surfacing its URL. (2) **Metering**: the breaker prices model, voice, memory and runtime but not searches, which cost $7 per 1,000 after the free 5,000 a month. Either price them (a new `PRICE_*` variable) or show the F reserve covers the worst case. No per-session search cap exists either; `TURN_MAX_TOOL_EXECUTIONS` bounds a turn only. Do not invent the numbers. **Done 2026-11-18** (spec Session 2026-11-18): links in the UI beside the reply, searches priced at `PRICE_WEB_SEARCH_MICRO_USD` 7,000 with the free allowance not credited, and `SESSION_MAX_WEB_SEARCHES` 10. RED seen for the intended reasons, then GREEN. Agent: `tools/webSearchTool.test.ts` § searchForTurn, `index.webSearch.test.ts`, `spend/usage.test.ts`, `spend/reservation.test.ts` (each tool execution is reserved as a search), `handlers/sessionManager.test.ts`, `session/controlTable.test.ts`, `config/runtimeConfig.test.ts`, `index.cancellation.test.ts`. Frontend: `hooks/useAgentStream.test.ts`, `components/BroadcastText.test.tsx`. Infra: `agent-stack.test.ts`. Contracts `runtime-config.md` (38 variables) and `transport-sse.md` (`sources` event), and `data-model.md` (`webSearches`), updated. **Known limit:** a cancelled or failed turn does not add its searches to the session's `webSearches`, since the session is written only on the success path; the month's spend still counts them through the reservation.
 - [ ] T179 Part of T174: against live Bedrock, run a conversation long enough that `boundModelInput` trims it, including a tool round trip, and confirm Bedrock Converse accepts what remains. T175's tests pin the cut rule (a genuine user message, and never the turn in progress) but it has not been exercised live. Do this before T130.
+
+## Phase 17: PR 92 adversarial review remediation (2026-11-24)
+
+**Source:** the adversarial review of PR 92. No review document is checked in:
+the findings and their TDD plan are in
+`docs/tdd-plans/PR-92-Adversarial-Review-TDD-Plan.md`.
+T182 and T183 are merge blockers for spend integrity; T184-T188 do not defer
+until after merge.
+
+- [x] T182 RED: add stateful admission tests that commit the DynamoDB
+  transaction and then return a timeout/lost-response error, plus the inverse
+  with no matching lease. Assert exact-request reconciliation uses a strongly
+  consistent `LEASE#<sub>` read and that unresolved admission starts no model
+  work. GREEN: reconcile exact request IDs in
+  `packages/agent/src/session/controlTable.ts`, fail closed on no matching
+  lease, preserve `friend_busy` for another holder, and document the behavior
+  in `contracts/spend-control.md`.
+- [x] T183 RED: extend `packages/agent/tests/index.cancellation.test.ts` so
+  aborted/deadline-expired Polly synthesis with a positive character count
+  asserts that settlement includes that billed voice work. GREEN: copy
+  `PollySynthesisError.pollyCharacters` into the settlement counter before
+  applying cancellation/deadline branches, preserving full-reservation
+  settlement when usage is missing.
+- [x] T184 RED: add a synthesized `AgentStack` test that the runtime application
+  log group or retention custom resource has 14-day retention and depends on
+  runtime creation. Verify the pinned CDK and primary AWS documentation for
+  the exact AgentCore runtime log-group name before choosing the GREEN
+  mechanism. GREEN: use the pinned L2 Runtime's explicit
+  `APPLICATION_LOGS` CloudWatch delivery to
+  `/aws/vendedlogs/bedrock-agentcore/max-height` with `TWO_WEEKS`
+  retention and no guessed service-managed runtime ID.
+- [x] T185 RED: add an `index.memory.test.ts` case for an existing counted
+  `continue` session with no in-process registry entry; assert memory retrieval
+  succeeds once on that fresh agent and does not repeat while the agent is
+  reused. GREEN: return enough acquisition information from `AgentRegistry`
+  for `index.ts` to rehydrate memory once on a fresh agent.
+- [x] T186 RED: update `useAgentStream.test.ts` so HTTP 429 proves one fetch,
+  no automatic retry, an active session state, and the existing in-character
+  busy outcome. GREEN: map platform 429 to transient busy, leaving
+  application-SSE `rate_limited` on its existing terminal behavior.
+- [x] T187 RED: add `useAudio.test.ts` coverage for cancelling active and queued
+  clips, and App tests for power-off/channel/send interruption. GREEN: add a
+  non-disposing audio cancel operation that stops the active voice source,
+  clears the queue and stops mouth polling; invoke it from power-off, channel
+  change and new-send paths.
+- [x] T188 RED: add direct-invocation and prompt tests for 50 Unicode-code-point
+  aliases, 51-character rejection, control/format characters, whitespace
+  normalization and quote/backslash framing. GREEN: normalize and reject
+  aliases in `isInvocationBody`, and escape or omit accepted aliases in
+  `buildSystemPrompt()` without treating them as instruction policy.

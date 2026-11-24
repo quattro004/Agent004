@@ -133,6 +133,14 @@ settle:  one transaction: delete LEASE#<sub> (requestId and reserved must match)
 - **The counted session is written only under the lease** (`putSession` creates an absent item or replaces an exact previous snapshot), so a concurrent instance cannot reset another counted session. A post-turn write failure keeps the reply and counts `SessionWriteFailures`.
 - **Cost.** Each admitted turn adds roughly 6 write units at admission and 6 at settlement to the existing reads (about $0.00002 a turn at on-demand rates, to be re-confirmed against the Price List before deploy).
 
+- **Ambiguous admission is reconciled before model work.** If `TransactWriteItems`
+  returns no usable response, `ControlTable.admitRequest` performs a strongly
+  consistent read of `LEASE#<sub>`. It admits only when `requestId`,
+  `reservedMicroUsd`, `month`, and the subject key all match the transaction
+  caller attempted. A different active lease is `friend_busy`; no exact lease
+  fails closed with no model call or replay. The DynamoDB transaction is never
+  retried from the SDK caller.
+
 ### Reconciliation (manual)
 
 A crash mid-turn leaves LEASE#<sub> and the CONTROL#ACTIVE count with **no TTL**: expiry would silently refund a reservation, which this design forbids, and a stale-lease threshold is a hard number no spec has decided. Symptoms are a friend who is always `busy`, or `GLOBAL_MAX_ACTIVE_REQUESTS` stuck high. After confirming no request for that `sub` is running:

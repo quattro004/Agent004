@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mockClient } from 'aws-sdk-client-mock';
 import {
   DynamoDBClient,
+  GetItemCommand,
   TransactWriteItemsCommand,
   TransactionCanceledException,
   type AttributeValue,
@@ -55,7 +56,10 @@ type Item = Record<string, AttributeValue>;
  * Evaluates the conditions this feature's transactions carry against one
  * in-memory table, all-or-nothing like DynamoDB's `TransactWriteItems`.
  */
-function useStatefulTable(initial: Record<string, Item> = {}): {
+function useStatefulTable(
+  initial: Record<string, Item> = {},
+  lostResponse = false,
+): {
   items: Map<string, Item>;
   transactions: TransactWriteItemsCommandInput[];
 } {
@@ -122,6 +126,7 @@ function useStatefulTable(initial: Record<string, Item> = {}): {
         items.set(key, next);
       }
     }
+    if (lostResponse) throw new Error('TransactWriteItems response lost');
     return {};
   });
 
@@ -257,6 +262,40 @@ describe('admitRequest', () => {
     const result = await t.admitRequest(request({ sub: 'a', requestId: 'ra2' }));
 
     expect(result).toEqual({ admitted: false, reason: 'friend_busy' });
+  });
+
+  it('reconciles a lost transaction response by strongly reading the exact admitted lease', async () => {
+    const state = useStatefulTable({}, true);
+    ddb.on(GetItemCommand).callsFake((input) => ({
+      Item: state.items.get(input.Key!.pk!.S!),
+    }));
+
+    const result = await table().admitRequest(request());
+
+    expect(result).toEqual({
+      admitted: true,
+      lease: { sub: 'sub-1', requestId: 'req-1', reservedMicroUsd: 125_000, month: '2026-11' },
+    });
+    const get = ddb.commandCalls(GetItemCommand)[0]?.args[0];
+    expect(get.input).toMatchObject({
+      TableName: TABLE,
+      Key: { pk: { S: 'LEASE#sub-1' } },
+      ConsistentRead: true,
+    });
+  });
+
+  it('fails closed and does not admit a second reservation when no lease can be reconciled', async () => {
+    ddb.on(TransactWriteItemsCommand).rejects(new Error('TransactWriteItems response lost'));
+    ddb.on(GetItemCommand).resolves({ Item: undefined });
+
+    await expect(table().admitRequest(request())).rejects.toThrow(
+      'TransactWriteItems response lost',
+    );
+    expect(ddb.commandCalls(GetItemCommand)[0]?.args[0].input).toMatchObject({
+      TableName: TABLE,
+      Key: { pk: { S: 'LEASE#sub-1' } },
+      ConsistentRead: true,
+    });
   });
 
   it('propagates a failure that is not a refused condition', async () => {

@@ -17,6 +17,7 @@ import { useVoiceStore, type AudioClip } from '../stores/voiceStore';
 const MOUTH_POLL_INTERVAL_MS = 50; // ~20Hz
 
 export interface UseAudioHandle {
+  cancel: () => void;
   dispose: () => void;
 }
 
@@ -31,6 +32,7 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
   let mouthPollTimer: ReturnType<typeof setInterval> | null = null;
   let draining = false;
   let disposed = false;
+  let cancelGeneration = 0;
   let lastPlayedTurn = -1;
   let lastPlayedSeq = -1;
 
@@ -53,14 +55,16 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async function play(clip: AudioClip): Promise<void> {
+  async function play(clip: AudioClip, generation: number): Promise<boolean> {
     const context = new AudioContext();
     try {
       const buffer = await context.decodeAudioData(decodeBase64(clip.data));
-      if (disposed) return;
+      if (disposed || generation !== cancelGeneration) return false;
       const durationMs = audioChain.play(buffer);
+      if (disposed || generation !== cancelGeneration) return false;
       startMouthPolling();
       await wait(durationMs);
+      return !disposed && generation === cancelGeneration;
     } finally {
       await context.close();
     }
@@ -71,10 +75,11 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
     draining = true;
     const voice = () => useVoiceStore.getState();
     voice().setSpeaking(true);
+    const generation = cancelGeneration;
 
     try {
       for (;;) {
-        if (disposed) return;
+        if (disposed || generation !== cancelGeneration) return;
         const clip = voice().shiftAudio();
         if (!clip) return;
         if (clip.turn !== lastPlayedTurn) {
@@ -85,7 +90,8 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
         lastPlayedSeq = clip.seq;
 
         try {
-          await play(clip);
+          const played = await play(clip, generation);
+          if (!played) return;
         } catch (error) {
           // A segment that will not decode is lost, but the rest of the
           // turn still plays. There is no fallback voice to reach for.
@@ -93,8 +99,8 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
         }
       }
     } finally {
-      draining = false;
-      if (!disposed) {
+      if (generation === cancelGeneration) draining = false;
+      if (!disposed && generation === cancelGeneration) {
         voice().setSpeaking(false);
         stopMouthPolling();
       }
@@ -108,9 +114,22 @@ export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
   });
 
   return {
+    cancel() {
+      if (disposed) return;
+      cancelGeneration += 1;
+      audioChain.stop();
+      stopMouthPolling();
+      const voice = useVoiceStore.getState();
+      voice.clearAudio();
+      voice.setSpeaking(false);
+      draining = false;
+    },
     dispose() {
       disposed = true;
+      cancelGeneration += 1;
+      draining = false;
       unsubscribe();
+      audioChain.stop();
       stopMouthPolling();
       const voice = useVoiceStore.getState();
       voice.clearAudio();

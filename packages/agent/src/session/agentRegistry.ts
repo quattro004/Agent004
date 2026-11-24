@@ -29,6 +29,11 @@ export interface AgentRegistryOptions<TAgent, TContext = void> {
   now?: () => number;
 }
 
+export interface AgentAcquisition<TAgent> {
+  agent: TAgent;
+  fresh: boolean;
+}
+
 export class AgentRegistry<TAgent = object, TContext = void> {
   readonly #entries = new Map<string, Entry<TAgent, TContext>>();
   readonly #create: (countedSessionId: string, context?: TContext) => TAgent;
@@ -47,7 +52,11 @@ export class AgentRegistry<TAgent = object, TContext = void> {
    * Returns the agent for this runtime session, building one if it is new or
    * if the counted session behind it has changed.
    */
-  acquire(runtimeSessionId: string, countedSessionId: string, context?: TContext): TAgent {
+  acquire(
+    runtimeSessionId: string,
+    countedSessionId: string,
+    context?: TContext,
+  ): AgentAcquisition<TAgent> {
     if (runtimeSessionId.length < RUNTIME_SESSION_ID_MIN_LENGTH) {
       throw new Error(
         `Runtime session ID must be at least ${RUNTIME_SESSION_ID_MIN_LENGTH} characters; got ${runtimeSessionId.length}`,
@@ -63,7 +72,7 @@ export class AgentRegistry<TAgent = object, TContext = void> {
       existing.context === context
     ) {
       existing.lastUsedAt = this.#now();
-      return existing.agent;
+      return { agent: existing.agent, fresh: false };
     }
 
     const agent =
@@ -76,7 +85,7 @@ export class AgentRegistry<TAgent = object, TContext = void> {
       context,
       lastUsedAt: this.#now(),
     });
-    return agent;
+    return { agent, fresh: true };
   }
 
   /** When the entry was last acquired, or `undefined` if it is not held. */

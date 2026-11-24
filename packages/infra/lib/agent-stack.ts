@@ -7,6 +7,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 export interface AgentStackProps extends cdk.StackProps {
@@ -141,24 +142,37 @@ export class AgentStack extends cdk.Stack {
       ...RUNTIME_CONFIG,
     };
 
-    this.runtime = new bedrockagentcore.CfnRuntime(this, 'Runtime', {
-      agentRuntimeName: 'MaxHeightAgent',
-      agentRuntimeArtifact: { containerConfiguration: { containerUri: image.imageUri } },
-      platformVersion: 'V2',
-      roleArn: this.executionRole.roleArn,
-      networkConfiguration: { networkMode: 'PUBLIC' },
-      protocolConfiguration: 'HTTP',
-      authorizerConfiguration: {
-        customJwtAuthorizer: {
-          discoveryUrl: `https://cognito-idp.${this.region}.amazonaws.com/${props.userPool.userPoolId}/.well-known/openid-configuration`,
-          allowedClients: [props.userPoolClient.userPoolClientId],
-        },
-      },
-      requestHeaderConfiguration: { requestHeaderAllowlist: ['Authorization'] },
-      lifecycleConfiguration: { idleRuntimeSessionTimeout: 1800, maxLifetime: 28800 },
-      environmentVariables,
+    const applicationLogGroup = new logs.LogGroup(this, 'RuntimeApplicationLogGroup', {
+      logGroupName: '/aws/vendedlogs/bedrock-agentcore/max-height',
+      retention: logs.RetentionDays.TWO_WEEKS,
     });
-    this.runtime.node.addDependency(this.executionRole);
+
+    const runtimeConstruct = new bedrockagentcore.Runtime(this, 'Runtime', {
+      runtimeName: 'MaxHeightAgent',
+      agentRuntimeArtifact: bedrockagentcore.AgentRuntimeArtifact.fromImageUri(image.imageUri),
+      executionRole: this.executionRole,
+      platformVersion: bedrockagentcore.PlatformVersion.V2,
+      protocolConfiguration: bedrockagentcore.ProtocolType.HTTP,
+      networkConfiguration: undefined,
+      authorizerConfiguration: bedrockagentcore.RuntimeAuthorizerConfiguration.usingJWT(
+        `https://cognito-idp.${this.region}.amazonaws.com/${props.userPool.userPoolId}/.well-known/openid-configuration`,
+        [props.userPoolClient.userPoolClientId],
+      ),
+      requestHeaderConfiguration: { allowlistedHeaders: ['Authorization'] },
+      lifecycleConfiguration: {
+        idleRuntimeSessionTimeout: cdk.Duration.seconds(1800),
+        maxLifetime: cdk.Duration.seconds(28800),
+      },
+      environmentVariables,
+      loggingConfigs: [
+        {
+          logType: bedrockagentcore.LogType.APPLICATION_LOGS,
+          destination: bedrockagentcore.LoggingDestination.cloudWatchLogs(applicationLogGroup),
+        },
+      ],
+      manageDeliveryResourcePolicy: false,
+    });
+    this.runtime = runtimeConstruct.node.defaultChild as bedrockagentcore.CfnRuntime;
 
     new cdk.CfnOutput(this, 'RuntimeArn', { value: this.runtime.attrAgentRuntimeArn });
     new cdk.CfnOutput(this, 'RuntimeId', { value: this.runtime.attrAgentRuntimeId });

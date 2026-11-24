@@ -73,6 +73,12 @@ describe('displayAlias server-side collection', () => {
     expect(prompt).toContain('ReturningVisitor');
   });
 
+  it('escapes quotes and backslashes in accepted display aliases', () => {
+    const prompt = buildSystemPrompt({ displayAlias: 'A "Guest" \\ Fan' });
+
+    expect(prompt).toContain('A \\"Guest\\" \\\\ Fan');
+  });
+
   it('handles no display alias gracefully', () => {
     expect(buildSystemPrompt()).not.toContain('# Current viewer');
   });

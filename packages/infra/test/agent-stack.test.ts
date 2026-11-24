@@ -73,6 +73,19 @@ describe('AgentStack (AgentCore Runtime, T024)', () => {
     expect(props.AgentRuntimeName).toMatch(/^[a-zA-Z][a-zA-Z0-9_]*$/);
   });
 
+  test('retains the runtime application log group for 14 days', () => {
+    const groups = template.findResources('AWS::Logs::LogGroup');
+    const applicationGroups = Object.values(groups).filter(
+      (resource) =>
+        (resource.Properties as { LogGroupName?: unknown }).LogGroupName ===
+        '/aws/vendedlogs/bedrock-agentcore/max-height',
+    );
+
+    expect(applicationGroups).toHaveLength(1);
+    expect(applicationGroups[0].Properties).toMatchObject({ RetentionInDays: 14 });
+    expect(template.findResources('AWS::Logs::Delivery')).not.toEqual({});
+  });
+
   test('keeps sessions for 1800 s idle and 28800 s maximum (W25)', () => {
     expect(runtimeProps().LifecycleConfiguration).toEqual({
       IdleRuntimeSessionTimeout: 1800,

@@ -145,7 +145,8 @@ export function buildSystemPrompt(options?: SystemPromptOptions): string {
 
   const alias = options?.displayAlias;
   if (alias) {
-    prompt += `\n\n# Current viewer\nThe viewer's name is "${alias}". Use it as a running gag — but don't overdo it. First-name basis, like an old pal.`;
+    const escapedAlias = alias.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    prompt += `\n\n# Current viewer\nThe viewer's name is "${escapedAlias}". Use it as a running gag — but don't overdo it. First-name basis, like an old pal.`;
   }
 
   return prompt;

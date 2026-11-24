@@ -128,8 +128,9 @@ vi.mock('../src/config/constants', () => ({
   },
 }));
 
+const mockAudioCancel = vi.hoisted(() => vi.fn());
 vi.mock('../src/hooks/useAudio', () => ({
-  createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  createUseAudio: vi.fn().mockReturnValue({ cancel: mockAudioCancel, dispose: vi.fn() }),
 }));
 
 const { mockPlayGreeting, mockPreloadGreeting, mockStopGreeting } = vi.hoisted(() => ({
@@ -434,8 +435,10 @@ describe('App — TV Power Lifecycle', () => {
       expect(screen.getByTestId('text-input')).toBeInTheDocument();
     });
     const input = screen.getByTestId('text-input');
+    mockAudioCancel.mockClear();
     fireEvent.change(input, { target: { value: 'hello Max' } });
     fireEvent.keyDown(input, { key: 'Enter' });
+    expect(mockAudioCancel).toHaveBeenCalled();
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'hello Max',
@@ -454,9 +457,11 @@ describe('App — TV Power Lifecycle', () => {
     });
 
     mockCancel.mockClear();
+    mockAudioCancel.mockClear();
     fireEvent.click(screen.getByTestId('tv-knob'));
 
     expect(mockCancel).toHaveBeenCalled();
+    expect(mockAudioCancel).toHaveBeenCalled();
   });
 
   it('should turn TV off when session enters ENDED state', async () => {
