@@ -15,6 +15,10 @@ import { makeRes } from './fixtures/sse.js';
 import { streamOf } from './fixtures/strands.js';
 
 const streamMock = vi.hoisted(() => vi.fn());
+const memorySdk = vi.hoisted(() => ({
+  createEvent: vi.fn(),
+  retrieveRecords: vi.fn(),
+}));
 
 vi.mock('@strands-agents/sdk', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -47,6 +51,9 @@ vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
     synthesizeToAudioEvents: vi.fn().mockResolvedValue({ pollyCharacters: 0, segments: 0 }),
   };
 });
+vi.mock('../src/memory/agentCoreMemoryClient.js', () => ({
+  createAgentCoreMemoryClient: () => memorySdk,
+}));
 
 const { __test } = await import('../src/index.js');
 
@@ -71,6 +78,8 @@ describe('handleInvocations — approved per-turn bounds', () => {
         usage: { inputTokens: 30, outputTokens: 7, totalTokens: 37 },
       }),
     );
+    memorySdk.createEvent.mockResolvedValue(undefined);
+    memorySdk.retrieveRecords.mockResolvedValue([]);
   });
 
   it('refuses a body over 16 KiB and never invokes the model', async () => {
