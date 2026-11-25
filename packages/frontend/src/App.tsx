@@ -128,7 +128,7 @@ export function App() {
   const startupReadyRef = useRef(false);
   const greetingDoneRef = useRef(false);
 
-  const stream = useAgentStream({
+  const agentStream = useAgentStream({
     runtimeArn: RUNTIME_ARN,
     getAccessToken: () => authService.getAccessToken(),
     refreshAccessToken: () => authService.refreshAccessToken(),
@@ -164,7 +164,7 @@ export function App() {
     let cancelled = false;
     startupReadyRef.current = false;
 
-    void stream.runAction({ action: 'runtime.ready' }, signal).then((outcome) => {
+    void agentStream.runAction({ action: 'runtime.ready' }, signal).then((outcome) => {
       if (
         cancelled ||
         powerSequenceIdRef.current !== sequenceId ||
@@ -192,7 +192,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [isTvOn, stream]);
+  }, [isTvOn, agentStream]);
 
   // Decide whether the friend is signed in before anything else renders.
   // On the callback route the code is exchanged first, then the URL is
@@ -401,7 +401,7 @@ export function App() {
       startupReadyRef.current = false;
       greetingDoneRef.current = false;
       // A turn still streaming is a turn still being paid for.
-      stream.cancel();
+      agentStream.cancel();
       voicePlayerRef.current?.cancel();
       audioChain.stopStatic();
       tvPowerRef.current = 'off';
@@ -409,11 +409,12 @@ export function App() {
       setIsGreetingDone(false);
       setGreetingText(null);
     }
-  }, [tvPower, stream, audioChain, greeting]);
+  }, [tvPower, agentStream, audioChain, greeting]);
 
   const handleChannelChange = useCallback(() => {
     if (tvPower === 'off') return;
 
+    agentStream.cancel();
     voicePlayerRef.current?.cancel();
     greeting.stopGreeting();
     preloadedGreetingRef.current = null;
@@ -425,21 +426,21 @@ export function App() {
       return AVATAR_THEMES.indexOf(nextTheme(currentTheme));
     });
     setGreetingNonce((current) => current + 1);
-  }, [tvPower, greeting]);
+  }, [tvPower, agentStream, greeting]);
 
   const handleSend = useCallback(
     (text: string) => {
       if (!text.trim() || !canSend) return;
       voicePlayerRef.current?.cancel();
       const displayAlias = useVisitorStore.getState().displayAlias;
-      void stream.send({
+      void agentStream.send({
         message: text,
         displayAlias: displayAlias ?? undefined,
         clientTimestamp: new Date().toISOString(),
         voice: 'on',
       });
     },
-    [canSend, stream],
+    [canSend, agentStream],
   );
 
   const controlPanel = (

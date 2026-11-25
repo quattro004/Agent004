@@ -301,6 +301,7 @@ describe('App — channel knob', () => {
     fireEvent.click(screen.getByTestId('channel-knob'));
 
     await vi.waitFor(() => {
+      expect(mockCancel).toHaveBeenCalled();
       expect(mockAudioCancel).toHaveBeenCalled();
       expect(mockStopGreeting).toHaveBeenCalledTimes(1);
       expect(mockPlayGreeting).toHaveBeenCalledTimes(2);
