@@ -44,6 +44,7 @@ export type SseErrorCode =
   | 'breaker_tripped'
   | 'rate_limited'
   | 'busy'
+  | 'turn_deadline'
   | 'session_cap_exceeded'
   | 'session_mismatch'
   | 'moderation_blocked'
@@ -92,6 +93,10 @@ export const SSE_ERRORS: Record<SseErrorCode, ErrorDefinition> = {
     retryable: true,
     inCharacterMessage:
       "One c-conversation at a time, friend — I'm still on the last one. Try again in a moment.",
+  },
+  turn_deadline: {
+    retryable: true,
+    inCharacterMessage: 'The sixty-second b-broadcast window closed. Try that turn again.',
   },
   session_cap_exceeded: {
     retryable: false,

@@ -128,9 +128,10 @@ describe('recordTurn', () => {
     expect(recordTurn(stored({ ttl: 123 }), 1, 0, CAPS)).not.toHaveProperty('ttl');
   });
 
-  // Spec 003 Session 2026-11-18 (T181): the per-session search cap needs a running count.
-  it("adds the searches this turn sent to the session's count", () => {
-    expect(recordTurn(stored({ webSearches: 4 }), 1, 3, CAPS).webSearches).toBe(7);
+  // Spec 003 Session 2026-11-18 (T181): persisted claims are absolute counts,
+  // not turn-local increments to add again at the final session write.
+  it('preserves the absolute session search count after persistent claims', () => {
+    expect(recordTurn(stored({ webSearches: 4 }), 1, 7, CAPS).webSearches).toBe(7);
   });
 
   it('does not sign the session off at the search cap; only searching stops', () => {

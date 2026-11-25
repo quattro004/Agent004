@@ -76,7 +76,7 @@ stateDiagram-v2
 ```
 
 - **`conversationalTokens`** is this invocation's `outputTokens`, measured from `result.invocationContext.usage`, plus the friend's message estimated at characters / 4 (P-09). Lifetime `metrics.accumulatedUsage` must not be added as per-turn usage when an Agent is reused. A message is at most 2,000 characters (P-08).
-- **`webSearches`** counts every web search a successful turn sent, including failed ones, which may still bill. A turn may send only what is left of `SESSION_MAX_WEB_SEARCHES` (10, spec § Clarifications Session 2026-11-18); past it the tool answers "limit reached" without searching. Reaching it does not sign the session off. A cancelled or failed turn does not add its searches here, though the month's spend still counts them through the reservation.
+- **`webSearches`** counts every web search sent, including cancelled or failed searches that may still bill. Before an outbound search executes, the runtime atomically increments `SESSION#<sub>.webSearches` for the exact counted session and rejects a stale session snapshot or the 10-search session allowance. A successful turn writes the absolute claimed count into the session; it does not add turn-local claims a second time. Reaching the allowance stops searching but does not sign the conversation off.
 - **A dropout** (runtime restart, redeploy or reclaim) does not change state. The friend's next message continues the same counted session under a new runtime session ID (strict continuity, P-05). In-session history is lost; long-term memories remain.
 - **`HALT`** refuses every request in every state without changing state.
 

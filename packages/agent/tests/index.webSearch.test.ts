@@ -87,7 +87,7 @@ function modelSearching(searches: number, claimed: boolean[] = []) {
   return async function* (_message: string, options: { invocationState: Record<string, unknown> }) {
     const searchTurn = options.invocationState[WEB_SEARCH_TURN] as WebSearchTurn;
     for (let i = 0; i < searches; i++) {
-      const allowed = searchTurn.claim();
+      const allowed = await searchTurn.claimPersisted();
       claimed.push(allowed);
       if (allowed) searchTurn.report([RESULT]);
     }
@@ -162,5 +162,22 @@ describe('handleInvocations — web search', () => {
 
     expect(claimed).toEqual([true, false]);
     expect(table.sessions.get(TEST_SUB)?.webSearches).toBe(10);
+  });
+
+  it('persists a search claim when the model turn fails', async () => {
+    const table = boot();
+    streamMock.mockImplementation(async function* (
+      _message: string,
+      options: { invocationState: Record<string, unknown> },
+    ) {
+      const searchTurn = options.invocationState[WEB_SEARCH_TURN] as WebSearchTurn;
+      await searchTurn.claimPersisted();
+      yield textDelta('The turn failed after the search.');
+      throw new Error('model failed');
+    });
+
+    await turn();
+
+    expect(table.sessions.get(TEST_SUB)?.webSearches).toBe(1);
   });
 });

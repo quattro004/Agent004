@@ -143,6 +143,7 @@ describe('handleInvocations — per-session cap enforcement', () => {
       expect.objectContaining({ type: 'error', code: 'session_cap_exceeded', retryable: false }),
     ]);
     expect(events()[0]).not.toHaveProperty('conversationalTokens');
+    expect(table.consumeRate).not.toHaveBeenCalled();
     expect(streamMock).not.toHaveBeenCalled();
 
     // The over-budget session is signed off in the table, so every instance

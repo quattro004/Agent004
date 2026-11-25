@@ -141,6 +141,7 @@ The breaker and cap figures (`conversationalTokens`, spend) are **not** sent to 
 | `breaker_tripped` | `SPEND#<yyyy-mm>` has reached the trip limit | false | Hard-stop state |
 | `rate_limited` | Hourly (60) or daily (500) messages per `sub` exceeded (spec 001 websocket-api.md:207-208) | true, after the window | Rate-limited state |
 | `busy` | Admission refused the turn because the friend already has a request in flight, or `GLOBAL_MAX_ACTIVE_REQUESTS` are in flight across instances (T166). No queue and no replay; the friend sends again | true | Stays active; Max's in-character line is the reply |
+| `turn_deadline` | The configured 60-second model, tool or voice deadline expired. The deadline does not sign off the counted session or create a permanent session-end state | true | Stays active; in-character deadline line is the reply; the friend may send again |
 | `session_cap_exceeded` | Turn, token or 30-minute cap reached before this turn (code name kept from `index.ts:173`) | false | Ended state; the next message opens a fresh counted session |
 | `session_mismatch` | The runtime session ID is bound to a different `sub` | false | The browser drops its session ID, makes a new one and retries once |
 | `moderation_blocked` | Guardrails intervened (if the adopted model's path supports them, Q2) | false | In-character deflection |
@@ -150,10 +151,10 @@ Refusal order before a turn, which is cheapest first and spends nothing:
 
 1. body validation
 2. `CONTROL#HALT`
-3. rate limit (not for `memory.forget`); a refused message is not counted, but a message answered `busy` is
-4. breaker pre-read (chat turns only; the tally includes in-flight reservations)
-5. admission (chat turns only): one request per friend, `GLOBAL_MAX_ACTIVE_REQUESTS` overall, and room under the trip threshold for the reservation → `busy` or `breaker_tripped`
-6. counted-session caps and the allowlist at counted-session open (chat turns only), both read under the lease, so a refusal here settles at 0 µUSD. The allowlist is also checked on every action
+3. breaker pre-read (chat turns only; the tally includes in-flight reservations)
+4. admission (chat turns only): one request per friend, `GLOBAL_MAX_ACTIVE_REQUESTS` overall, and room under the trip threshold for the reservation → `busy` or `breaker_tripped`
+5. counted-session caps and the allowlist at counted-session open (chat turns only), both read under the lease, so a refusal here settles at 0 µUSD. The allowlist is also checked on every action
+6. fixed-window rate consumption (chat and memory actions, except `memory.forget`); it runs only after admission and every pre-admission refusal has passed. A rate refusal settles the just-created lease at 0 µUSD and starts no model or memory work
 
 Admission precedes the session read because the counted session is state that only the lease holder may write (T166/T167).
 
@@ -162,6 +163,13 @@ Admission precedes the session read because the counted session is state that on
 The browser aborts the `fetch` with an `AbortController` when the friend leaves or interrupts. The container detects the disconnect with `res.on('close')` guarded by `res.writableFinished` (`index.ts:185-188`; wiki `Gotchas`), and forwards the abort to the model call and to every tool's `fetch` (cooperative cancellation). Whether CloudFront closes the origin connection when the viewer disconnects is **unverified**. Quickstart V-02 checks it through the `invocation` span's `cancelled` attribute.
 
 A cancelled turn still counts its usage against the counted session and the breaker. Whatever was billed is counted.
+
+If the cancellation is caused by the configured turn deadline, the terminal SSE
+code is `turn_deadline`, not `session_cap_exceeded`. It is retryable and does
+not sign off or replace the counted session. A successful or billed model or
+voice call still settles exactly as measured; missing usage retains the
+admitted reservation. A client disconnect has no browser error frame and does
+not send a partial reply or memory event.
 
 ## Spans (R-obs, P9)
 

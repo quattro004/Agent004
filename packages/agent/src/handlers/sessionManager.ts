@@ -56,6 +56,7 @@ export function evaluateSession(
  * Counts one turn. A turn that reaches a cap is Max's in-character sign-off,
  * so the session ends here and the next message opens a fresh one. The search
  * cap is not one of those: reaching it stops searching, not the conversation.
+ * `webSearches` is absolute; callers do not add turn-local claims to it again.
  */
 export function recordTurn(
   session: CountedSessionWrite,
@@ -73,6 +74,6 @@ export function recordTurn(
     openedAt: session.openedAt,
     turns,
     conversationalTokens: tokens,
-    webSearches: session.webSearches + webSearches,
+    webSearches,
   };
 }

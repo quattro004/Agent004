@@ -329,6 +329,7 @@ describe('useAgentStream', () => {
       ['breaker_tripped', 'BUDGET_CAPPED'],
       ['rate_limited', 'RATE_LIMITED'],
       ['busy', null],
+      ['turn_deadline', null],
       ['session_cap_exceeded', 'ENDED'],
       ['session_mismatch', null],
       ['moderation_blocked', null],
@@ -376,6 +377,39 @@ describe('useAgentStream', () => {
         "Let's talk about something else.",
       );
       expect(useConnectionStore.getState().sessionState).not.toBe('SIGNAL_LOST');
+    });
+
+    it('keeps turn_deadline retryable and renders the in-character deadline line', async () => {
+      useConnectionStore.getState().setSessionState('ACTIVE');
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(
+          sseResponse([
+            {
+              type: 'error',
+              code: 'turn_deadline',
+              retryable: true,
+              inCharacterMessage: 'We crossed the 60-second mark. Try again.',
+            },
+          ]),
+        )
+        .mockResolvedValueOnce(happyStream());
+      const { stream } = makeStream({ fetchImpl: fetchImpl as unknown as typeof fetch });
+
+      await stream.send({ message: 'hi' });
+
+      expect(useConversationStore.getState().currentResponseText).toBe(
+        'We crossed the 60-second mark. Try again.',
+      );
+      expect(useConnectionStore.getState().sessionState).toBe('ACTIVE');
+      expect(outcomeForErrorCode('turn_deadline')).toEqual({
+        sessionState: null,
+        showAsReply: true,
+        retryWithNewSessionId: false,
+      });
+
+      await stream.send({ message: 'again' });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
 
     it('takes a fresh runtime session ID and retries once on session_mismatch', async () => {

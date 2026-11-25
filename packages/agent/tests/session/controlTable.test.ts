@@ -254,7 +254,7 @@ describe('SESSION#<sub>', () => {
     expect(input.ConditionExpression).toBe(
       '#sessionId = :expectedSessionId AND #state = :expectedState AND ' +
         '#openedAt = :expectedOpenedAt AND #turns = :expectedTurns AND ' +
-        '#conversationalTokens = :expectedTokens',
+        '#conversationalTokens = :expectedTokens AND #webSearches = :expectedWebSearches',
     );
     expect(input.ExpressionAttributeNames).toEqual({
       '#sessionId': 'sessionId',
@@ -262,6 +262,7 @@ describe('SESSION#<sub>', () => {
       '#openedAt': 'openedAt',
       '#turns': 'turns',
       '#conversationalTokens': 'conversationalTokens',
+      '#webSearches': 'webSearches',
     });
   });
 
@@ -317,6 +318,78 @@ describe('SESSION#<sub>', () => {
       conversationalTokens: { N: '412' },
       webSearches: { N: '2' },
       ttl: { N: String(epoch(openedAt) + (30 + 15) * 60) },
+    });
+  });
+
+  it('atomically claims a search for the exact counted session and allowance', async () => {
+    ddb.on(UpdateItemCommand).resolves({
+      Attributes: {
+        pk: { S: 'SESSION#sub-1' },
+        sessionId: { S: 'counted-1' },
+        webSearches: { N: '3' },
+      },
+    });
+
+    const result = await table().claimWebSearch('sub-1', 'counted-1', 2, 10);
+
+    expect(result).toEqual({ claimed: true, webSearches: 3 });
+    const input = ddb.commandCalls(UpdateItemCommand)[0]!.args[0].input;
+    expect(input.Key).toEqual({ pk: { S: 'SESSION#sub-1' } });
+    expect(input.UpdateExpression).toBe('ADD #webSearches :one');
+    expect(input.ConditionExpression).toContain('#sessionId = :sessionId');
+    expect(input.ConditionExpression).toContain('#webSearches = :expectedWebSearches');
+    expect(input.ConditionExpression).toContain('#webSearches < :limit');
+  });
+
+  it('rejects a stale counted-session snapshot instead of overwriting search claims', async () => {
+    ddb.on(UpdateItemCommand).rejects(
+      new ConditionalCheckFailedException({
+        message: 'The conditional request failed',
+        $metadata: {},
+      }),
+    );
+    ddb.on(GetItemCommand).resolves({
+      Item: {
+        pk: { S: 'SESSION#sub-1' },
+        sessionId: { S: 'counted-other' },
+        state: { S: 'Active' },
+        openedAt,
+        turns: 3,
+        conversationalTokens: 412,
+        webSearches: { N: '2' },
+        ttl: { N: '0' },
+      },
+    });
+
+    await expect(table().claimWebSearch('sub-1', 'counted-1', 2, 10)).resolves.toEqual({
+      claimed: false,
+      reason: 'session_changed',
+    });
+  });
+
+  it('rejects an eleventh search at the configured session allowance', async () => {
+    ddb.on(UpdateItemCommand).rejects(
+      new ConditionalCheckFailedException({
+        message: 'The conditional request failed',
+        $metadata: {},
+      }),
+    );
+    ddb.on(GetItemCommand).resolves({
+      Item: {
+        pk: { S: 'SESSION#sub-1' },
+        sessionId: { S: 'counted-1' },
+        state: { S: 'Active' },
+        openedAt,
+        turns: 3,
+        conversationalTokens: 412,
+        webSearches: { N: '10' },
+        ttl: { N: '0' },
+      },
+    });
+
+    await expect(table().claimWebSearch('sub-1', 'counted-1', 10, 10)).resolves.toEqual({
+      claimed: false,
+      reason: 'limit',
     });
   });
 

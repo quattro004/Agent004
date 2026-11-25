@@ -131,6 +131,10 @@ settle:  one transaction: delete LEASE#<sub> (requestId and reserved must match)
 - **The tally includes in-flight reservations**, so the pre-turn breaker read is conservative, and a degraded turn (tally ≥ degrade) still has room because reservation + degrade < trip.
 - **Settlement never fails or replays a turn.** The work is done and paid for. A failure is logged and counted in `SettlementFailures`, and the lease and reservation stand until reconciled.
 - **The counted session is written only under the lease** (`putSession` creates an absent item or replaces an exact previous snapshot), so a concurrent instance cannot reset another counted session. A post-turn write failure keeps the reply and counts `SessionWriteFailures`.
+- **The fixed-window counter is consumed only after a turn or memory action is admitted and every pre-admission/session refusal has passed.** A breaker, busy, session-cap, allowlist or admission refusal consumes no rate window. A rate refusal settles the admitted lease at 0 µUSD.
+- **Settlement starts at the full admitted reservation.** A measured model or voice result replaces it; missing usage, cancellation or an unresolved memory/voice phase retains the full reservation rather than refunding it.
+- **Search claims are persisted before outbound execution.** `claimWebSearch` conditionally increments `SESSION#<sub>.webSearches` for the exact counted-session ID and snapshot, and rejects at the configured allowance or when the session changed. The callback survives cancellation and failure, is counted at settlement, and is not added to the session a second time in `recordTurn`.
+- **A stale counted-session write is rejected, not silently overwritten.** `putSession` includes `sessionId`, `state`, `openedAt`, `turns`, `conversationalTokens` and `webSearches` in its replacement snapshot condition.
 - **Cost.** Each admitted turn adds roughly 6 write units at admission and 6 at settlement to the existing reads (about $0.00002 a turn at on-demand rates, to be re-confirmed against the Price List before deploy).
 
 - **Ambiguous admission is reconciled before model work.** If `TransactWriteItems`

@@ -155,11 +155,12 @@ describe('handleInvocations — the breaker', () => {
 
   it('refuses the turn with breaker_tripped at the trip threshold, before any model call', async () => {
     const { breakerTripMicroUsd } = testRuntimeConfig();
-    install(fakeControlTable({ spendMicroUsd: breakerTripMicroUsd }));
+    const table = install(fakeControlTable({ spendMicroUsd: breakerTripMicroUsd }));
 
     const { events } = await turn();
 
     expect(errorCodeOf(events)).toBe('breaker_tripped');
+    expect(table.consumeRate).not.toHaveBeenCalled();
     expect(streamMock).not.toHaveBeenCalled();
   });
 

@@ -167,6 +167,40 @@ describe('handleInvocations — cancellation on client disconnect', () => {
     expect(captured!.aborted).toBe(true);
   });
 
+  it('persists a search claim before a cancelled turn returns', async () => {
+    let claimed = false;
+    streamMock.mockImplementation(
+      (
+        _message: string,
+        options: { cancelSignal?: AbortSignal; invocationState: Record<string, unknown> },
+      ) => {
+        const turn = options.invocationState[WEB_SEARCH_TURN] as InstanceType<typeof WebSearchTurn>;
+        return {
+          async next() {
+            claimed = await turn.claimPersisted();
+            await new Promise<void>((_resolve, reject) => {
+              options.cancelSignal?.addEventListener('abort', () =>
+                reject(new Error('invocation aborted')),
+              );
+            });
+            return { done: true, value: fakeResult('', {}) };
+          },
+        };
+      },
+    );
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'search the news' }), double.res);
+
+    await vi.waitFor(() => expect(claimed).toBe(true));
+    double.disconnect();
+    await pending;
+    await double.end;
+
+    expect(table.sessions.get(TEST_SUB)?.webSearches).toBe(1);
+    expect(double.event('done')).toBeUndefined();
+  });
+
   it('writes nothing further to a stream whose client has gone', async () => {
     streamMock.mockImplementation(stallingStream(['Half a rep']));
 
@@ -218,6 +252,34 @@ describe('handleInvocations — cancellation on client disconnect', () => {
 
     expect(streamMock).not.toHaveBeenCalled();
     expect(double.event('done')).toBeUndefined();
+    const [lease, actual] = table.settleRequest.mock.calls[0];
+    expect(actual).toBe(lease.reservedMicroUsd);
+  });
+
+  it('reports turn_deadline and leaves the counted session active during memory retrieval', async () => {
+    __test.setRuntimeConfig(
+      testRuntimeConfig({ limits: { ...testRuntimeConfig().limits, deadlineMs: 20 } }),
+    );
+    let resolveRetrieve!: (records: []) => void;
+    memorySdk.retrieveRecords.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRetrieve = resolve;
+        }),
+    );
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+
+    await vi.waitFor(() => expect(memorySdk.retrieveRecords).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    resolveRetrieve([]);
+    await pending;
+    await double.end;
+
+    expect(double.event('error')).toMatchObject({ code: 'turn_deadline', retryable: true });
+    expect(streamMock).not.toHaveBeenCalled();
+    expect(table.sessions.get(TEST_SUB)?.state).toBe('Active');
   });
 
   it('does not send done when Polly throws after the turn was cancelled', async () => {

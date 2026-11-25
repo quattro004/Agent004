@@ -10,6 +10,7 @@ import {
   type Halt,
   type Lease,
   type RateDecision,
+  type SearchClaimDecision,
   type Spend,
 } from '../../src/session/controlTable.js';
 
@@ -30,6 +31,16 @@ export interface FakeControlTable {
   getFriend: ReturnType<typeof vi.fn<(sub: string) => Promise<Friend | undefined>>>;
   getAllow: ReturnType<typeof vi.fn<(email: string) => Promise<AllowEntry | undefined>>>;
   consumeRate: ReturnType<typeof vi.fn<(sub: string, now: Date) => Promise<RateDecision>>>;
+  claimWebSearch: ReturnType<
+    typeof vi.fn<
+      (
+        sub: string,
+        sessionId: string,
+        expectedWebSearches: number,
+        limit: number,
+      ) => Promise<SearchClaimDecision>
+    >
+  >;
   recordFriendSeen: ReturnType<typeof vi.fn<(sub: string, at: Date) => Promise<void>>>;
   getSession: ReturnType<typeof vi.fn<(sub: string) => Promise<CountedSession | undefined>>>;
   putSession: ReturnType<
@@ -90,7 +101,8 @@ export function fakeControlTable(
     stored.state === expected.state &&
     stored.openedAt === expected.openedAt &&
     stored.turns === expected.turns &&
-    stored.conversationalTokens === expected.conversationalTokens;
+    stored.conversationalTokens === expected.conversationalTokens &&
+    stored.webSearches === expected.webSearches;
 
   return {
     getHalt: vi.fn(async () => overrides.halt),
@@ -106,6 +118,28 @@ export function fakeControlTable(
     getFriend: vi.fn(async () => friend),
     getAllow: vi.fn(async () => allow),
     consumeRate: vi.fn(async () => ({ allowed: true }) as RateDecision),
+    claimWebSearch: vi.fn(
+      async (
+        sub: string,
+        sessionId: string,
+        expectedWebSearches: number,
+        limit: number,
+      ): Promise<SearchClaimDecision> => {
+        const session = sessions.get(sub);
+        if (!session || session.sessionId !== sessionId) {
+          return { claimed: false, reason: 'session_changed' };
+        }
+        if (session.webSearches !== expectedWebSearches) {
+          return { claimed: false, reason: 'session_changed' };
+        }
+        if (session.webSearches >= limit) {
+          return { claimed: false, reason: 'limit' };
+        }
+        const next = { ...session, webSearches: session.webSearches + 1 };
+        sessions.set(sub, next);
+        return { claimed: true, webSearches: next.webSearches };
+      },
+    ),
     recordFriendSeen: vi.fn(async () => {}),
     getSession: vi.fn(async (sub: string) => sessions.get(sub)),
     putSession: vi.fn(

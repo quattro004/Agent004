@@ -99,11 +99,12 @@ describe('handleInvocations — the allowlist at session open', () => {
   });
 
   it('refuses with not_allowlisted when the allow item is gone', async () => {
-    install({ allow: null });
+    const table = install({ allow: null });
 
     const { events } = await turn();
 
     expect(errorCodeOf(events)).toBe('not_allowlisted');
+    expect(table.consumeRate).not.toHaveBeenCalled();
     expect(streamMock).not.toHaveBeenCalled();
   });
 

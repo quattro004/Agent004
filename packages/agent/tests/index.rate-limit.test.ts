@@ -103,6 +103,11 @@ describe('handleInvocations — rate limiting', () => {
 
     expect(errorCodeOf(events)).toBe('rate_limited');
     expect(streamMock).not.toHaveBeenCalled();
+    expect(table.admitRequest).toHaveBeenCalledTimes(1);
+    expect(table.settleRequest).toHaveBeenCalledTimes(1);
+    expect(table.settleRequest.mock.calls[0][1]).toBe(0);
+    expect(table.leases.size).toBe(0);
+    expect(table.counters.active).toBe(0);
   });
 
   it('tells the browser a rate-limited message is worth retrying', async () => {
@@ -121,16 +126,22 @@ describe('handleInvocations — rate limiting', () => {
     await turn();
 
     expect(table.addSpend).not.toHaveBeenCalled();
+    expect(table.settleRequest).toHaveBeenCalledTimes(1);
+    expect(table.settleRequest.mock.calls[0][1]).toBe(0);
+    expect(table.counters.committedMicroUsd).toBe(0);
     expect(synthesize).not.toHaveBeenCalled();
   });
 
-  it('checks the windows before the month tally, which is the costlier read', async () => {
+  it('admits work before consuming the fixed window and settles a rate refusal at zero', async () => {
     const table = install();
     table.consumeRate.mockResolvedValue({ allowed: false, exceeded: 'hour' });
 
     await turn();
 
-    expect(table.getSpend).not.toHaveBeenCalled();
+    expect(table.admitRequest).toHaveBeenCalledTimes(1);
+    expect(table.consumeRate).toHaveBeenCalledTimes(1);
+    expect(table.settleRequest.mock.calls[0][1]).toBe(0);
+    expect(table.getSpend).toHaveBeenCalled();
   });
 
   it('fails closed when the windows cannot be read', async () => {

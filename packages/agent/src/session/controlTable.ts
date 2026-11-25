@@ -3,6 +3,7 @@ import {
   PutItemCommand,
   TransactWriteItemsCommand,
   TransactionCanceledException,
+  ConditionalCheckFailedException,
   UpdateItemCommand,
   type AttributeValue,
   type DynamoDBClient,
@@ -57,6 +58,9 @@ export interface CountedSession extends CountedSessionWrite {
 }
 
 export type RateDecision = { allowed: true } | { allowed: false; exceeded: 'hour' | 'day' };
+
+export type SearchClaimDecision =
+  { claimed: true; webSearches: number } | { claimed: false; reason: 'limit' | 'session_changed' };
 
 export interface Spend {
   microUsd: number;
@@ -171,13 +175,14 @@ export class ControlTable {
             ConditionExpression:
               '#sessionId = :expectedSessionId AND #state = :expectedState AND ' +
               '#openedAt = :expectedOpenedAt AND #turns = :expectedTurns AND ' +
-              '#conversationalTokens = :expectedTokens',
+              '#conversationalTokens = :expectedTokens AND #webSearches = :expectedWebSearches',
             ExpressionAttributeNames: {
               '#sessionId': 'sessionId',
               '#state': 'state',
               '#openedAt': 'openedAt',
               '#turns': 'turns',
               '#conversationalTokens': 'conversationalTokens',
+              '#webSearches': 'webSearches',
             },
             ExpressionAttributeValues: {
               ':expectedSessionId': { S: expected.sessionId },
@@ -185,6 +190,7 @@ export class ControlTable {
               ':expectedOpenedAt': { S: expected.openedAt },
               ':expectedTurns': { N: String(expected.turns) },
               ':expectedTokens': { N: String(expected.conversationalTokens) },
+              ':expectedWebSearches': { N: String(expected.webSearches) },
             },
           };
     await this.options.client.send(
@@ -221,6 +227,89 @@ export class ControlTable {
       webSearches: num(item, 'webSearches'),
       ttl: num(item, 'ttl'),
     };
+  }
+
+  /** Atomically reserve one search against the exact counted-session snapshot. */
+  async claimWebSearch(
+    sub: string,
+    sessionId: string,
+    expectedWebSearches: number,
+    limit: number,
+  ): Promise<SearchClaimDecision> {
+    if (!Number.isSafeInteger(expectedWebSearches) || expectedWebSearches < 0) {
+      throw new Error(
+        `expectedWebSearches must be a non-negative integer, got ${expectedWebSearches}`,
+      );
+    }
+    if (!Number.isSafeInteger(limit) || limit < 0) {
+      throw new Error(`limit must be a non-negative integer, got ${limit}`);
+    }
+    if (expectedWebSearches >= limit) {
+      return { claimed: false, reason: 'limit' };
+    }
+
+    const key = `SESSION#${sub}`;
+    try {
+      const response = await this.options.client.send(
+        new UpdateItemCommand({
+          TableName: this.options.tableName,
+          Key: { pk: { S: key } },
+          UpdateExpression: 'ADD #webSearches :one',
+          ConditionExpression:
+            '#sessionId = :sessionId AND #webSearches = :expectedWebSearches AND ' +
+            '#webSearches < :limit',
+          ExpressionAttributeNames: {
+            '#sessionId': 'sessionId',
+            '#webSearches': 'webSearches',
+          },
+          ExpressionAttributeValues: {
+            ':sessionId': { S: sessionId },
+            ':expectedWebSearches': { N: String(expectedWebSearches) },
+            ':one': { N: '1' },
+            ':limit': { N: String(limit) },
+          },
+          ReturnValues: 'ALL_NEW',
+        }),
+      );
+      if (!response.Attributes) {
+        throw new Error(`Web-search claim for ${key} returned no attributes`);
+      }
+      return { claimed: true, webSearches: num(response.Attributes, 'webSearches') };
+    } catch (err) {
+      let stored: CountedSession | undefined;
+      try {
+        stored = await this.getSession(sub);
+      } catch {
+        return { claimed: false, reason: 'session_changed' };
+      }
+
+      if (!stored || stored.sessionId !== sessionId) {
+        return { claimed: false, reason: 'session_changed' };
+      }
+
+      const conditionFailed =
+        err instanceof ConditionalCheckFailedException ||
+        (err as { name?: string }).name === 'ConditionalCheckFailedException';
+      if (conditionFailed) {
+        if (stored.webSearches >= limit) {
+          return { claimed: false, reason: 'limit' };
+        }
+        if (stored.webSearches !== expectedWebSearches) {
+          return { claimed: false, reason: 'session_changed' };
+        }
+        return { claimed: false, reason: 'session_changed' };
+      }
+
+      // A lost SDK response can follow a committed update. Reconcile the
+      // exact one-search increment rather than replaying the update.
+      if (stored.webSearches === expectedWebSearches + 1) {
+        return { claimed: true, webSearches: stored.webSearches };
+      }
+      if (stored.webSearches === expectedWebSearches) {
+        return { claimed: false, reason: 'limit' };
+      }
+      return { claimed: false, reason: 'session_changed' };
+    }
   }
 
   /** DynamoDB TTL deletion is not immediate, so expiry is decided here from `openedAt`. */

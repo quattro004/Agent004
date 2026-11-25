@@ -132,6 +132,7 @@ export interface InvocationControlTable {
   getFriend: ControlTable['getFriend'];
   getAllow: ControlTable['getAllow'];
   consumeRate: ControlTable['consumeRate'];
+  claimWebSearch: ControlTable['claimWebSearch'];
   recordFriendSeen: ControlTable['recordFriendSeen'];
 }
 
@@ -214,6 +215,16 @@ class TurnCancelledError extends Error {
     super('The agent stream was cancelled');
     this.name = 'TurnCancelledError';
   }
+}
+
+function resolveTurnAbortOutcome(
+  signal: AbortSignal,
+  deadlineExceeded: boolean,
+  sse: SseStream,
+): 'cancelled' | SseErrorCode | undefined {
+  if (deadlineExceeded) return sse.fail('turn_deadline');
+  if (signal.aborted) return 'cancelled';
+  return undefined;
 }
 
 // --- Tool Definitions ---
@@ -478,24 +489,6 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       return;
     }
 
-    // FR-012: the windows bound the friend, where the caps below bound one
-    // conversation. A friend who ends a session gets fresh caps; they do not
-    // get a fresh hour. The write is conditional inside `consumeRate`, so a
-    // message refused here is not counted against the window
-    // (contracts/transport-sse.md § Refusal order, step 4).
-    let rate;
-    try {
-      rate = await table.consumeRate(sub, new Date());
-    } catch (err) {
-      console.error('Could not read the rate-limit windows:', err);
-      outcome = sse.fail('internal');
-      return;
-    }
-    if (!rate.allowed) {
-      outcome = sse.fail('rate_limited');
-      return;
-    }
-
     // The month's tally is read next, because it decides voice as well as
     // refusal (contracts/spend-control.md § Breaker). It fails closed: a turn
     // we cannot price is a turn we do not run.
@@ -545,6 +538,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         return;
       }
       lease = admission.lease;
+      settleMicroUsd = lease.reservedMicroUsd;
     } catch (err) {
       console.error('Could not admit the request:', err);
       outcome = sse.fail('internal');
@@ -564,6 +558,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       stored = await table.getSession(sub);
     } catch (err) {
       console.error('Could not read the counted session:', err);
+      settleMicroUsd = 0;
       outcome = sse.fail('internal');
       return;
     }
@@ -576,13 +571,12 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         console.error('Could not sign off the capped session:', err);
         emitCountMetric('SessionWriteFailures');
       }
+      settleMicroUsd = 0;
       outcome = sse.fail('session_cap_exceeded');
       return;
     }
 
     const opened = evaluation.kind === 'open';
-    // Covers opening a session, from the allowlist check to the end of memory
-    // retrieval. A turn in a session already open records `opened: false`.
     startSpan('session.open');
     let session: CountedSessionWrite;
     if (evaluation.kind === 'continue') {
@@ -596,15 +590,43 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       // (contracts/auth-and-allowlist.md § Revocation timeline).
       const refusal = await admitToNewSession(table, sub);
       if (refusal) {
+        settleMicroUsd = 0;
+        endSpan('session.open', { opened, abandoned: true });
         outcome = sse.fail(refusal);
         return;
       }
-
       session = openSession(turnStartedAt);
+    }
+
+    // The fixed-window counter starts only after breaker, admission, session,
+    // and allowlist checks succeed. A refusal here releases the just-created
+    // lease at zero and starts no model or memory work.
+    let rate;
+    try {
+      rate = await table.consumeRate(sub, new Date());
+    } catch (err) {
+      console.error('Could not read the rate-limit windows:', err);
+      settleMicroUsd = 0;
+      endSpan('session.open', { opened, abandoned: true });
+      outcome = sse.fail('internal');
+      return;
+    }
+    if (!rate.allowed) {
+      settleMicroUsd = 0;
+      endSpan('session.open', { opened, abandoned: true });
+      outcome = sse.fail('rate_limited');
+      return;
+    }
+
+    // Covers opening a session, from the allowlist check to the end of memory
+    // retrieval. A turn in a session already open records `opened: false`.
+    if (opened) {
       try {
         await table.putSession(sub, session, stored);
       } catch (err) {
         console.error('Could not open the counted session:', err);
+        settleMicroUsd = 0;
+        endSpan('session.open', { opened, abandoned: true });
         outcome = sse.fail('internal');
         return;
       }
@@ -651,15 +673,15 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
         emitCountMetric('MemoryRetrieveFailures');
         endSpan('memory.retrieve', { count: 0, failed: true });
       }
-      if (cancellation.signal.aborted) {
-        outcome = deadlineExceeded ? 'session_cap_exceeded' : 'cancelled';
+      const abortOutcome = resolveTurnAbortOutcome(cancellation.signal, deadlineExceeded, sse);
+      if (abortOutcome !== undefined) {
+        outcome = abortOutcome;
         return;
       }
-      // Retrieval was attempted, so it is billed even if nothing else runs.
-      settleMicroUsd = memoryRetrievals * config.prices.memoryRetrievalMicroUsd;
     }
-    if (cancellation.signal.aborted) {
-      outcome = deadlineExceeded ? 'session_cap_exceeded' : 'cancelled';
+    const abortOutcome = resolveTurnAbortOutcome(cancellation.signal, deadlineExceeded, sse);
+    if (abortOutcome !== undefined) {
+      outcome = abortOutcome;
       return;
     }
     endSpan('session.open', { opened });
@@ -682,6 +704,24 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
     const searchTurn = new WebSearchTurn(
       Math.max(0, config.sessionMaxWebSearches - session.webSearches),
       (sources) => sse.send({ type: 'sources', sources }),
+      async () => {
+        const decision = await table.claimWebSearch(
+          sub,
+          countedSessionId,
+          session.webSearches,
+          config.sessionMaxWebSearches,
+        );
+        if (!decision.claimed) {
+          if (decision.reason === 'session_changed') {
+            throw new Error(
+              `Counted session ${countedSessionId} changed before a web-search claim`,
+            );
+          }
+          return false;
+        }
+        session.webSearches = decision.webSearches;
+        return true;
+      },
     );
     // Set the moment the model reports usage, so a turn that fails afterwards
     // is still counted: the tokens were billed either way.
@@ -747,7 +787,7 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       const counted = recordTurn(
         session,
         usage.outputTokens + estimateMessageTokens(message),
-        searchTurn.sent,
+        session.webSearches,
         caps,
       );
       try {
@@ -809,13 +849,12 @@ async function serveInvocation(req: IncomingMessage, res: ServerResponse): Promi
       if (err instanceof PollySynthesisError) {
         pollyCharacters = err.pollyCharacters;
       }
-      if (deadlineExceeded) {
-        console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
-        outcome = sse.fail('session_cap_exceeded');
-      } else if (cancelled) {
-        // A friend who left: there is no one to report it to, and the socket
-        // is already gone.
-        outcome = 'cancelled';
+      const abortOutcome = resolveTurnAbortOutcome(cancellation.signal, deadlineExceeded, sse);
+      if (abortOutcome !== undefined) {
+        if (deadlineExceeded) {
+          console.warn(`Turn abandoned at the ${limits.deadlineMs}ms deadline`);
+        }
+        outcome = abortOutcome;
       } else if (err instanceof PollySynthesisError) {
         // Polly already billed for part of the reply; the text the friend can
         // read is worth more than a refusal, so the turn still completes.
@@ -961,17 +1000,6 @@ async function handleAction(
     const refusal = await admitToNewSession(table, sub);
     if (refusal) return sse.fail(refusal);
 
-    if (action !== 'memory.forget') {
-      let rate;
-      try {
-        rate = await table.consumeRate(sub, new Date());
-      } catch (error) {
-        console.error('Could not read the rate-limit windows for a memory action:', error);
-        return sse.fail('internal');
-      }
-      if (!rate.allowed) return sse.fail('rate_limited');
-    }
-
     actionStartedAt = new Date();
     let breaker;
     try {
@@ -1005,6 +1033,23 @@ async function handleAction(
     } catch (error) {
       console.error('Could not admit a memory action:', error);
       return sse.fail('internal');
+    }
+
+    if (action !== 'memory.forget') {
+      let rate;
+      try {
+        rate = await table.consumeRate(sub, new Date());
+      } catch (error) {
+        console.error('Could not read the rate-limit windows for a memory action:', error);
+        await settleLease(table, actionLease, 0, actionStartedAt);
+        actionLease = undefined;
+        return sse.fail('internal');
+      }
+      if (!rate.allowed) {
+        await settleLease(table, actionLease, 0, actionStartedAt);
+        actionLease = undefined;
+        return sse.fail('rate_limited');
+      }
     }
 
     const adapter = memoryAdapter(config);

@@ -101,6 +101,7 @@ export class WebSearchTurn {
   constructor(
     private readonly allowance: number,
     private readonly onSources: (sources: SearchSource[]) => void,
+    private readonly persistClaim?: () => Promise<boolean>,
   ) {}
 
   /** Searches this turn sent; added to the session's count and priced at settlement. */
@@ -111,6 +112,14 @@ export class WebSearchTurn {
   /** Takes one search from the allowance, or reports that none is left. */
   claim(): boolean {
     if (this.#sent >= this.allowance) return false;
+    this.#sent += 1;
+    return true;
+  }
+
+  /** Persists an outbound claim before the turn-local count is incremented. */
+  async claimPersisted(): Promise<boolean> {
+    if (this.#sent >= this.allowance) return false;
+    if (this.persistClaim && !(await this.persistClaim())) return false;
     this.#sent += 1;
     return true;
   }
@@ -126,7 +135,9 @@ export async function searchForTurn(
   options: WebSearchOptions & { turn: WebSearchTurn },
 ): Promise<WebSearchResult> {
   const { turn, ...searchOptions } = options;
-  if (!turn.claim()) return { success: false, error: SEARCH_LIMIT_REACHED };
+  if (!(await turn.claimPersisted())) {
+    return { success: false, error: SEARCH_LIMIT_REACHED };
+  }
 
   const result = await fetchWebSearch(input, searchOptions);
   if (result.success) turn.report(result.results ?? []);

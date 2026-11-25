@@ -221,7 +221,11 @@ describe('handleInvocations — approved per-turn bounds', () => {
 
     const { events } = await turn({ message: 'hi' });
 
-    expect(events().at(-1)).toMatchObject({ type: 'error', code: 'session_cap_exceeded' });
+    expect(events().at(-1)).toMatchObject({
+      type: 'error',
+      code: 'turn_deadline',
+      retryable: true,
+    });
   });
 
   it('cancels the in-flight model call when the deadline passes', async () => {

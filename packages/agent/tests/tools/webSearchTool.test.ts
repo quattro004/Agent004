@@ -171,6 +171,19 @@ describe('webSearchTool', () => {
   describe('searchForTurn', () => {
     const hit = { title: 'Example', text: 'Snippet', url: 'https://example.com/a' };
 
+    it('awaits a persistent claim before calling AgentCore', async () => {
+      const client = clientReturning({ results: [hit] });
+      const persistClaim = vi.fn().mockResolvedValue(false);
+      const turn = new WebSearchTurn(10, vi.fn(), persistClaim);
+
+      const result = await searchForTurn({ query: 'news' }, { client, turn });
+
+      expect(persistClaim).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      expect(client.send).not.toHaveBeenCalled();
+      expect(turn.sent).toBe(0);
+    });
+
     it('sends the search, counts it, and reports each source shown to the model', async () => {
       const client = clientReturning({ results: [hit] });
       const onSources = vi.fn();

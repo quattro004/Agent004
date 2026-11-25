@@ -132,6 +132,7 @@ describe('handleInvocations — admission and settlement', () => {
     const { events } = await action('memory.list');
 
     expect(errorCodeOf(events)).toBe('breaker_tripped');
+    expect(table.consumeRate).not.toHaveBeenCalled();
     expect(memorySdk.listRecords).not.toHaveBeenCalled();
     expect(table.admitRequest).not.toHaveBeenCalled();
   });
@@ -223,6 +224,7 @@ describe('handleInvocations — admission and settlement', () => {
     const { events } = await turn();
 
     expect(events().at(-1)).toMatchObject({ type: 'error', code: 'busy', retryable: true });
+    expect(table.consumeRate).not.toHaveBeenCalled();
     expect(streamMock).not.toHaveBeenCalled();
     expect(table.settleRequest).not.toHaveBeenCalled();
     expect(table.leases.get(TEST_SUB)?.requestId).toBe('other-request');
@@ -386,11 +388,12 @@ describe('handleInvocations — a turn Strands reports as cancelled', () => {
 
     const { events } = await turn();
 
-    expect(errorCodeOf(events)).toBe('session_cap_exceeded');
+    expect(errorCodeOf(events)).toBe('turn_deadline');
     expect(events().some((e) => e.type === 'done')).toBe(false);
     const [lease, actual] = table.settleRequest.mock.calls[0];
     expect(actual).toBe(lease.reservedMicroUsd);
     expect(memorySdk.createEvent).not.toHaveBeenCalled();
+    expect(table.sessions.get(TEST_SUB)?.state).toBe('Active');
   });
 });
 
