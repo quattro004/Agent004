@@ -10,7 +10,7 @@
 | Tool | Version | Install |
 |------|---------|---------|
 | Node.js | 24 (repo pins the exact patch) | [nodejs.org](https://nodejs.org/) |
-| pnpm | 11 (repo pins 11.24.0) | `npm install -g pnpm@11` |
+| pnpm | 11 (repo pins 11.28.13) | `npm install -g pnpm@11.28.13` |
 | AWS CLI | 2.x | [aws.amazon.com/cli](https://aws.amazon.com/cli/) |
 | AWS CDK CLI | 2.258+ | `npm install -g aws-cdk` |
 | AgentCore CLI | 0.30+ | `npm install -g @aws/agentcore` |
@@ -31,7 +31,7 @@ Corepack is **not** required. Node removed Corepack from its distribution in Nod
 setting (default `download`) makes pnpm fetch and run the exact version declared
 in the root `package.json` `packageManager` field. Install any pnpm 11 globally
 and it self-switches to the pin inside this repo — confirm with `pnpm -v`, which
-reports `11.24.0`. `corepack enable` still works on Node 24 but adds nothing.
+reports `11.28.13`. `corepack enable` still works on Node 24 but adds nothing.
 
 The Node.js runtime is pinned the same way, via
 [`devEngines.runtime`](https://pnpm.io/package_json#devenginesruntime) in the root
@@ -288,7 +288,7 @@ pnpm run test:e2e                   # Playwright
 | `VITE_MOCK_AGENT` | `true` for local UI dev without backend | Frontend (dev) |
 | `NEWS_API_KEY` | API key for news provider (selected in research.md §R7) | Agent |
 | `WEATHER_API_KEY` | API key for weather provider (selected in research.md §R7) | Agent |
-| `WEB_SEARCH_API_KEY` | API key for web search provider (if required, TBD) | Agent |
+| _(none for web search)_ | The web search tool uses AgentCore `InvokeWebSearch` over IAM and needs no key (spec 003 C46) | Agent |
 
 CDK deploy outputs the WebSocket endpoint and Cognito pool ID. Copy these to `.env.local` in `packages/frontend/`.
 

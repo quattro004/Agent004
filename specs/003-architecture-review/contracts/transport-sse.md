@@ -20,8 +20,8 @@ Browser ──fetch POST──▶ CloudFront  max.recipieces.com/runtimes/*
 | --- | --- | --- |
 | Origin | `bedrock-agentcore.us-west-2.amazonaws.com`, HTTPS only | Research Q4 |
 | Allowed methods | All (POST is needed) | — |
-| Cache policy | Caching disabled | CloudFront developer guide, "Add custom headers to origin requests": with `Authorization` outside the cache key, disable caching |
-| Origin request policy | Custom, with an explicit header list: `Authorization`, `Content-Type`, `Accept`, `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`. Query string: `qualifier`. No cookies. `Host` is **not** forwarded. | Same guide: `Authorization` reaches the origin only when a policy names it |
+| Cache policy | Caching disabled (managed `CachingDisabled`) | CloudFront developer guide, "Add custom headers to origin requests": with `Authorization` outside the cache key, disable caching |
+| Origin request policy | Managed **`AllViewerExceptHostHeader`**. Forwards every viewer header except `Host`, and all query strings, so `Authorization`, `Content-Type`, `Accept`, `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id` and `qualifier` all reach the origin. **A custom allow-list was tried first and is not buildable**: CloudFront rejects `Authorization` in an origin request policy's header list, and CDK fails synthesis with `CannotPassAuthorizationOrAcceptEncodingHeaders`. With caching off, this managed policy is AWS's documented way to forward `Authorization` ([knowledge-center/cloudfront-authorization-header](https://repost.aws/knowledge-center/cloudfront-authorization-header)). `Host` is still **not** forwarded, which is what matters: `max.recipieces.com` would not resolve at `bedrock-agentcore`. Tasks deviation C25 | Same guide; verified against CDK 2.275.0 at T034 |
 | Origin read timeout | 120 s, the CloudFormation maximum (default 30 s) | `CustomOriginConfig.originReadTimeout` (minimum 1, maximum 120) |
 | Viewer protocol | Redirect to HTTPS | [csp-and-hosting.md](./csp-and-hosting.md) |
 
@@ -50,10 +50,17 @@ X-Amzn-Bedrock-AgentCore-Runtime-Session-Id: <runtime session ID>
   "displayAlias": "string", // optional; at most 50 characters (spec 001 data-model.md:19)
   "greetingId": "string", // optional; the greeting the browser played, for context
   "clientTimestamp": "ISO-8601", // optional; time-of-day context only
+  "voice": "on" | "off", // optional, default "on"; "off" suppresses synthesis entirely
 }
 ```
 
 The server **ignores** `sessionId`, `actorId` and any other field. Identity comes only from the token (FR-010, #55).
+
+`voice` is the one setting the browser owns, because muting is the friend's
+choice and synthesizing audio they will not hear costs money for nothing. The
+server can still answer `voice: "off"` in the `session` event when the
+soft-degrade is active, so the browser must read that field rather than assume
+its request was honoured.
 
 ### Actions
 
@@ -61,12 +68,32 @@ A body with an `action` field is not a chat turn, and `message` is not required:
 
 ```jsonc
 {
-  "action": "memory.list" | "memory.export" | "memory.delete" | "memory.forget",
+  "action":
+    "runtime.ready" |
+    "memory.list" |
+    "memory.export" |
+    "memory.delete" |
+    "memory.forget",
   "memoryRecordId": "string", // required for memory.delete only
 }
 ```
 
-An unknown `action` is `invalid_request`. Behavior, checks and payloads are in [memory-api.md](./memory-api.md) § Friend-facing operations. An action stream is a single `result` event or a single `error` event. It never opens or counts against a counted session.
+An unknown `action` is `invalid_request`. An action stream is a single `result`
+event or a single `error` event. It never opens or counts against a counted
+session.
+
+`runtime.ready` is a startup/health probe. The browser may call it while the
+pre-recorded greeting plays. It proves that the authenticated runtime handled
+the request and that runtime initialization is ready; it does not invoke the
+model, synthesize speech, retrieve/write memory, admit a chat turn, reserve
+spend, or consume a session/rate counter. It returns:
+
+```jsonc
+{ "type": "result", "action": "runtime.ready", "data": { "ready": true } }
+```
+
+Memory action behavior, checks and payloads are in
+[memory-api.md](./memory-api.md) § Friend-facing operations.
 
 ## Response
 
@@ -94,7 +121,8 @@ action:     result | error
 | --- | --- | --- |
 | `session` | `countedSessionId`, `opened` (true when this turn opened a new counted session), `voice` (`"on"` or `"off"`) | First event of every successful stream. `voice: "off"` when the soft-degrade is active or the friend muted voice. |
 | `text` | `delta` (string) | Incremental reply text, in order. The browser renders the concatenation. |
-| `audio` | `seq` (integer from 0), `format` (`"mp3"`), `data` (base64) | Each event is one independently decodable Polly Neural segment, synthesized as reply text completes. There are no speech marks (#47). Absent when `voice` is `"off"`. |
+| `sources` | `sources` (array of `{ title, url }`) | Zero or more per turn, before `done`: one per web search that returned results. The browser shows them as links beside the reply, as AWS's terms for AgentCore web search require, and clears them when the next turn starts. Only `http` and `https` URLs become links. |
+| `audio` | `seq` (integer from 0), `format` (`"mp3"`), `data` (base64) | Each event is one independently decodable Polly Standard segment, synthesized as reply text completes. There are no speech marks (#47). Absent when `voice` is `"off"`. |
 | `done` | `turnsUsed`, `state` (`"ACTIVE"` or `"SIGNED_OFF"`) | Terminal. `SIGNED_OFF` means this reply was Max's in-character sign-off, so the next message opens a fresh counted session. |
 | `result` | `action`, `data` (the action's payload, [memory-api.md](./memory-api.md)) | Terminal. Action requests only. |
 | `error` | `code`, `retryable` (boolean), `inCharacterMessage` (string or null) | Terminal. No `session` event precedes a pre-turn refusal. |
@@ -112,25 +140,36 @@ The breaker and cap figures (`conversationalTokens`, spend) are **not** sent to 
 | `halted` | `CONTROL#HALT` is present (hard stop) | false | Hard-stop state |
 | `breaker_tripped` | `SPEND#<yyyy-mm>` has reached the trip limit | false | Hard-stop state |
 | `rate_limited` | Hourly (60) or daily (500) messages per `sub` exceeded (spec 001 websocket-api.md:207-208) | true, after the window | Rate-limited state |
+| `busy` | Admission refused the turn because the friend already has a request in flight, or `GLOBAL_MAX_ACTIVE_REQUESTS` are in flight across instances (T166). No queue and no replay; the friend sends again | true | Stays active; Max's in-character line is the reply |
+| `turn_deadline` | The configured 60-second model, tool or voice deadline expired. The deadline does not sign off the counted session or create a permanent session-end state | true | Stays active; in-character deadline line is the reply; the friend may send again |
 | `session_cap_exceeded` | Turn, token or 30-minute cap reached before this turn (code name kept from `index.ts:173`) | false | Ended state; the next message opens a fresh counted session |
 | `session_mismatch` | The runtime session ID is bound to a different `sub` | false | The browser drops its session ID, makes a new one and retries once |
 | `moderation_blocked` | Guardrails intervened (if the adopted model's path supports them, Q2) | false | In-character deflection |
-| `internal` | Anything else. Logged with a correlation ID; the friend's message text is never logged. | true | Signal-lost state |
+| `internal` | Anything else, including a request that reaches the container with no usable `sub` (the platform's JWT authorizer should already have refused it, so that is a misconfiguration, not a friend error). Logged with a correlation ID; the friend's message text is never logged. | true | Signal-lost state |
 
 Refusal order before a turn, which is cheapest first and spends nothing:
 
 1. body validation
 2. `CONTROL#HALT`
-3. allowlist (at counted-session open; on every action)
-4. rate limit (not for `memory.forget`)
-5. counted-session caps (chat turns only)
-6. breaker (chat turns only)
+3. breaker pre-read (chat turns only; the tally includes in-flight reservations)
+4. admission (chat turns only): one request per friend, `GLOBAL_MAX_ACTIVE_REQUESTS` overall, and room under the trip threshold for the reservation → `busy` or `breaker_tripped`
+5. counted-session caps and the allowlist at counted-session open (chat turns only), both read under the lease, so a refusal here settles at 0 µUSD. The allowlist is also checked on every action
+6. fixed-window rate consumption (chat and memory actions, except `memory.forget`); it runs only after admission and every pre-admission refusal has passed. A rate refusal settles the just-created lease at 0 µUSD and starts no model or memory work
+
+Admission precedes the session read because the counted session is state that only the lease holder may write (T166/T167).
 
 ## Cancellation
 
 The browser aborts the `fetch` with an `AbortController` when the friend leaves or interrupts. The container detects the disconnect with `res.on('close')` guarded by `res.writableFinished` (`index.ts:185-188`; wiki `Gotchas`), and forwards the abort to the model call and to every tool's `fetch` (cooperative cancellation). Whether CloudFront closes the origin connection when the viewer disconnects is **unverified**. Quickstart V-02 checks it through the `invocation` span's `cancelled` attribute.
 
 A cancelled turn still counts its usage against the counted session and the breaker. Whatever was billed is counted.
+
+If the cancellation is caused by the configured turn deadline, the terminal SSE
+code is `turn_deadline`, not `session_cap_exceeded`. It is retryable and does
+not sign off or replace the counted session. A successful or billed model or
+voice call still settles exactly as measured; missing usage retains the
+admitted reservation. A client disconnect has no browser error frame and does
+not send a partial reply or memory event.
 
 ## Spans (R-obs, P9)
 
@@ -145,3 +184,5 @@ A cancelled turn still counts its usage against the counted session and the brea
 | `reply.complete` | Model call starts | `done` written | `inputTokens`, `outputTokens`, `pollyCharacters` |
 | `memory.create_event` | `CreateEvent` call | Result | `failed` |
 | `memory.action` | Action request received | `result` or `error` written | `action`, `count`, `failed` |
+
+Every span of one request belongs to that request's trace, parented to its `invocation` span, so two requests in flight never end each other's spans. A span still open when the request settles is ended with `abandoned: true`. Spans are OpenTelemetry API spans, exported by whatever tracer provider the runtime installs; with none installed they are no-ops. A span carries no message text.

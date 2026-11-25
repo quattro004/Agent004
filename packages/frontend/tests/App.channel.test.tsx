@@ -87,14 +87,24 @@ vi.mock('../src/components/TextInput', () => ({
   ),
 }));
 
-const mockSendMessage = vi.fn();
-vi.mock('../src/hooks/useWebSocket', () => ({
-  useWebSocket: () => ({
-    sendMessage: mockSendMessage,
-    startSession: vi.fn(),
-    endSession: vi.fn(),
-    sendInterrupt: vi.fn(),
-  }),
+const mockSend = vi.fn().mockResolvedValue(undefined);
+const mockCancel = vi.fn();
+const mockRunAction = vi.fn().mockResolvedValue({ ok: true, data: { ready: true } });
+const mockStream = { send: mockSend, cancel: mockCancel, runAction: mockRunAction };
+vi.mock('../src/hooks/useAgentStream', () => ({
+  useAgentStream: () => mockStream,
+}));
+
+vi.mock('../src/services/authService', () => ({
+  RUNTIME_ARN: 'arn:aws:bedrock-agentcore:us-west-2:111122223333:runtime/max-height',
+  authService: {
+    signIn: vi.fn(),
+    handleCallback: vi.fn().mockResolvedValue({ status: 'signed-in' }),
+    getAccessToken: vi.fn().mockResolvedValue('access-token'),
+    refreshAccessToken: vi.fn().mockResolvedValue('access-token'),
+    signOut: vi.fn(),
+    isSignedIn: () => true,
+  },
 }));
 
 vi.mock('../src/hooks/useIsMobile', () => ({
@@ -123,8 +133,9 @@ vi.mock('../src/config/constants', () => {
   };
 });
 
+const mockAudioCancel = vi.hoisted(() => vi.fn());
 vi.mock('../src/hooks/useAudio', () => ({
-  createUseAudio: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  createUseAudio: vi.fn().mockReturnValue({ cancel: mockAudioCancel, dispose: vi.fn() }),
 }));
 
 const { mockAudioInit, mockAudioDispose } = vi.hoisted(() => ({
@@ -169,12 +180,23 @@ vi.mock('../src/hooks/useGreeting', () => ({
 }));
 
 vi.mock('../src/stores/connectionStore', () => {
-  let state = {
-    sessionState: 'ACTIVE' as string,
-    sessionId: 'test-session',
-    isWebSocketReady: true,
+  let state: {
+    sessionState: string;
+    sessionId: string | null;
+    isStreamReady: boolean;
+    setSessionState: (sessionState: string) => void;
   };
   const listeners = new Set<() => void>();
+  const setState = (s: Partial<typeof state>) => {
+    state = { ...state, ...s };
+    listeners.forEach((fn) => fn());
+  };
+  state = {
+    sessionState: 'ACTIVE' as string,
+    sessionId: 'test-session',
+    isStreamReady: true,
+    setSessionState: (sessionState) => setState({ sessionState }),
+  };
   return {
     useConnectionStore: Object.assign(
       (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state),
@@ -184,10 +206,7 @@ vi.mock('../src/stores/connectionStore', () => {
           listeners.add(fn);
           return () => listeners.delete(fn);
         },
-        _setState: (s: Partial<typeof state>) => {
-          state = { ...state, ...s };
-          listeners.forEach((fn) => fn());
-        },
+        _setState: setState,
       },
     ),
   };
@@ -248,7 +267,7 @@ beforeEach(async () => {
   (useConnectionStore as unknown as { _setState: (s: Record<string, unknown>) => void })._setState({
     sessionState: 'ACTIVE',
     sessionId: 'test-session',
-    isWebSocketReady: true,
+    isStreamReady: true,
   });
 });
 
@@ -282,6 +301,8 @@ describe('App — channel knob', () => {
     fireEvent.click(screen.getByTestId('channel-knob'));
 
     await vi.waitFor(() => {
+      expect(mockCancel).toHaveBeenCalled();
+      expect(mockAudioCancel).toHaveBeenCalled();
       expect(mockStopGreeting).toHaveBeenCalledTimes(1);
       expect(mockPlayGreeting).toHaveBeenCalledTimes(2);
       expect(mockPlayGreeting.mock.calls[1]).toEqual([null]);

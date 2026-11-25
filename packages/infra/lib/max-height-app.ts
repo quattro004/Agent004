@@ -1,0 +1,89 @@
+import * as cdk from 'aws-cdk-lib';
+import { LogRetention14Days } from './aspects/log-retention.js';
+import { AgentStack } from './agent-stack.js';
+import { CertificateStack } from './certificate-stack.js';
+import { DataStack } from './data-stack.js';
+import { CognitoStack } from './cognito-stack.js';
+import { BudgetStack } from './budget-stack.js';
+import { FrontendStack } from './frontend-stack.js';
+import { OpsStack } from './ops-stack.js';
+import { SITE_DOMAIN } from './site-domain.js';
+
+/** FR-031: every stack except the us-east-1 certificate stack. */
+const env = { region: 'us-west-2' };
+
+export { SITE_DOMAIN };
+
+/** `-c publishSite=true` arrives as a string; anything unrecognised is an error, not "off". */
+function publishSiteContext(app: cdk.App): boolean {
+  const value: unknown = app.node.tryGetContext('publishSite');
+  if (value === undefined || value === false || value === 'false') return false;
+  if (value === true || value === 'true') return true;
+  throw new Error(`Context publishSite must be true or false, not ${JSON.stringify(value)}.`);
+}
+
+/**
+ * Adds every Max Height stack to `app`. Lives outside `bin/app.ts` so tests can
+ * assert app-wide properties (Region, tags, log retention) on the real app.
+ */
+export function buildMaxHeightApp(app: cdk.App): void {
+  const certificateStack = new CertificateStack(app, 'MaxHeight-Certificate', {
+    env: { region: 'us-east-1' },
+    domainName: SITE_DOMAIN,
+  });
+
+  const data = new DataStack(app, 'MaxHeight-Data', { env });
+
+  // Both are public values the builder owns, and neither is invented here:
+  // cdk deploy -c cognitoDomainPrefix=<prefix> -c googleClientId=<id>
+  // (quickstart.md Prerequisites rows 8 and 9, deviation C33).
+  const cognitoStack = new CognitoStack(app, 'MaxHeight-Cognito', {
+    env,
+    controlTable: data.controlTable,
+    domainPrefix: app.node.tryGetContext('cognitoDomainPrefix'),
+    googleClientId: app.node.tryGetContext('googleClientId'),
+  });
+
+  const agent = new AgentStack(app, 'MaxHeight-Agent', {
+    env,
+    controlTable: data.controlTable,
+    memory: { memoryId: data.memory.attrMemoryId, memoryArn: data.memory.attrMemoryArn },
+    userPool: cognitoStack.userPool,
+    userPoolClient: cognitoStack.userPoolClient,
+  });
+
+  const budget = new BudgetStack(app, 'MaxHeight-Budget', {
+    env,
+    // Never committed (public repo): cdk deploy -c budgetAlertEmail=<owner email>
+    alertEmail: app.node.tryGetContext('budgetAlertEmail'),
+  });
+
+  // Last, because it acts on the others' resources: it denies spend on the
+  // runtime role, writes HALT to the control table, and alarms on the pruner
+  // (contracts/spend-control.md § Stack split; deviation C32).
+  new OpsStack(app, 'MaxHeight-Ops', {
+    env,
+    hardStopTopic: budget.hardStopTopic,
+    controlTable: data.controlTable,
+    runtimeRole: agent.executionRole,
+    prunerFunction: data.prunerFunction,
+    alertEmail: app.node.tryGetContext('budgetAlertEmail'),
+  });
+
+  new FrontendStack(app, 'MaxHeight-Frontend', {
+    env,
+    domainName: SITE_DOMAIN,
+    certificate: certificateStack.certificate,
+    cognitoHost: cognitoStack.cognitoHost,
+    // Bootstrap deploys leave this off, so no stack needs a built frontend:
+    // cdk deploy MaxHeight-Frontend -c publishSite=true (quickstart.md § Deploy order).
+    publishSite: publishSiteContext(app),
+    // Defaults to packages/frontend/dist; the infra tests point it at a
+    // fixture so they need no frontend build.
+    siteContentPath: app.node.tryGetContext('siteContentPath'),
+  });
+
+  // research § R-deploy: the one cost-allocation tag.
+  cdk.Tags.of(app).add('project', 'max-height');
+  cdk.Aspects.of(app).add(new LogRetention14Days());
+}

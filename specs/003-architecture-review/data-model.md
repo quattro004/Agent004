@@ -13,13 +13,13 @@ Hard numbers below are cited. None is introduced here.
 
 ### Control table (DynamoDB, one table)
 
-The partition key is `pk` (string) and there is no sort key. The TTL attribute is `ttl` (epoch seconds). Provisioned capacity stays within the Always Free offer (human-read required, R-cost). The table name and ARN reach code only through configuration ([contracts/runtime-config.md](./contracts/runtime-config.md)).
+The partition key is `pk` (string) and there is no sort key. The TTL attribute is `ttl` (epoch seconds). Billing is on demand, as research § R-cost's F line prices it (about $0.01 a month; deviation C14). The table name and ARN reach code only through configuration ([contracts/runtime-config.md](./contracts/runtime-config.md)).
 
 | Item (`pk`) | Attributes | Written by | Read by |
 | --- | --- | --- | --- |
 | `ALLOW#<email>` | `provider` (`google`), `addedAt`, `addedBy` | Operator (documented CLI command) | Pre sign-up, pre token generation, runtime at session open |
 | `FRIEND#<sub>` | `email`, `provider`, `createdAt`, `lastSeenAt`, `memoryPrunedAt` | Pre token generation (`email`, `provider`); runtime (`lastSeenAt` at session open); pruner (`memoryPrunedAt`) | Runtime, memory pruner |
-| `SESSION#<sub>` | `sessionId`, `state`, `openedAt`, `turns`, `conversationalTokens`, `ttl` | Runtime | Runtime |
+| `SESSION#<sub>` | `sessionId`, `state`, `openedAt`, `turns`, `conversationalTokens`, `webSearches`, `ttl` | Runtime | Runtime |
 | `RATE#<sub>#H#<yyyy-mm-ddThh>` and `RATE#<sub>#D#<yyyy-mm-dd>` (UTC) | `count`, `ttl` | Runtime (atomic `ADD`) | Runtime |
 | `SPEND#<yyyy-mm>` | `microUsd` (integer), `updatedAt` | Runtime (atomic `ADD`) | Runtime |
 | `CONTROL#HALT` | `haltedAt`, `reason` | Hard-stop Lambda; the operator deletes it on recovery | Runtime, pre token generation |
@@ -28,9 +28,10 @@ Validation rules:
 
 - **`email`** is lowercased and trimmed before any write or lookup. Only an email whose provider marks it verified is ever matched (FR-043).
 - **`sub`** comes only from the token the runtime authorizer validated, or from the Cognito trigger event. It never comes from a request body (FR-010, #55).
+- **Control reads** are strongly consistent. `putSession` creates only an absent item; an update or replacement supplies the previously read session snapshot and conditionally matches its ID, state, opening time and counters. A conflicting write throws; callers must not silently overwrite it or replay already-spent work.
 - **`microUsd`** is an integer, so repeated `ADD`s never drift.
 - **`RATE#…` windows** are fixed UTC hour and day windows with spec 001's limits: 60 messages an hour and 500 a day (`contracts/websocket-api.md:207-208`). `ttl` is the window end plus one window, so DynamoDB removes stale counters. A refused message is not counted.
-- **`SESSION#<sub>.ttl`** is `openedAt` plus spec 001's 30-minute cap plus a grace window, for cleanup only. Expiry is evaluated in code, not by TTL, because TTL deletion is not immediate.
+- **`SESSION#<sub>.ttl`** is `openedAt` plus spec 001's 30-minute cap plus the approved 15-minute grace (spec.md Session 2026-11-15), for cleanup only. Expiry is evaluated in code, not by TTL, because TTL deletion is not immediate.
 
 ### Invited Friend
 
@@ -74,7 +75,8 @@ stateDiagram-v2
     Expired --> Active: next message opens a new session
 ```
 
-- **`conversationalTokens`** is the reply's `outputTokens`, measured from `result.metrics.accumulatedUsage`, plus the friend's message estimated at characters / 4 (P-09). A message is at most 2,000 characters (P-08).
+- **`conversationalTokens`** is this invocation's `outputTokens`, measured from `result.invocationContext.usage`, plus the friend's message estimated at characters / 4 (P-09). Lifetime `metrics.accumulatedUsage` must not be added as per-turn usage when an Agent is reused. A message is at most 2,000 characters (P-08).
+- **`webSearches`** counts every web search sent, including cancelled or failed searches that may still bill. Before an outbound search executes, the runtime atomically increments `SESSION#<sub>.webSearches` for the exact counted session and rejects a stale session snapshot or the 10-search session allowance. A successful turn writes the absolute claimed count into the session; it does not add turn-local claims a second time. Reaching the allowance stops searching but does not sign the conversation off.
 - **A dropout** (runtime restart, redeploy or reclaim) does not change state. The friend's next message continues the same counted session under a new runtime session ID (strict continuity, P-05). In-session history is lost; long-term memories remain.
 - **`HALT`** refuses every request in every state without changing state.
 
@@ -95,7 +97,7 @@ Computed per turn. It never comes from the client.
 
 | Field | Source |
 | --- | --- |
-| `inputTokens`, `outputTokens`, `totalTokens` and the optional cache-read and cache-write counts | `result.metrics.accumulatedUsage` (`telemetry/meter.d.ts:141,149`; `Usage` at `models/streaming.d.ts:379-401`) |
+| `inputTokens`, `outputTokens`, `totalTokens` and the optional cache-read and cache-write counts | `result.invocationContext.usage` (Strands 1.24.0 `types/agent.d.ts:424-432`, `agent/invocation-context.d.ts:19-26`); a copied snapshot of the current request, never lifetime metrics |
 | `pollyCharacters` | Characters sent to `SynthesizeSpeech`. Zero when voice is off. |
 | `memoryEvents`, `memoryRetrievals` | Calls made this turn |
 | `estimatedMicroUsd` | The sum of each count times its configured rate ([contracts/runtime-config.md](./contracts/runtime-config.md)), added to `SPEND#<yyyy-mm>` |
@@ -106,10 +108,10 @@ The spec's Spend Signal, made concrete in [contracts/spend-control.md](./contrac
 
 | Kind | Source | Threshold source | Action | Recovery |
 | --- | --- | --- | --- | --- |
-| Alert | Budgets, gross of credits | P2: $5 and $8 | Email | None needed |
-| Soft-degrade | `SPEND#` tally | $8 minus F (R-cost) | Voice off, text only | New month |
-| Breaker | `SPEND#` tally | $10 minus F (R-cost) | Refuse turns, in character | New month, or the operator raises it with a recorded reason |
-| Hard stop | Budgets 100% ACTUAL | P2: $10 | `CONTROL#HALT` plus a deny policy on the runtime role | Manual runbook |
+| Alert | Budgets, gross of credits | P2: $10 and $16 | Email | None needed |
+| Soft-degrade | `SPEND#` tally | $11 application threshold (A7); formerly $16 minus F, superseded (C43) | Voice off, text only | New month |
+| Breaker | `SPEND#` tally | $15 trip threshold (A7); formerly $20 minus F, superseded (C43) | Refuse turns, in character | New month, or the operator raises it with a recorded reason |
+| Hard stop | Budgets 100% ACTUAL | P2: $20 | `CONTROL#HALT` plus a deny policy on the runtime role | Manual runbook |
 
 ### Memory (AgentCore Memory)
 
@@ -119,7 +121,7 @@ The spec's Spend Signal, made concrete in [contracts/spend-control.md](./contrac
 | Actor | `actorId` is the verified `sub` (FR-012) |
 | Namespace | Prefix `/max-height/{actorId}/` (`memory/memoryAdapter.ts:57-59`), with per-strategy sub-paths `facts/`, `preferences/` and `summaries/{sessionId}/` ([contracts/memory-api.md](./contracts/memory-api.md)) |
 | Short-term event | `actorId` and `sessionId` (the counted session); a conversational payload of the friend's message and Max's reply; `eventExpiryDuration` of 7 days (the service minimum) |
-| Long-term record | `memoryRecordId`, `namespace`, content text, `createdAt`, strategy. There is no service expiry, so the pruner removes it 30 days after `FRIEND#<sub>.lastSeenAt` and then sets `memoryPrunedAt` |
+| Long-term record | `memoryRecordId`, `namespace`, content text, strategy and available service/source timestamps. There is no service expiry. The approved target is true 30-day data retention even for active friends, not `lastSeenAt`-only inactivity pruning. T172's source verification is dated 2026-11-17 and remains pending as of 2026-11-16 (C36 in [tasks.md](./tasks.md)); see [memory-api.md](./contracts/memory-api.md) § Pruner |
 | Ownership rule | Every list, export, delete or wipe resolves the namespace from the verified `sub`. A record whose namespace is outside that prefix is never touched (FR-013; fixes N3) |
 
 ## Review entities (documentation records)

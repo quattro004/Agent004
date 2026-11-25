@@ -8,11 +8,6 @@ import type { AudioChain } from '../audio/audioChain';
 import { useVisitorStore } from '../stores/visitorStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { selectGreeting, loadManifest, type GreetingManifest } from '../services/greetingSelector';
-import {
-  speak as browserSpeak,
-  isAvailable as browserTtsAvailable,
-  stop as stopBrowserTts,
-} from '../services/browserTts';
 
 const MOUTH_POLL_INTERVAL_MS = 50;
 
@@ -177,20 +172,9 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
         };
       }
 
-      if (greeting.text && browserTtsAvailable()) {
-        useVoiceStore.getState().setSpeaking(true);
-        useVoiceStore.getState().setGreeting(true);
-        return {
-          id: greeting.id,
-          text: greeting.text,
-          completion: finalizePlayback(
-            browserSpeak(greeting.text).catch((error) => {
-              console.error('[useGreeting] Browser TTS playback failed', error);
-            }),
-          ),
-        };
-      }
-
+      // A missing clip degrades to text only. Browser speech synthesis would
+      // run a voice model in the page, which P1's cloud-only rule forbids, so
+      // spec 001 FR-016's browser-TTS fallback stays unmet (research Q1, P-15).
       return { id: greeting.id, text: greeting.text, completion: Promise.resolve() };
     } catch (error) {
       if (!isAbortError(error)) {
@@ -203,7 +187,6 @@ export function createUseGreeting(audioChain: AudioChain): UseGreetingHandle {
   function stopGreeting() {
     playbackToken += 1;
     audioChain.stop();
-    stopBrowserTts();
     stopMouthPolling();
     useVoiceStore.getState().setSpeaking(false);
     useVoiceStore.getState().setMouthOpen(false);

@@ -1,27 +1,47 @@
 /**
- * Cancellation tests for the agent invocation handler (issue #43).
+ * Cancellation tests for the agent invocation handler (issue #43, T030).
  *
- * A guest who closes the tab mid-turn must not keep billing tokens. These
- * tests bypass the HTTP layer and call `handleInvocations` directly with
- * mocked IncomingMessage / ServerResponse, following the same pattern as
- * `index.cap-enforcement.test.ts`.
+ * A friend who closes the tab mid-turn must not keep billing tokens, and the
+ * work already billed before they left must still be counted. These bypass
+ * the HTTP layer and call `handleInvocations` directly with doubles.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { BedrockAgentCoreClient } from '@aws-sdk/client-bedrock-agentcore';
+import { testRuntimeConfig } from './fixtures/runtimeConfig.js';
+import { fakeControlTable, type FakeControlTable } from './fixtures/controlTable.js';
+import { makeReq, TEST_SUB } from './fixtures/http.js';
+import { makeRes } from './fixtures/sse.js';
+import { streamOf, fakeResult, textDelta } from './fixtures/strands.js';
+import { computeTurnUsage } from '../src/spend/usage.js';
 
-vi.mock('@strands-agents/sdk', () => {
-  const invokeMock = vi.fn().mockResolvedValue({
-    lastMessage: {
-      content: [{ type: 'textBlock', text: 'Hi there from Max!' }],
+const streamMock = vi.hoisted(() => vi.fn());
+const synthesize = vi.hoisted(() => vi.fn());
+const PollySynthesisError = vi.hoisted(
+  () =>
+    class PollySynthesisError extends Error {
+      constructor(
+        message: string,
+        readonly pollyCharacters: number,
+        readonly emitted: number,
+        readonly cause?: unknown,
+      ) {
+        super(message);
+        this.name = 'PollySynthesisError';
+      }
     },
-  });
+);
+const memorySdk = vi.hoisted(() => ({
+  createEvent: vi.fn(),
+  retrieveRecords: vi.fn(),
+}));
+
+vi.mock('@strands-agents/sdk', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const Agent = vi.fn(function () {
-    return { invoke: invokeMock };
+    return { stream: streamMock, addHook: vi.fn(), messages: [] };
   });
   const tool = vi.fn().mockImplementation((cfg) => ({ ...cfg, __tool: true }));
-  return { Agent, tool, __invokeMock: invokeMock };
+  return { ...actual, Agent, tool };
 });
 
 vi.mock('@strands-agents/sdk/models/bedrock', () => ({
@@ -32,19 +52,28 @@ vi.mock('@strands-agents/sdk/models/bedrock', () => ({
 
 vi.mock('../src/tools/newsTool.js', () => ({ newsToolSchema: {}, fetchNews: vi.fn() }));
 vi.mock('../src/tools/weatherTool.js', () => ({ weatherToolSchema: {}, fetchWeather: vi.fn() }));
-vi.mock('../src/tools/webSearchTool.js', () => ({
-  webSearchToolSchema: {},
-  fetchWebSearch: vi.fn(),
+vi.mock('../src/tools/webSearchTool.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  searchForTurn: vi.fn(),
 }));
 vi.mock('../src/personality/systemPrompt.js', () => ({
   buildSystemPrompt: vi.fn().mockReturnValue('You are Max Height...'),
 }));
+vi.mock('../src/voice/pollyStream.js', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    synthesizeToAudioEvents: synthesize,
+    PollySynthesisError,
+  };
+});
+vi.mock('../src/memory/agentCoreMemoryClient.js', () => ({
+  createAgentCoreMemoryClient: () => memorySdk,
+}));
 
 const sdk = (await import('@strands-agents/sdk')) as unknown as {
-  __invokeMock: ReturnType<typeof vi.fn>;
   tool: ReturnType<typeof vi.fn>;
 };
-const invokeMock = sdk.__invokeMock;
 const toolMock = sdk.tool;
 const { fetchNews } = (await import('../src/tools/newsTool.js')) as unknown as {
   fetchNews: ReturnType<typeof vi.fn>;
@@ -52,10 +81,16 @@ const { fetchNews } = (await import('../src/tools/newsTool.js')) as unknown as {
 const { fetchWeather } = (await import('../src/tools/weatherTool.js')) as unknown as {
   fetchWeather: ReturnType<typeof vi.fn>;
 };
-const { fetchWebSearch } = (await import('../src/tools/webSearchTool.js')) as unknown as {
-  fetchWebSearch: ReturnType<typeof vi.fn>;
+const webSearchModule = (await import('../src/tools/webSearchTool.js')) as unknown as {
+  searchForTurn: ReturnType<typeof vi.fn>;
+  WebSearchTurn: typeof import('../src/tools/webSearchTool.js').WebSearchTurn;
+  WEB_SEARCH_TURN: string;
 };
+const { searchForTurn: fetchWebSearch, WebSearchTurn, WEB_SEARCH_TURN } = webSearchModule;
+const invocationState = () => ({ [WEB_SEARCH_TURN]: new WebSearchTurn(1, () => {}) });
 const { __test } = await import('../src/index.js');
+
+let table: FakeControlTable;
 
 /**
  * Snapshot the tool registrations now, at import time: the tools are built once
@@ -67,117 +102,271 @@ interface ToolRegistration {
 }
 const toolRegistrations = toolMock.mock.calls.map((call) => call[0] as ToolRegistration);
 
-function makeReq(body: unknown): IncomingMessage {
-  const stream = new PassThrough();
-  stream.end(JSON.stringify(body));
-  return stream as unknown as IncomingMessage;
-}
-
-/**
- * A response double that is an EventEmitter, because the disconnect signal we
- * rely on is `res.on('close')` firing while `writableFinished` is still false.
- */
-function makeRes(): {
-  res: ServerResponse;
-  disconnect: () => void;
-  body: () => string;
-  end: Promise<void>;
-} {
-  const chunks: string[] = [];
-  let resolveEnd!: () => void;
-  const ended = new Promise<void>((r) => (resolveEnd = r));
-
-  const emitter = new EventEmitter();
-  const res = Object.assign(emitter, {
-    writableFinished: false,
-    writeHead() {
-      return res;
-    },
-    write(chunk: string) {
-      chunks.push(chunk);
-      return true;
-    },
-    end(chunk?: string) {
-      if (chunk) chunks.push(chunk);
-      (res as unknown as { writableFinished: boolean }).writableFinished = true;
-      resolveEnd();
-      emitter.emit('close');
-      return res;
-    },
-  }) as unknown as ServerResponse;
-
-  return {
-    res,
-    // The client vanishing: 'close' arrives before the response finished.
-    disconnect: () => emitter.emit('close'),
-    body: () => chunks.join(''),
-    end: ended,
+/** A `stream()` that stalls after `chunks`, so a test can disconnect mid-turn. */
+function stallingStream(chunks: string[], options: { usage?: { outputTokens: number } } = {}) {
+  return (_message: string, invokeOptions: { cancelSignal?: AbortSignal }) => {
+    const queue = [...chunks];
+    return {
+      async next() {
+        const chunk = queue.shift();
+        if (chunk !== undefined) return { done: false, value: textDelta(chunk) };
+        return new Promise((_resolve, reject) => {
+          invokeOptions.cancelSignal?.addEventListener('abort', () =>
+            reject(new Error('invocation aborted')),
+          );
+        });
+      },
+      /** The handler never calls this, but a real generator has it. */
+      async return() {
+        return { done: true, value: fakeResult(chunks.join(''), options) };
+      },
+    };
   };
 }
 
 describe('handleInvocations — cancellation on client disconnect', () => {
   beforeEach(() => {
-    __test.sessions.clear();
-    invokeMock.mockReset();
-    invokeMock.mockResolvedValue({
-      lastMessage: { content: [{ type: 'textBlock', text: 'Hi there from Max!' }] },
-    });
+    __test.reset();
+    __test.setRuntimeConfig(testRuntimeConfig());
+    table = fakeControlTable();
+    __test.setControlTable(table);
+    vi.clearAllMocks();
+    streamMock.mockImplementation(streamOf(['Hi there from Max!']));
+    synthesize.mockResolvedValue({ pollyCharacters: 0, segments: 0 });
+    memorySdk.createEvent.mockResolvedValue(undefined);
+    memorySdk.retrieveRecords.mockResolvedValue([]);
   });
 
-  it('passes a cancelSignal to agent.invoke', async () => {
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hello', sessionId: 's1' }), res);
-    await end;
+  it('passes a cancelSignal to agent.stream', async () => {
+    const double = makeRes();
+    await __test.handleInvocations(makeReq({ message: 'hello' }), double.res);
+    await double.end;
 
-    expect(invokeMock).toHaveBeenCalledTimes(1);
-    const options = invokeMock.mock.calls[0]?.[1] as { cancelSignal?: AbortSignal } | undefined;
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    const options = streamMock.mock.calls[0]?.[1] as { cancelSignal?: AbortSignal } | undefined;
     expect(options?.cancelSignal).toBeInstanceOf(AbortSignal);
   });
 
   it('aborts the invocation when the client disconnects mid-turn', async () => {
     let captured: AbortSignal | undefined;
-    invokeMock.mockImplementation((_prompt: unknown, options?: { cancelSignal?: AbortSignal }) => {
-      captured = options?.cancelSignal;
-      return new Promise((_resolve, reject) => {
-        options?.cancelSignal?.addEventListener('abort', () =>
-          reject(new Error('invocation aborted')),
-        );
-      });
+    streamMock.mockImplementation((message: string, options: { cancelSignal?: AbortSignal }) => {
+      captured = options.cancelSignal;
+      return stallingStream([])(message, options);
     });
 
-    const { res, disconnect, end } = makeRes();
-    const pending = __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's2' }), res);
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
 
     await vi.waitFor(() => expect(captured).toBeDefined());
     expect(captured!.aborted).toBe(false);
 
-    disconnect();
+    double.disconnect();
 
     await pending;
-    await end;
+    await double.end;
     expect(captured!.aborted).toBe(true);
+  });
+
+  it('persists a search claim before a cancelled turn returns', async () => {
+    let claimed = false;
+    streamMock.mockImplementation(
+      (
+        _message: string,
+        options: { cancelSignal?: AbortSignal; invocationState: Record<string, unknown> },
+      ) => {
+        const turn = options.invocationState[WEB_SEARCH_TURN] as InstanceType<typeof WebSearchTurn>;
+        return {
+          async next() {
+            claimed = await turn.claimPersisted();
+            await new Promise<void>((_resolve, reject) => {
+              options.cancelSignal?.addEventListener('abort', () =>
+                reject(new Error('invocation aborted')),
+              );
+            });
+            return { done: true, value: fakeResult('', {}) };
+          },
+        };
+      },
+    );
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'search the news' }), double.res);
+
+    await vi.waitFor(() => expect(claimed).toBe(true));
+    double.disconnect();
+    await pending;
+    await double.end;
+
+    expect(table.sessions.get(TEST_SUB)?.webSearches).toBe(1);
+    expect(double.event('done')).toBeUndefined();
+  });
+
+  it('writes nothing further to a stream whose client has gone', async () => {
+    streamMock.mockImplementation(stallingStream(['Half a rep']));
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+
+    await vi.waitFor(() => expect(double.event('text')).toBeDefined());
+    double.disconnect();
+    await pending;
+
+    // No error and no done: there is no one left to tell, and an SSE frame
+    // written after the socket closed is just an exception we would have to
+    // swallow.
+    expect(double.events().map((e) => e.type)).toEqual(['session', 'text']);
   });
 
   it('does not abort a turn that completes normally', async () => {
     let captured: AbortSignal | undefined;
-    invokeMock.mockImplementation((_prompt: unknown, options?: { cancelSignal?: AbortSignal }) => {
-      captured = options?.cancelSignal;
-      return Promise.resolve({
-        lastMessage: { content: [{ type: 'textBlock', text: 'done' }] },
-      });
+    streamMock.mockImplementation((message: string, options: { cancelSignal?: AbortSignal }) => {
+      captured = options.cancelSignal;
+      return streamOf(['done'])();
     });
 
-    const { res, end } = makeRes();
-    await __test.handleInvocations(makeReq({ message: 'hi', sessionId: 's3' }), res);
-    await end;
+    const double = makeRes();
+    await __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+    await double.end;
 
     expect(captured!.aborted).toBe(false);
+    expect(double.event('done')).toBeDefined();
+  });
+
+  it('does not start the model when the client disconnects during memory retrieval', async () => {
+    let resolveRetrieve!: (records: []) => void;
+    memorySdk.retrieveRecords.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRetrieve = resolve;
+        }),
+    );
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+
+    await vi.waitFor(() => expect(memorySdk.retrieveRecords).toHaveBeenCalled());
+    double.disconnect();
+    resolveRetrieve([]);
+    await pending;
+    await double.end;
+
+    expect(streamMock).not.toHaveBeenCalled();
+    expect(double.event('done')).toBeUndefined();
+    const [lease, actual] = table.settleRequest.mock.calls[0];
+    expect(actual).toBe(lease.reservedMicroUsd);
+  });
+
+  it('reports turn_deadline and leaves the counted session active during memory retrieval', async () => {
+    __test.setRuntimeConfig(
+      testRuntimeConfig({ limits: { ...testRuntimeConfig().limits, deadlineMs: 20 } }),
+    );
+    let resolveRetrieve!: (records: []) => void;
+    memorySdk.retrieveRecords.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRetrieve = resolve;
+        }),
+    );
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+
+    await vi.waitFor(() => expect(memorySdk.retrieveRecords).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    resolveRetrieve([]);
+    await pending;
+    await double.end;
+
+    expect(double.event('error')).toMatchObject({ code: 'turn_deadline', retryable: true });
+    expect(streamMock).not.toHaveBeenCalled();
+    expect(table.sessions.get(TEST_SUB)?.state).toBe('Active');
+  });
+
+  it('does not send done when Polly throws after the turn was cancelled', async () => {
+    synthesize.mockImplementation(async (_reply: string, options: { signal?: AbortSignal }) => {
+      await new Promise<void>((resolve) => {
+        if (options.signal?.aborted) {
+          resolve();
+          return;
+        }
+        options.signal?.addEventListener('abort', () => resolve(), { once: true });
+      });
+      throw new PollySynthesisError('Polly synthesis was cancelled', 0, 0, new Error('aborted'));
+    });
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hello' }), double.res);
+    await vi.waitFor(() => expect(synthesize).toHaveBeenCalled());
+    double.disconnect();
+    await pending;
+    await double.end;
+
+    expect(synthesize).toHaveBeenCalled();
+    expect(double.event('done')).toBeUndefined();
+  });
+
+  it('counts billed Polly characters when synthesis throws after the client disconnects', async () => {
+    const config = testRuntimeConfig();
+    __test.setRuntimeConfig(config);
+    streamMock.mockImplementation(
+      streamOf(['Partial billed reply'], {
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      }),
+    );
+    synthesize.mockImplementation(async (_reply: string, options: { signal?: AbortSignal }) => {
+      await new Promise<void>((resolve) => {
+        options.signal?.addEventListener('abort', () => resolve(), { once: true });
+      });
+      throw new PollySynthesisError('Polly synthesis was cancelled', 17, 12, new Error('aborted'));
+    });
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hello' }), double.res);
+    await vi.waitFor(() => expect(synthesize).toHaveBeenCalled());
+    double.disconnect();
+    await pending;
+    await double.end;
+
+    const settlement = table.settleRequest.mock.calls[0];
+    expect(settlement).toBeDefined();
+    expect(settlement![1]).toBe(
+      computeTurnUsage(
+        {
+          model: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          pollyCharacters: 17,
+          memoryEvents: 0,
+          memoryRetrievals: 1,
+          webSearches: 0,
+        },
+        config.prices,
+      ).estimatedMicroUsd,
+    );
+  });
+
+  it('leaves the counted session intact when the friend leaves mid-turn', async () => {
+    streamMock.mockImplementation(stallingStream(['Half a rep']));
+
+    const double = makeRes();
+    const pending = __test.handleInvocations(makeReq({ message: 'hi' }), double.res);
+    await vi.waitFor(() => expect(double.event('text')).toBeDefined());
+    double.disconnect();
+    await pending;
+
+    // The session was opened and must survive, so the friend who comes back
+    // resumes the same budget rather than getting a fresh one (P-05).
+    expect(table.sessions.get(TEST_SUB)).toBeDefined();
   });
 });
 
 describe('tool callbacks — cancel signal forwarding', () => {
   // Cancelling the model turn is only half the saving: a tool already in flight
   // holds an outbound HTTP request open unless the signal reaches it too.
+  beforeEach(() => {
+    __test.setRuntimeConfig(testRuntimeConfig());
+    table = fakeControlTable();
+    __test.setControlTable(table);
+  });
+
   function callbackFor(name: string) {
     const cfg = toolRegistrations.find((c) => c.name === name);
     if (!cfg) throw new Error(`no tool registered named ${name}`);
@@ -198,9 +387,51 @@ describe('tool callbacks — cancel signal forwarding', () => {
       { query: 'q', topic: 'q', location: 'q' },
       {
         cancelSignal: controller.signal,
+        invocationState: invocationState(),
       },
     );
 
-    expect(fetcher.mock.calls[0]?.[2]).toBe(controller.signal);
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
+  });
+
+  it.each([
+    ['get_news', () => fetchNews, 'news-key'],
+    ['get_weather', () => fetchWeather, 'weather-key'],
+  ])(
+    '%s takes its API key from the runtime config, not the environment',
+    async (toolName, getFetcher, apiKey) => {
+      // T038: the container reads its secrets from SSM at startup, so a tool
+      // reading `process.env` would use whatever the process inherited.
+      const fetcher = getFetcher();
+      fetcher.mockReset();
+      fetcher.mockResolvedValue({ success: true });
+
+      await callbackFor(toolName as string)({ query: 'q', topic: 'q', location: 'q' }, undefined);
+
+      expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ apiKey });
+    },
+  );
+
+  it('web_search refuses to search without a turn allowance to count against', async () => {
+    fetchWebSearch.mockReset();
+
+    await expect(
+      callbackFor('web_search')({ query: 'q' }, { invocationState: {} }),
+    ).rejects.toThrow(/WebSearchTurn/);
+    expect(fetchWebSearch).not.toHaveBeenCalled();
+  });
+
+  it('web_search gives its fetcher an AgentCore client for the runtime Region, not a key', async () => {
+    fetchWebSearch.mockReset();
+    fetchWebSearch.mockResolvedValue({ success: true });
+
+    await callbackFor('web_search')({ query: 'q' }, { invocationState: invocationState() });
+
+    const options = fetchWebSearch.mock.calls[0]?.[1] as { client: unknown; apiKey?: unknown };
+    expect(options.client).toBeInstanceOf(BedrockAgentCoreClient);
+    expect(options.apiKey).toBeUndefined();
+    await expect((options.client as BedrockAgentCoreClient).config.region()).resolves.toBe(
+      testRuntimeConfig().awsRegion,
+    );
   });
 });

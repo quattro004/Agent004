@@ -1,43 +1,160 @@
 <!--
   Sync Impact Report
   ───────────────────────────────────────────────────────────
-  Version change : 1.4.0 → 1.5.0
-  Bump rationale : MINOR — P7 replaces guest access with
-                   invite-only federated sign-in and a verified
-                   email allowlist. P11 ties spend-bearing
-                   runtime access to the signed-in identity;
-                   the Auth technology row adds a Cognito
-                   User Pool. P2's guest-role example is
-                   updated without changing its $10 rule.
+  Version change : 1.8.0 → 1.9.0 (amendment A7, 2026-11-16)
+  Bump rationale : MINOR — P2 is materially expanded, not
+                   redefined. The $20/month hard cap, the
+                   $10/$16 gross AWS email alerts and the $20
+                   hard stop are all unchanged. What is added
+                   is a second, faster layer the application
+                   enforces on its own measured spend, and an
+                   honest statement of what that layer can and
+                   cannot promise.
 
-  Modified principles : P2 Budget Ceiling (example only),
-                        P7 Friends-and-Family Audience Only,
-                        P11 Credential & Secret Hygiene.
+                   The need is a timing gap, not a new policy.
+                   AWS Budgets reads billing data that lags by
+                   hours, so by the time a $16 email arrives
+                   the money is already spent. P2's enforcement
+                   was therefore entirely after the fact. The
+                   application now meters its own spend as it
+                   commits it: soft-degrade at $11 and refuse
+                   new spend-bearing admission at $15, with $5
+                   reserved for non-chat lines (logs, spans,
+                   ECR, data transfer) and pricing uncertainty
+                   that the application never sees.
+
+                   Builder approval 2026-11-15 (spec 003
+                   spec.md § Clarifications, Session
+                   2026-11-15): "I'll go with your
+                   recommendations and review the code later",
+                   which explicitly authorized this amendment.
+                   The builder chose MINOR on the same reading
+                   used for A5: the meaning of the ceiling is
+                   unchanged and only the enforcement gains a
+                   layer.
+
+                   P2 now states plainly that this is not a
+                   guarantee an AWS invoice stays under $20.
+                   Saying so is the point: a cap that is
+                   claimed to be absolute and is not is worse
+                   than a cap with a documented limit.
+
+  Modified principles (A7): P2 Budget Ceiling.
+
+  Added (A7): None.
+
+  Modified sections (A7):
+    - Core Principles (P2).
+    - Quality Gates (gate #1, which now names the application
+      thresholds alongside the gross figure).
+
+  Amendment route (A7): committed on the
+    003-architecture-review branch and merged with that
+    branch's pull request, not in its own pull request — the
+    C9 route established for A5, A6 and A1.
+
+  Dependent artifacts reviewed (A7):
+    - specs/003-architecture-review/spec.md § Clarifications,
+      Session 2026-11-15 records the approval and the numbers.
+    - specs/003-architecture-review/contracts/runtime-config.md
+      BREAKER_DEGRADE_MICRO_USD and BREAKER_TRIP_MICRO_USD
+      change from the F-derived (16 − F) and (20 − F) formulas
+      to the approved $11 and $15 (T117).
+    - packages/infra/lib/budget-stack.ts keeps $10/$16/$20: the
+      gross AWS layer is unchanged by this amendment.
+    - specs/001-max-height-ai-character/ is frozen; spec 003
+      supersedes its threshold values.
+    - The wiki (Concept-Budget-Ceiling) must ingest this
+      amendment after the branch merges.
+
+  Previous change: 1.7.0 → 1.8.0 (amendment A1, 2026-11-13)
+  Bump rationale : MINOR — the tech table's IaC row changes
+                   from "AWS CDK (infrastructure) + AgentCore
+                   CLI (agent deployment)" to "AWS CDK" alone.
+                   Builder decision 2026-10-11 (spec 003
+                   research Q8): CDK owns the runtime
+                   (CfnRuntime) and Memory (CfnMemory) as L1
+                   constructs in aws-cdk-lib 2.272.0, so the
+                   AgentCore CLI is not used. Same route as A5
+                   and A6: committed on the
+                   003-architecture-review branch (deviation
+                   C11).
+
+  Modified sections (A1): Technology Stack (IaC row).
+
+  Dependent artifacts reviewed (A1):
+    - specs/003-architecture-review/ tasks T024 and T025
+      build the runtime with CDK alone; research Q8 and the
+      amendments table record A1 as applied.
+    - docs/ mention the AgentCore CLI as background only.
+    - Wiki Decision-AgentCore-Runtime-V2 and
+      Guide-Deployment, ingested after the branch merges.
+
+  Previous change: 1.6.0 → 1.7.0 (amendment A6, 2026-11-13)
+  Bump rationale : MINOR — the tech table's TTS row changes
+                   from "Amazon Polly Neural" to "Amazon Polly
+                   Standard" (voice Matthew). Builder decision
+                   2026-11-13: Standard costs $4 per 1M
+                   characters against Neural's $16, and Polly
+                   was the largest projected line. P1 is
+                   unaffected (TTS stays in the cloud). Same
+                   route as A5: committed on the
+                   003-architecture-review branch (deviation
+                   C10).
+
+  Modified sections (A6): Technology Stack (TTS row).
+
+  Dependent artifacts reviewed (A6):
+    - specs/003-architecture-review/ (spec clarification,
+      research Q1 and R-cost, plan, tasks T029 and T158,
+      contracts transport-sse and runtime-config).
+    - packages/frontend/scripts/greetingGenCore.ts and
+      services/pollyTts.ts still request Engine 'neural';
+      greetings change under T158, pollyTts.ts is deleted by
+      T081, and the server path is built Standard by T029.
+    - Wiki Decision-Polly-Voice and Source-Amazon-Polly.
+
+  Previous change: 1.5.0 → 1.6.0 (amendment A5, 2026-11-13)
+  Bump rationale : MINOR — P2's ceiling rises from $10 to $20
+                   per month. Its meaning is unchanged (a hard
+                   cap, a rule and not a target, with automated
+                   enforcement); only the figures move. Alerts
+                   scale to $10 and $16 (50% and 80%), and gate
+                   1's mitigation threshold to $16 (80%). The
+                   builder chose MINOR over MAJOR on 2026-11-13.
+                   The $20 is provisional: spec 003 T156 proposes
+                   lowering it back if a measured month fits
+                   under $10.
+
+  Modified principles : P2 Budget Ceiling.
 
   Added : None.
 
   Modified sections:
-    - Core Principles (P2, P7 and P11).
-    - Technology Stack (Auth row).
-    - Quality Gates (gate #7 aligned with P11).
+    - Core Principles (P2).
+    - Quality Gates (gate #1).
+
+  Amendment route: committed on the 003-architecture-review
+    branch and merged with that branch's pull request, not in
+    its own pull request. Builder decision 2026-11-13, waiving
+    spec 003 FR-002's own-PR rule (spec 003 tasks.md deviation
+    C9). The governance procedure's pull request is the
+    branch's.
 
   Dependent artifacts reviewed:
-    - specs/003-architecture-review/spec.md FR-041–FR-056
-      defines the sign-in behavior and requires this amendment
-      before planning. It remains on its feature branch.
-    - specs/001-max-height-ai-character/ and its guest-auth
-      contracts are frozen, point-in-time artifacts; spec 003
-      FR-056 supersedes them for access.
-    - docs/infra-plan.md and docs/audio-plan.md describe the
-      old guest path and remain historical until the new
-      deployment design replaces it.
-    - The wiki describes current guest code until implementation
-      and must ingest this amendment after it merges.
+    - specs/003-architecture-review/ (spec, plan, research,
+      data-model, contracts, quickstart, tasks) hand-edited to
+      the A5 figures by T157.
+    - specs/001-max-height-ai-character/ is frozen; spec 003
+      supersedes its $5, $8 and $10 threshold values.
+    - packages/infra/lib/budget-stack.ts still encodes $10 and
+      changes under spec 003 T155, with tests.
+    - The wiki (Concept-Budget-Ceiling and pages citing $10)
+      must ingest this amendment after the branch merges.
 
-  Follow-up TODOs : Decide signed-in credentials, revocation,
-    spend-stop mechanism and sign-in cost in spec 003 planning;
-    remove the unauthenticated infrastructure during
-    implementation, not in this governance-only amendment.
+  Previous amendment (1.4.0 → 1.5.0, 2026-10-11): P7 invite-only
+    federated sign-in; P11 ties runtime access to the signed-in
+    identity; Auth row adds a Cognito User Pool.
 -->
 
 # Max Height Constitution
@@ -55,20 +172,50 @@ clients, and operational simplicity. A single inference path
 means one place to monitor, one place to budget, one place to
 debug.
 
-### P2. Budget Ceiling — $10/Month Hard Cap
+### P2. Budget Ceiling — $20/Month Hard Cap
 
-The $10/month figure is a **rule**, not a target. Enforcement
-is automated and mandatory:
+The $20/month figure is a **rule**, not a target. Enforcement
+is automated and mandatory, in two layers.
 
-- AWS Budgets email alarm MUST fire at $5 and $8.
-- Hard-stop mechanism MUST activate at $10 (e.g., revoking
+**Gross AWS layer** — covers every charge, reacts slowly:
+
+- AWS Budgets email alarm MUST fire at $10 and $16.
+- Hard-stop mechanism MUST activate at $20 (e.g., revoking
   access to all spend-bearing paths).
-- Per-session token cap MUST be enforced.
+
+**Application layer** — covers only what the application
+itself commits, reacts immediately:
+
+- $5/month MUST be reserved for lines the application never
+  measures: logs, spans, ECR storage, data transfer, and
+  pricing uncertainty.
+- Application commitments MUST soft-degrade at $11 of measured
+  application spend.
+- The application MUST refuse to admit new spend-bearing work
+  at $15.
+- Spend MUST be reserved at a conservative maximum *before* a
+  call is made, not recorded after it returns.
+
+And in both layers:
+
+- Per-session and per-turn token caps MUST be enforced.
 - No feature ships without a documented cost model.
+
+**These layers do not guarantee that an AWS invoice stays
+under $20.** AWS billing data lags by hours, so the gross layer
+can only react after money is spent, and the application layer
+can only meter the spend it initiates. The second layer exists
+to make the first one rarely matter — not to replace it.
 
 **Rationale**: A personal fan project with no revenue MUST have
 an inviolable cost ceiling. Automated enforcement prevents
-"just this once" drift.
+"just this once" drift. The application layer was added
+(amendment A7, 2026-11-15) because enforcement that depends on
+delayed billing data is enforcement after the loss; reserving
+spend before committing it is the only check that can refuse
+the charge rather than report it. Stating the residual risk
+plainly is part of the principle: a cap claimed to be absolute
+and silently is not would be worse than this one.
 
 ### P3. Personality-First Build Order
 
@@ -230,13 +377,13 @@ pinning it to one product would have cost real money here.
 | Frontend | React + Vite SPA, React Three Fiber, Zustand, Web Audio API |
 | Agent Backend | Strands Agents SDK on Amazon Bedrock AgentCore Runtime |
 | LLM | Amazon Bedrock — Anthropic Haiku-class (specific model version in plan) |
-| TTS | Amazon Polly Neural (direct SDK, streaming) |
+| TTS | Amazon Polly Standard, voice Matthew (direct SDK, streaming) |
 | STT | Web Speech API (browser built-in) |
 | Auth | Amazon Cognito User Pool (invite-only federated sign-in); Identity Pool if authenticated AWS credentials are needed |
 | Memory | AgentCore Memory (30-day rolling window) |
 | Observability | AgentCore Observability (traces, metrics, logs) |
 | Hosting | S3 + CloudFront |
-| IaC | AWS CDK (infrastructure) + AgentCore CLI (agent deployment) |
+| IaC | AWS CDK (infrastructure and agent deployment) |
 
 Technology choices are load-bearing — changes to this table
 require a constitution amendment (MINOR version bump minimum).
@@ -251,8 +398,10 @@ The following gates MUST pass before work proceeds past them:
 
 1. **Cost model gate**: Every feature MUST include a cost
    estimate before implementation begins. Features that push
-   the projected monthly total above $8 MUST include a
-   mitigation plan.
+   the projected monthly total above $16 gross MUST include a
+   mitigation plan. A feature whose own measured application
+   spend would push the application total past $11 MUST state
+   how it degrades, per P2's application layer.
 
 2. **Personality gate**: The golden-set rubric (50 cases) MUST
    pass before any visual/audio polish ships. Evaluated offline
@@ -314,4 +463,4 @@ The constitution follows semantic versioning:
   justified in the Complexity Tracking section of the
   implementation plan.
 
-**Version**: 1.5.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-10-11
+**Version**: 1.9.0 | **Ratified**: 2026-04-19 | **Last Amended**: 2026-11-16

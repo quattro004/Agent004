@@ -1,125 +1,327 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
-import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as bedrockagentcore from 'aws-cdk-lib/aws-bedrockagentcore';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
+export interface AgentStackProps extends cdk.StackProps {
+  controlTable: dynamodb.ITable;
+  memory: { memoryId: string; memoryArn: string };
+  userPool: cognito.IUserPool;
+  userPoolClient: cognito.IUserPoolClient;
+}
+
+const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const DOCKERFILE = 'packages/agent/Dockerfile';
+
+const FOUNDATION_MODEL = 'anthropic.claude-haiku-4-5-20251001-v1:0';
+const INFERENCE_PROFILE = `global.${FOUNDATION_MODEL}`;
+
+const SSM_PARAMS = {
+  SSM_PARAM_WEATHER_KEY: '/max-height/weather-api-key',
+  SSM_PARAM_NEWS_KEY: '/max-height/news-api-key',
+};
+
+// contracts/runtime-config.md § Agent runtime.
+const RUNTIME_CONFIG: Record<string, string> = {
+  AWS_REGION: 'us-west-2',
+  MODEL_ID: INFERENCE_PROFILE,
+  MAX_OUTPUT_TOKENS: '250',
+  MEMORY_TOP_K: '10',
+  POLLY_VOICE_ID: 'Matthew',
+  POLLY_ENGINE: 'standard',
+  POLLY_SAMPLE_RATE: '24000',
+  SESSION_MAX_TURNS: '50',
+  SESSION_MAX_TOKENS: '20000',
+  SESSION_MAX_MINUTES: '30',
+  RATE_LIMIT_PER_HOUR: '60',
+  RATE_LIMIT_PER_DAY: '500',
+  MESSAGE_MAX_CHARS: '2000',
+  HISTORY_WINDOW: '40',
+  // Spec 003 § Clarifications, Session 2026-11-15: the approved per-turn
+  // bounds. They are set here rather than defaulted in the runtime so a stack
+  // that forgot one fails at startup instead of spending more than approved.
+  REQUEST_BODY_MAX_BYTES: '16384',
+  MODEL_INPUT_MAX_BYTES: '32768',
+  TOOL_RESULT_MAX_BYTES: '8192',
+  TURN_MAX_MODEL_CALLS: '4',
+  TURN_MAX_TOOL_EXECUTIONS: '4',
+  TURN_MAX_GENERATED_TOKENS: '1000',
+  TURN_MAX_BILLED_TOKENS: '64000',
+  TURN_DEADLINE_MS: '60000',
+  // Constitution 1.9.0 P2 / spec 003 Session 2026-11-15: two spend-bearing
+  // requests in flight across every runtime instance, one per friend (the
+  // per-friend limit is the lease key itself, so it has no variable).
+  GLOBAL_MAX_ACTIVE_REQUESTS: '2',
+  // Constitution 1.9.0 P2's application layer (amendment A7, T117): the
+  // application soft-degrades at $11 of its own measured spend and refuses new
+  // spend-bearing work at $15, holding $5 back for lines it never meters. These
+  // are no longer the F-derived (16 − F)/(20 − F) figures; the reservation
+  // replaced the subtraction. The gross $10/$16/$20 AWS layer is unchanged.
+  BREAKER_DEGRADE_MICRO_USD: '11000000',
+  BREAKER_TRIP_MICRO_USD: '15000000',
+  PRICE_MODEL_INPUT_PER_MTOK_MICRO_USD: '1000000',
+  PRICE_MODEL_OUTPUT_PER_MTOK_MICRO_USD: '5000000',
+  PRICE_MODEL_CACHE_READ_PER_MTOK_MICRO_USD: '0',
+  PRICE_POLLY_PER_MCHAR_MICRO_USD: '4000000',
+  // T082, research.md § R-cost: $1.00 per GB with a 12 KiB billing minimum.
+  // MESSAGE_MAX_CHARS (2,000) and MAX_OUTPUT_TOKENS (250) keep every event
+  // well under that minimum, so each one bills at it. 12 KiB of $1.00/GB is
+  // 11.44 µUSD read as GiB and 12.29 µUSD read as a decimal GB; 13 rounds the
+  // larger reading up, so the tally cannot undercount under either.
+  PRICE_MEMORY_EVENT_MICRO_USD: '13',
+  PRICE_MEMORY_RETRIEVAL_MICRO_USD: '500',
+  // T082, research.md § F: Runtime V2 CPU ($0.06) plus memory ($0.60) over the
+  // average case's 795 turns is $0.00083019 a turn. The average case is used
+  // because it is the dearer of the two per turn — the full case spreads a
+  // longer session's billed memory across more turns ($0.33 over 800).
+  PRICE_RUNTIME_PER_TURN_MICRO_USD: '831',
+  // Spec 003 § Clarifications, Session 2026-11-18: AgentCore web search at the
+  // research.md-verified $7 per 1,000 queries, the free monthly allowance not
+  // credited, and at most 10 searches a counted session.
+  PRICE_WEB_SEARCH_MICRO_USD: '7000',
+  SESSION_MAX_WEB_SEARCHES: '10',
+  // research.md § R-obs (T169b): ADOT, launched by the Dockerfile, defaults
+  // GenAI message-content capture on and exports logs and metrics; P7/FR-053
+  // and our own EMF rule those out. Spans go to `aws/spans`, which OpsStack
+  // keeps for 14 days, rather than the runtime's own log group, which would
+  // need `logs:PutResourcePolicy` on the execution role.
+  AGENT_OBSERVABILITY_ENABLED: 'true',
+  OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: 'false',
+  OTEL_LOGS_EXPORTER: 'none',
+  OTEL_METRICS_EXPORTER: 'none',
+  UNIFIED_TRACES_DESTINATION_ENABLED: 'false',
+  ...SSM_PARAMS,
+};
+
+/** The agent image's build context is the repo root, filtered by the agent's own ignore file. */
+function imageExcludes(): string[] {
+  const ignore = fs.readFileSync(path.join(REPO_ROOT, `${DOCKERFILE}.dockerignore`), 'utf8');
+  const patterns = ignore
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+  return [...patterns, `!${DOCKERFILE}`];
+}
+
 export class AgentStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  public readonly runtime: bedrockagentcore.CfnRuntime;
+  public readonly executionRole: iam.Role;
+
+  constructor(scope: Construct, id: string, props: AgentStackProps) {
     super(scope, id, props);
 
-    // Secrets stored in SSM Parameter Store (SecureString)
-    const weatherApiKey = ssm.StringParameter.fromSecureStringParameterAttributes(
-      this,
-      'WeatherApiKey',
-      { parameterName: '/max-height/weather-api-key' },
-    );
-    const newsApiKey = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'NewsApiKey', {
-      parameterName: '/max-height/news-api-key',
+    const image = new ecrAssets.DockerImageAsset(this, 'AgentImage', {
+      directory: REPO_ROOT,
+      file: DOCKERFILE,
+      exclude: imageExcludes(),
+      platform: ecrAssets.Platform.LINUX_ARM64,
     });
 
-    const wsHandler = new lambda.Function(this, 'WebSocketHandler', {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'websocket-handler.handler',
-      code: lambda.Code.fromAsset('lib/handlers'),
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-      environment: {
-        WEATHER_API_KEY_PARAM: '/max-height/weather-api-key',
-        NEWS_API_KEY_PARAM: '/max-height/news-api-key',
+    this.executionRole = new iam.Role(this, 'ExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com', {
+        conditions: {
+          StringEquals: { 'aws:SourceAccount': this.account },
+          ArnLike: {
+            'aws:SourceArn': `arn:aws:bedrock-agentcore:${this.region}:${this.account}:*`,
+          },
+        },
+      }),
+    });
+    this.grantRuntimePermissions(props, image);
+
+    const environmentVariables: Record<string, string> = {
+      CONTROL_TABLE_NAME: props.controlTable.tableName,
+      MEMORY_ID: props.memory.memoryId,
+      ...RUNTIME_CONFIG,
+    };
+
+    const applicationLogGroup = new logs.LogGroup(this, 'RuntimeApplicationLogGroup', {
+      logGroupName: '/aws/vendedlogs/bedrock-agentcore/max-height',
+      retention: logs.RetentionDays.TWO_WEEKS,
+    });
+
+    const runtimeConstruct = new bedrockagentcore.Runtime(this, 'Runtime', {
+      runtimeName: 'MaxHeightAgent',
+      agentRuntimeArtifact: bedrockagentcore.AgentRuntimeArtifact.fromImageUri(image.imageUri),
+      executionRole: this.executionRole,
+      platformVersion: bedrockagentcore.PlatformVersion.V2,
+      protocolConfiguration: bedrockagentcore.ProtocolType.HTTP,
+      networkConfiguration: undefined,
+      authorizerConfiguration: bedrockagentcore.RuntimeAuthorizerConfiguration.usingJWT(
+        `https://cognito-idp.${this.region}.amazonaws.com/${props.userPool.userPoolId}/.well-known/openid-configuration`,
+        [props.userPoolClient.userPoolClientId],
+      ),
+      requestHeaderConfiguration: { allowlistedHeaders: ['Authorization'] },
+      lifecycleConfiguration: {
+        idleRuntimeSessionTimeout: cdk.Duration.seconds(1800),
+        maxLifetime: cdk.Duration.seconds(28800),
       },
+      environmentVariables,
+      loggingConfigs: [
+        {
+          logType: bedrockagentcore.LogType.APPLICATION_LOGS,
+          destination: bedrockagentcore.LoggingDestination.cloudWatchLogs(applicationLogGroup),
+        },
+      ],
+      manageDeliveryResourcePolicy: false,
     });
+    this.runtime = runtimeConstruct.node.defaultChild as bedrockagentcore.CfnRuntime;
 
-    // Publish a version and a "live" alias so deploys are blue/green and a
-    // bad release can be rolled back by repointing the alias to a prior
-    // version (P9 — solo-dev rollback).
-    const wsHandlerAlias = new lambda.Alias(this, 'WebSocketHandlerLiveAlias', {
-      aliasName: 'live',
-      version: wsHandler.currentVersion,
-    });
+    new cdk.CfnOutput(this, 'RuntimeArn', { value: this.runtime.attrAgentRuntimeArn });
+    new cdk.CfnOutput(this, 'RuntimeId', { value: this.runtime.attrAgentRuntimeId });
+  }
 
-    // Grant Lambda access to read the secure parameters
-    weatherApiKey.grantRead(wsHandler);
-    newsApiKey.grantRead(wsHandler);
+  private grantRuntimePermissions(props: AgentStackProps, image: ecrAssets.DockerImageAsset): void {
+    const role = this.executionRole;
+    const invoke = ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'];
+    const profileArn = `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/${INFERENCE_PROFILE}`;
 
-    const webSocketApi = new apigatewayv2.CfnApi(this, 'WebSocketApi', {
-      name: 'MaxHeightWebSocket',
-      protocolType: 'WEBSOCKET',
-      routeSelectionExpression: '$request.body.type',
-    });
-
-    const integration = new apigatewayv2.CfnIntegration(this, 'LambdaIntegration', {
-      apiId: webSocketApi.ref,
-      integrationType: 'AWS_PROXY',
-      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${wsHandlerAlias.functionArn}/invocations`,
-    });
-
-    // IAM authorizer for WebSocket $connect — validates SigV4 signatures
-    const _connectRoute = new apigatewayv2.CfnRoute(this, 'ConnectRoute', {
-      apiId: webSocketApi.ref,
-      routeKey: '$connect',
-      authorizationType: 'AWS_IAM',
-      target: `integrations/${integration.ref}`,
-    });
-
-    const _disconnectRoute = new apigatewayv2.CfnRoute(this, 'DisconnectRoute', {
-      apiId: webSocketApi.ref,
-      routeKey: '$disconnect',
-      target: `integrations/${integration.ref}`,
-    });
-
-    const _defaultRoute = new apigatewayv2.CfnRoute(this, 'DefaultRoute', {
-      apiId: webSocketApi.ref,
-      routeKey: '$default',
-      target: `integrations/${integration.ref}`,
-    });
-
-    const _stage = new apigatewayv2.CfnStage(this, 'ProdStage', {
-      apiId: webSocketApi.ref,
-      stageName: 'prod',
-      autoDeploy: true,
-      defaultRouteSettings: {
-        throttlingBurstLimit: 10,
-        throttlingRateLimit: 5,
-      },
-    });
-
-    // Grant API Gateway permission to invoke the Lambda (via the live alias)
-    wsHandlerAlias.addPermission('ApiGwInvoke', {
-      principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
-      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/*`,
-    });
-
-    // Grant Lambda permission to post back to connections
-    wsHandler.addToRolePolicy(
+    // Global cross-Region inference: the profile, the in-Region model through the
+    // profile, and the Region-less model ARN the global route resolves to (T140).
+    role.addToPolicy(
       new iam.PolicyStatement({
-        actions: ['execute-api:ManageConnections'],
-        resources: [`arn:aws:execute-api:${this.region}:${this.account}:${webSocketApi.ref}/*`],
+        actions: invoke,
+        resources: [profileArn],
+        conditions: { StringEquals: { 'aws:RequestedRegion': this.region } },
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: invoke,
+        resources: [`arn:aws:bedrock:${this.region}::foundation-model/${FOUNDATION_MODEL}`],
+        conditions: {
+          StringEquals: {
+            'aws:RequestedRegion': this.region,
+            'bedrock:InferenceProfileArn': profileArn,
+          },
+        },
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: invoke,
+        resources: [`arn:aws:bedrock:::foundation-model/${FOUNDATION_MODEL}`],
+        conditions: {
+          StringEquals: {
+            'aws:RequestedRegion': 'unspecified',
+            'bedrock:InferenceProfileArn': profileArn,
+          },
+        },
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({ actions: ['bedrock:ListAsyncInvokes'], resources: ['*'] }),
+    );
+
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['polly:SynthesizeSpeech'],
+        resources: ['*'],
+        conditions: { StringEquals: { 'aws:RequestedRegion': this.region } },
       }),
     );
 
-    new cdk.CfnOutput(this, 'WebSocketEndpoint', {
-      value: `wss://${webSocketApi.ref}.execute-api.${this.region}.amazonaws.com/prod`,
-    });
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'dynamodb:GetItem',
+          'dynamodb:PutItem',
+          'dynamodb:UpdateItem',
+          'dynamodb:DeleteItem',
+        ],
+        resources: [props.controlTable.tableArn],
+      }),
+    );
 
-    new cdk.CfnOutput(this, 'WebSocketHandlerLiveAliasArn', {
-      value: wsHandlerAlias.functionArn,
-      description: 'ARN of the "live" alias — repoint to a prior version to roll back.',
-    });
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'bedrock-agentcore:CreateEvent',
+          'bedrock-agentcore:ListSessions',
+          'bedrock-agentcore:ListEvents',
+          'bedrock-agentcore:DeleteEvent',
+          'bedrock-agentcore:RetrieveMemoryRecords',
+          'bedrock-agentcore:ListMemoryRecords',
+          'bedrock-agentcore:GetMemoryRecord',
+          'bedrock-agentcore:DeleteMemoryRecord',
+          'bedrock-agentcore:BatchDeleteMemoryRecords',
+        ],
+        resources: [props.memory.memoryArn],
+      }),
+    );
 
-    // SSM SecureString parameters cannot be created by CloudFormation, so
-    // operators must create them out of band before `cdk deploy`. Surface
-    // the expected parameter names as stack outputs so they are discoverable.
-    new cdk.CfnOutput(this, 'WeatherApiKeyParam', {
-      value: '/max-height/weather-api-key',
-      description:
-        'SSM SecureString parameter for the weather API key — create manually before deploy.',
-    });
-    new cdk.CfnOutput(this, 'NewsApiKeyParam', {
-      value: '/max-height/news-api-key',
-      description:
-        'SSM SecureString parameter for the news API key — create manually before deploy.',
-    });
+    // AgentCore's AWS-managed web search needs no key; the account field of its
+    // ARN is the literal "aws". It is a different action from the memory ones,
+    // and the memory statement's resource would not match it.
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['bedrock-agentcore:InvokeWebSearch'],
+        resources: [`arn:aws:bedrock-agentcore:${this.region}:aws:tool/web-search.v1`],
+      }),
+    );
+
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['ssm:GetParameter'],
+        resources: Object.values(SSM_PARAMS).map(
+          (name) => `arn:aws:ssm:${this.region}:${this.account}:parameter${name}`,
+        ),
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['kms:Decrypt'],
+        resources: [`arn:aws:kms:${this.region}:${this.account}:key/*`],
+        conditions: { StringEquals: { 'kms:ViaService': `ssm.${this.region}.amazonaws.com` } },
+      }),
+    );
+
+    image.repository.grantPull(role);
+
+    // AgentCore Runtime execution-role requirements (devguide runtime-permissions).
+    const runtimeLogs = `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/bedrock-agentcore/runtimes/*`;
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['logs:DescribeLogStreams', 'logs:CreateLogGroup'],
+        resources: [runtimeLogs],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['logs:DescribeLogGroups'],
+        resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:*`],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+        resources: [`${runtimeLogs}:log-stream:*`],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'xray:PutTraceSegments',
+          'xray:PutTelemetryRecords',
+          'xray:GetSamplingRules',
+          'xray:GetSamplingTargets',
+        ],
+        resources: ['*'],
+      }),
+    );
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['cloudwatch:PutMetricData'],
+        resources: ['*'],
+        conditions: { StringEquals: { 'cloudwatch:namespace': 'bedrock-agentcore' } },
+      }),
+    );
   }
 }

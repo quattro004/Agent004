@@ -100,7 +100,7 @@ Package-level commands:
 
 - Frontend: `cd packages/frontend && pnpm run dev` / `pnpm run test` / `pnpm run test:e2e`
 - Agent: `cd packages/agent && pnpm run dev` / `pnpm run test`
-- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email>` (every `cdk synth`, `diff` and `deploy` needs it; never commit the address)
+- Infra: `cd packages/infra && pnpm run build` / `pnpm run test` / `npx cdk diff -c budgetAlertEmail=<owner email> -c cognitoDomainPrefix=<prefix> -c googleClientId=<client id>` (every `cdk synth`, `diff` and `deploy` needs all three; never commit the owner address). Add `-c publishSite=true` only when deploying `MaxHeight-Frontend` with a finished `MAX_HEIGHT_DEPLOY=1` frontend build; without it no stack reads `dist`
 - Repo tools: `cd packages/repo-tools && pnpm run test`
 
 ## Required engineering workflow
@@ -121,6 +121,23 @@ them.
 - Use TDD for production code: **RED → GREEN → REFACTOR**. Its subject is **behavior** — a change with no behavioral delta (removing an unimported dependency, a rename, formatting, docs) cannot have a RED test, so name that out loud and state the check replacing it rather than manufacturing one. See the `tdd` skill.
 - Add or update tests for any non-trivial behavior change.
 - Reuse existing patterns/helpers before introducing new abstractions.
+- Never call a deprecated API. `@typescript-eslint/no-deprecated` enforces
+  this through each package's `tsconfig.eslint.json`, which covers sources,
+  tests and configs; a new TypeScript file outside those globs is not
+  type-checked. Do not silence it with a disable comment — use the replacement
+  the deprecation names.
+- Agent spend safety: provider `maxTokens` bounds one model call, not a tool
+  loop. SDK invocation limits are checked between turns and can overshoot;
+  do not claim a strict ceiling from those limits alone. Reused Agents report lifetime `accumulatedUsage`,
+  so prove per-invocation accounting before enabling reuse (see wiki
+  `Source-Agent-Infra-Deployment-Review`).
+- `ControlTable.putSession` creates only absent items. Updates/replacements must
+  pass the previously read snapshot; a condition conflict is not success and
+  must not replay model work that has already spent money.
+- A cancelled Strands turn **resolves** with `stopReason: 'cancelled'` rather
+  than throwing, so abort handling must inspect the result as well as `catch`.
+  An error after response headers are sent must end the response, never
+  `writeHead` again, which crashes the process (wiki `Gotchas`).
 - Do not hide failures with broad catches or silent fallbacks; surface errors clearly.
 - Keep dependency hygiene strict: review new dependencies and keep `pnpm-lock.yaml` committed.
 
@@ -132,6 +149,11 @@ tells the story, with dates and worked examples.
 - **A red `pnpm audit` on an unchanged commit is news, not a regression.** It
   queries the live advisory database. Check the patched version's npm publish
   date before assuming new exposure — fixes often ship weeks before disclosure.
+- **Add a new `@aws-sdk/client-*` at the version the lockfile already resolves
+  for the others** (`pnpm add <pkg>@<x.y.z>`, then restore the `^x.y.z`
+  specifier). The SDK publishes daily, and a plain `pnpm add` takes the newest
+  release, which pulls a second `@aws-sdk/core` alongside the existing one.
+  Dependabot's `dependencies` group then bumps all clients together.
 - **pnpm will not re-resolve a transitive dependency the lockfile already
   satisfies.** `pnpm update <pkg> -r` and `--depth Infinity` both no-op on one.
   Use an `overrides:` entry in `pnpm-workspace.yaml` (pnpm 11 reads them nowhere
@@ -202,6 +224,29 @@ change; it does not require that test to survive it. When the change is a
 deletion or a config edit, the test is often scaffolding. Delete it in REFACTOR
 and keep the reasoning in the PR or on the wiki. Never delete a test that pins
 behavior.
+
+## Code reviews are not artifacts — their findings are
+
+A code review is transient. The repo does **not** check review documents in,
+and `docs/reviews/` is not a place to put one. A review that produced nothing
+durable produced nothing.
+
+Before a review session ends, convert every finding that matters into something
+with an owner:
+
+- a task in the relevant `specs/NNN-*/tasks.md`,
+- a GitHub issue (ask first — see the issue-tracking rule),
+- or a wiki page, if the finding is durable project knowledge.
+
+**Never cite a review file as the source of a task.** Spec 003's Phase 15 cites
+`docs/reviews/2026-11-15-agent-infra-deployment-review.md`, which was never
+committed; a reader cannot check a Phase 15 task against what the review
+actually said (`tasks.md` deviation C21). Cite the clarification session, the
+spec section or the issue instead — all of which are in git.
+
+**A review finding is not implemented because a review happened.** Verify
+against the code before treating one as closed, exactly as with a `[x]` task
+below.
 
 ## Trust, but verify, task status and wiki claims
 
@@ -325,6 +370,17 @@ around a red build.
   without updating the ruleset leaves the old check pending and blocks merging.
   See the wiki's `Guide-Validation-Gate`.
 
+## TypeScript types
+
+- Prefer the SDK, API, or domain type that already defines a value. Use
+  `unknown` only at an untrusted external boundary, then validate and narrow
+  before reading fields. Prefer `unknown` over `any` when the shape is truly
+  not known.
+- Do not replace a known SDK/API type with `unknown` merely to make code compile.
+  Import exported types such as `SystemPrompt` and `ToolSpec` instead.
+- For test doubles and test-only casts, keep the minimum boundary shape explicit
+  instead of adding `unknown` or `any` broadly.
+
 ## Keep this file current
 
 When you learn something durable about this repo — a convention, a constraint, a
@@ -404,6 +460,14 @@ Polly IAM supports no `polly:Engine` or `polly:VoiceId` condition keys. Scope
 `SynthesizeSpeech` by `aws:RequestedRegion`; voice and engine are application
 settings, not IAM restrictions. Check the service authorization reference
 before copying condition-key examples, including P11's illustrative examples.
+
+Every IAM action granted to the runtime role that can bill (a model, voice,
+memory or search call) must also be in `DENIED_ACTIONS` in
+`packages/infra/lib/handlers/hard-stop.ts`, with a test in `hard-stop.test.ts`.
+The hard stop only denies what it lists, so an unlisted action keeps spending
+after the cap. Web search is `bedrock-agentcore:InvokeWebSearch`: IAM only, no
+key (wiki `Decision-Web-Search-Provider`). AWS's terms require showing a
+result's source link, so a result with no URL is dropped.
 
 - User-facing/project-facing name is **Max Height**.
 - Do not use **Max Headroom** in product/UI copy (README/About inspiration references are acceptable).

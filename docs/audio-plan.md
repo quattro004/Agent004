@@ -27,7 +27,7 @@ The greeting **playback** pipeline is already fully built; it just lacks the 16 
 
 ## Decisions
 
-- **Provider:** Amazon Polly is the **sole** generation method — Matthew, neural, mp3, 24 kHz (reuse existing config). No other TTS provider (ElevenLabs, manual recording, browser TTS) is in scope.
+- **Provider:** Amazon Polly is the **sole** generation method — Matthew, mp3, 24 kHz. The engine was Neural for the committed pool; the generator now requests **Standard** (amendment A6; see § Generator switched to Polly Standard). No other TTS provider (ElevenLabs, manual recording, browser TTS) is in scope.
 - **SSML:** Hand-tuned per greeting (breaks, prosody `rate`/`volume`, stutter timing), guided by the personality bible. Falls back to the simple wrapper if a line lacks custom SSML. Note the neural engine supports only `volume`/`rate` on `<prosody>` and rejects `<emphasis>`; pitch changes come from the glitch engine at playback (see § Voice glitch episodes), not from SSML.
 - **Duration calibration:** Auto-measure each MP3 and rewrite `audioDurationMs` (within the contract's ±500 ms / 1000–15000 ms bounds).
 - **Spec:** Update via speckit iterate to make video **optional/deferred** (not deleted) — avatar images are the MVP visual; mp4s are a future "if cheap" add.
@@ -205,8 +205,22 @@ explicitly. The `gap5` profile and `--pace-experiment` harness remain only as
 the record of that rejected trial; `pace-gap-5ms` output lives in
 `packages/frontend/.greeting-experiment/pace-gap-5ms/audio/`.
 
-**No production audio or manifest duration has been regenerated.** Do that with
-the full-pool command, validating each measured duration rather than clamping.
+**Production audio was regenerated on 2026-11-07** (`f2c769d`) with the
+full-pool command on Neural Matthew: all 16 MP3s, with manifest durations of
+8424 to 14736 ms, inside the 1000 to 15000 ms bounds and not clamped.
+
+### Generator switched to Polly Standard (2026-11-14)
+
+Per constitution amendment A6 (spec 003 deviation C10), `buildSynthesisInput`
+now requests **Standard** Matthew; mp3 and an explicit 24 kHz stay valid on
+Standard (the [SynthesizeSpeech reference](https://docs.aws.amazon.com/polly/latest/APIReference/API_SynthesizeSpeech.html)
+lists 24000 for mp3 on every engine; only the default differs). The committed
+MP3s and the manifest's `voiceConfig.engine` are still Neural until the pool is
+regenerated, which the builder has deferred until after the first deploy. That
+regeneration is the first listen to Standard Matthew; record the verdict in
+spec 003 research.md § Q1. Run a full-pool regeneration rather than `--only`,
+so the pool is never half Neural, half Standard. The cost figures above were
+Neural rates; Standard is $4 per million characters.
 
 ### Playback DSP and signal measurements
 
@@ -412,3 +426,4 @@ Two corrections surfaced during generation:
 7. **audio-driven-timing** — Phase 4 tail-buffer timing refinement + tests.
 8. **verify-volume** — Phase 4 verify volume knob (optional localStorage persistence).
 9. **validate-finalize** — Phase 5 `pnpm run validate` + docs update.
+10. **regenerate-standard** — regenerate the full pool on Polly Standard Matthew (T158, amendment A6), listen, record the verdict in spec 003 research.md § Q1, and update `voiceConfig.engine`. Deferred until after the first deploy; see § Generator switched to Polly Standard.

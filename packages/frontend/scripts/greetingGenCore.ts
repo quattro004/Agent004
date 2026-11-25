@@ -161,7 +161,7 @@ export function parseCliArgs(argv: string[]): GenerationCliOptions {
 // --- Polly synthesis ---
 
 export interface SynthesisInput {
-  Engine: 'neural';
+  Engine: 'standard';
   VoiceId: 'Matthew';
   LanguageCode: 'en-US';
   OutputFormat: 'mp3';
@@ -170,10 +170,14 @@ export interface SynthesisInput {
   Text: string;
 }
 
-/** Build the Polly request for a greeting, matching the manifest's `voiceConfig`. */
+/**
+ * Build the Polly request for a greeting: Standard Matthew per constitution
+ * amendment A6 (spec 003 T158). The manifest's `voiceConfig` describes the
+ * committed audio, so it reads `neural` until the pool is regenerated.
+ */
 export function buildSynthesisInput(ssml: string): SynthesisInput {
   return {
-    Engine: 'neural',
+    Engine: 'standard',
     VoiceId: 'Matthew',
     LanguageCode: 'en-US',
     OutputFormat: 'mp3',

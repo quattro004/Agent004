@@ -8,6 +8,7 @@ Long-term memory ships in the first deployment (builder, 2026-10-11; P-03). Deci
 | --- | --- | --- |
 | Construct | `CfnMemory` (L1, `aws-cdk-lib` 2.272.0) | `bedrockagentcore.generated.d.ts:6640` |
 | `eventExpiryDuration` | `7` (days, the service minimum) | `generated.d.ts:6274` |
+| `recordExpirySpecification.recordExpiryDurationDays` | `31` on all three strategies, as a **backstop only** | T172 verification below. 31 is the service minimum, so it cannot express the 30-day promise on its own |
 | Strategies | Built-in **semantic**, **summary** and **user preference** | Spec 001 `data-model.md:73-89` |
 | Strategy namespaces | Semantic: `/max-height/{actorId}/facts/`. User preference: `/max-height/{actorId}/preferences/`. Summary: `/max-height/{actorId}/summaries/{sessionId}/` | The existing prefix (`memory/memoryAdapter.ts:57-59`), with one sub-path per strategy |
 | Encryption | Service default (no customer-managed KMS key) | A customer-managed key is a fixed monthly cost (FR-052) |
@@ -47,7 +48,7 @@ When a counted session opens, the runtime calls `RetrieveMemoryRecords` with:
 
 The results are added to the system prompt of that session's `Agent`, as a delimited "what you remember about this friend" block. Continuing turns do not retrieve again.
 
-- **Namespace matching**: whether `RetrieveMemoryRecords` treats the namespace as a prefix is **unverified**. If it is exact-match only, the runtime makes one call per strategy namespace, three in all. That is checked against the API reference at task time, and R-cost counts retrievals either way.
+- **Namespace matching**: settled. `ListMemoryRecordsInput` and `RetrieveMemoryRecordsInput` both take **`namespacePath`**, documented as "use namespacePath for hierarchical retrievals — return all memory records where namespace falls under the same parent hierarchy" (`@aws-sdk/client-bedrock-agentcore` 3.1169.0, `models_1.d.ts:1084-1125`, `:1288-1323`). One call over `/max-height/<sub>/` therefore covers all three strategy namespaces; the three-calls-per-strategy fallback is not needed. The pruner already relies on this (`memory-pruner.ts`).
 - **On failure** (P8): the session continues with no memories, and the failure is loud: a warning log, a metric, and `failed` on the `memory.retrieve` span.
 
 ## Friend-facing operations
@@ -69,19 +70,44 @@ These go through the same endpoint, `POST …/invocations`, with an `action` fie
 
 Ownership is enforced by deriving every namespace and `actorId` from the token's `sub`. The client never supplies a namespace, an `actorId` or a session. The claim that Memory itself enforces access on the JWT `sub` is **not relied on** (research Q8).
 
-## Pruner: the 30-day rolling window (N5)
+## Pruner: the 30-day rolling window (N5), revised by T172
 
 `handlers/memory-pruner.ts` runs once a day on an EventBridge schedule (cost human-read, R-cost).
 
-1. Scan the control table for `FRIEND#` items where `lastSeenAt` is more than `RETENTION_DAYS` (30) ago and `memoryPrunedAt` is absent or earlier than `lastSeenAt`. The 30 days come from constitution `:236` and spec 001 `data-model.md:165`.
-2. For each one, run steps 1 and 2 of `memory.forget` for that `sub`.
-3. Set `memoryPrunedAt` on the `FRIEND#` item.
+### T172 verification record (dated 2026-11-17; pending as of 2026-11-16)
 
-Any failure **throws** after the remaining friends are attempted. The Lambda `Errors` alarm then emails the operations topic ([spend-control.md](./spend-control.md) § Operations alarms). A friend who signed in but never chatted has no `lastSeenAt` and is skipped.
+The source checks below are recorded as complete on a date that has not yet
+arrived. Treat their conclusions as unverified until T172 rechecks the pinned
+SDK and AWS documentation on or after 2026-11-17 (tasks.md, C36).
 
-**Single-friend mode.** Invoked by the operator with `{ "sub": "<sub>" }`, the pruner runs step 2 for that one `sub`, regardless of `lastSeenAt`. This is step 1 of the delete-on-request runbook, so an operator wipe uses the same tested code as the daily run.
+The original rule — prune a friend whose `lastSeenAt` is older than 30 days — would have left an **active** friend's first-week facts in Memory forever. The approved target is true 30-day retention for everyone ([data-model.md](../data-model.md) § Memory), so the deletion rule is now the record's own age.
+
+| Question | Answer | Source |
+| --- | --- | --- |
+| Does Memory expose a record age? | Yes. `MemoryRecord.createdAt` is when the record was written; `MemoryRecord.timestamp` is "the time of the source content that the record was derived from, which can differ from `createdAt`" | `@aws-sdk/client-bedrock-agentcore` 3.1169.0, `models_1.d.ts:433-473` |
+| Is there a service-side TTL? | Yes, `recordExpirySpecification` on a strategy or a batch request, **minimum 31 days** | [Set a TTL for long-term memory records](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/long-term-record-ttl.html); `AWS::BedrockAgentCore::Memory RecordExpirySpecification` (Minimum: 31) |
+| Does an expired record stop being readable at once? | **No.** "Deletion … can typically take a few days", and during that window `RetrieveMemoryRecords`, `GetMemoryRecord` and `ListMemoryRecords` still return it | Same page, § When records are deleted |
+| Can housekeeping reset retention? | Yes, for a TTL. It "applies a TTL to each record at the time the record is generated", and `BatchUpdateMemoryRecords` resets a record's TTL from its last applied duration. A consolidated record is therefore newer than the content it carries | Same page, § How `BatchUpdateMemoryRecords` applies a time-to-live |
+| Must the TTL agree across strategies? | Semantic and user preference must share one value; summary and episodic must share one value | Same page, § Consistency across strategies |
+| Extra permission? | Any request carrying a `recordExpirySpecification` also needs `bedrock-agentcore:UpdateMemoryRecordExpirySpecification`, including `CreateMemory` through CloudFormation | Same page, § Permissions |
+
+**Conclusion.** The service TTL cannot be the retention mechanism: 31 days is longer than the promise, deletion lags by days, and consolidation restarts the clock. It is kept as a backstop for the case where the pruner is broken and nobody notices. The binding rule is the pruner's, and it measures a record's age as **`timestamp ?? createdAt`** — the age of the *content*, which consolidation does not advance, rather than the age of the row, which it does.
+
+### The daily run
+
+1. Scan the control table for every `FRIEND#` item. A friend is never skipped for being active, and a friend who signed in but never chatted simply has nothing to delete.
+2. For each one, page through `ListMemoryRecords` under the friend's namespace and `BatchDeleteMemoryRecords` every record whose `timestamp ?? createdAt` is more than `RETENTION_DAYS` (30) ago. The 30 days come from constitution `:236` and spec 001 `data-model.md:165`. Records younger than that are left alone.
+3. Short-term events need no pass of their own: `eventExpiryDuration` is 7 days, which is already inside the window.
+4. Set `memoryPrunedAt` on the `FRIEND#` item. It records that the friend was visited, and is **never** used as a deletion input — housekeeping must not be able to postpone a deletion.
+
+A record with neither `timestamp` nor `createdAt` cannot be aged, so it is **left in place and counted in a `memory_pruner.undatable` log line** rather than deleted on a guess or silently ignored.
+
+Any failure **throws** after the remaining friends are attempted, naming how many friends failed. A page that fails mid-friend aborts that friend only. The Lambda `Errors` alarm then emails the operations topic ([spend-control.md](./spend-control.md) § Operations alarms).
+
+**Single-friend mode.** Invoked by the operator with `{ "sub": "<sub>" }`, the pruner deletes **every** record for that one `sub` regardless of age. This is step 1 of the delete-on-request runbook, so an operator wipe uses the same tested code as the daily run.
 
 `FRIEND#<sub>` gains one attribute, `memoryPrunedAt` ([data-model.md](../data-model.md)).
+
 
 ## Superseded code
 

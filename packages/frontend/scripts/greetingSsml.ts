@@ -4,7 +4,9 @@
  * Maps each greeting id in `public/greetings/manifest.json` to a single,
  * well-formed `<speak>` document used by the Phase 2 Polly generation script.
  *
- * Engine constraints (Polly neural / Matthew):
+ * Engine constraints: generation uses Polly Standard / Matthew (amendment A6),
+ * but this SSML stays within the Neural subset so the pool still renders if
+ * A6 is reverted after the first listen (spec 003 T158):
  * - `<emphasis>` is NOT supported — emphasis uses `<prosody volume="loud">`.
  * - `<prosody>` supports only `volume` and `rate` on neural; the `pitch`
  *   attribute is unsupported, so it is omitted here and in the shared

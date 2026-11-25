@@ -1,78 +1,85 @@
 /**
- * Budget degradation handler tests.
- * T138: Verify browser TTS fallback wiring on budget soft-degrade.
+ * Budget degradation (T071).
+ *
+ * The soft-degrade is text-only. There is no browser-TTS mode: browser speech
+ * synthesis would itself breach P1's cloud-only rule, so spec 001 FR-016's
+ * browser-TTS fallback is recorded as unmet rather than implemented
+ * (research Q1, P-15). The degrade is announced once, in character.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createBudgetDegradation } from '../../src/services/budgetDegradation';
-
-// Mock browserTts
-vi.mock('../../src/services/browserTts', () => ({
-  isAvailable: vi.fn(() => true),
-}));
-
-import { isAvailable } from '../../src/services/browserTts';
-const mockIsAvailable = vi.mocked(isAvailable);
 
 describe('createBudgetDegradation', () => {
   let budget: ReturnType<typeof createBudgetDegradation>;
 
   beforeEach(() => {
     budget = createBudgetDegradation();
-    mockIsAvailable.mockReturnValue(true);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('starts in normal mode', () => {
+  it('starts in normal mode with nothing to announce', () => {
     expect(budget.getMode()).toBe('normal');
+    expect(budget.takeAnnouncement()).toBeNull();
   });
 
-  describe('onBudgetCapped with softDegrade=true', () => {
-    it('transitions to browser_tts mode when browser TTS is available', () => {
-      mockIsAvailable.mockReturnValue(true);
-      budget.onBudgetCapped(true);
-      expect(budget.getMode()).toBe('browser_tts');
-    });
-
-    it('transitions to text_only mode when browser TTS is unavailable', () => {
-      mockIsAvailable.mockReturnValue(false);
-      budget.onBudgetCapped(true);
+  describe('soft-degrade', () => {
+    it('goes text-only when the server answers voice off', () => {
+      budget.onSessionVoice('off');
       expect(budget.getMode()).toBe('text_only');
     });
+
+    it('stays normal while the server still answers voice on', () => {
+      budget.onSessionVoice('on');
+      expect(budget.getMode()).toBe('normal');
+      expect(budget.takeAnnouncement()).toBeNull();
+    });
+
+    it('announces the degrade once, in character', () => {
+      budget.onSessionVoice('off');
+      const message = budget.takeAnnouncement();
+      expect(message).toBeTruthy();
+      expect(message!.toLowerCase()).toContain('signal');
+      expect(message!.length).toBeGreaterThan(10);
+    });
+
+    it('does not announce the same degrade twice', () => {
+      budget.onSessionVoice('off');
+      budget.takeAnnouncement();
+      expect(budget.takeAnnouncement()).toBeNull();
+    });
+
+    it('does not re-announce when later turns are still voice off', () => {
+      budget.onSessionVoice('off');
+      budget.takeAnnouncement();
+      budget.onSessionVoice('off');
+      expect(budget.takeAnnouncement()).toBeNull();
+    });
+
+    it('announces again if voice comes back and is lost a second time', () => {
+      budget.onSessionVoice('off');
+      budget.takeAnnouncement();
+      budget.onSessionVoice('on');
+      expect(budget.getMode()).toBe('normal');
+      budget.onSessionVoice('off');
+      expect(budget.takeAnnouncement()).toBeTruthy();
+    });
   });
 
-  describe('onBudgetCapped with softDegrade=false', () => {
-    it('transitions to hard_stop regardless of TTS availability', () => {
-      mockIsAvailable.mockReturnValue(true);
-      budget.onBudgetCapped(false);
+  describe('hard stop', () => {
+    it('goes to hard_stop and never returns to text-only on its own', () => {
+      budget.onHardStop();
+      expect(budget.getMode()).toBe('hard_stop');
+      budget.onSessionVoice('on');
       expect(budget.getMode()).toBe('hard_stop');
     });
-  });
 
-  describe('first fallback tracking', () => {
-    it('isFirstFallback returns true on first call after entering browser_tts mode', () => {
-      budget.onBudgetCapped(true);
-      expect(budget.isFirstFallback()).toBe(true);
-    });
-
-    it('isFirstFallback returns false on subsequent calls', () => {
-      budget.onBudgetCapped(true);
-      budget.isFirstFallback(); // consume first
-      expect(budget.isFirstFallback()).toBe(false);
-    });
-
-    it('isFirstFallback returns false when not in browser_tts mode', () => {
-      expect(budget.isFirstFallback()).toBe(false);
+    it('has no announcement of its own, because the overlay carries that copy', () => {
+      budget.onHardStop();
+      expect(budget.takeAnnouncement()).toBeNull();
     });
   });
 
-  describe('getFirstFallbackMessage', () => {
-    it('returns an in-character degradation message', () => {
-      const msg = budget.getFirstFallbackMessage();
-      expect(msg.toLowerCase()).toContain('signal');
-      expect(msg.length).toBeGreaterThan(10);
-    });
+  it('offers no browser-TTS mode', () => {
+    budget.onSessionVoice('off');
+    expect(budget.getMode()).not.toBe('browser_tts');
   });
 });

@@ -1,25 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  handleDeleteMemory,
   handleForgetMe,
   handleListMemories,
-  handleDeleteMemory,
 } from '../../src/memory/memoryHandlers.js';
-import type { MemoryAdapter } from '../../src/memory/memoryAdapter.js';
+import { MemoryRecordNotFoundError, type MemoryAdapter } from '../../src/memory/memoryAdapter.js';
 
 function createMockAdapter(): MemoryAdapter {
   return {
-    getNamespace: vi.fn((actorId: string) => `/max-height/${actorId}/`),
+    getNamespace: vi.fn((sub: string) => `/max-height/${sub}/`),
     retrieveMemories: vi.fn().mockResolvedValue([]),
-    storeMemory: vi.fn().mockResolvedValue(undefined),
-    storeMemories: vi.fn().mockResolvedValue(undefined),
-    wipeMemories: vi.fn().mockResolvedValue({ deletedCount: 5 }),
+    createEvent: vi.fn().mockResolvedValue(undefined),
+    wipeMemories: vi.fn().mockResolvedValue({ recordsDeleted: 2, eventsDeleted: 3 }),
     deleteMemory: vi.fn().mockResolvedValue(undefined),
     listMemories: vi.fn().mockResolvedValue([]),
-    calculateExpiry: vi.fn().mockReturnValue(new Date()),
   };
 }
 
-describe('Memory HTTP Handlers', () => {
+describe('Memory HTTP handlers', () => {
   let adapter: MemoryAdapter;
 
   beforeEach(() => {
@@ -27,102 +25,58 @@ describe('Memory HTTP Handlers', () => {
     adapter = createMockAdapter();
   });
 
-  describe('handleForgetMe (T090)', () => {
-    it('wipes all memories for given actorId', async () => {
-      const result = await handleForgetMe(adapter, 'actor-123');
+  it('lists only records returned for the verified subject', async () => {
+    const records = [
+      {
+        id: 'memory-1',
+        text: 'Likes sci-fi',
+        kind: 'preference' as const,
+        createdAt: '2026-11-16',
+      },
+    ];
+    vi.mocked(adapter.listMemories).mockResolvedValue(records);
 
-      expect(adapter.wipeMemories).toHaveBeenCalledWith('actor-123');
-      expect(result.success).toBe(true);
-      expect(result.deletedCount).toBe(5);
-    });
+    const result = await handleListMemories(adapter, 'friend-1');
 
-    it('returns success with 0 count when no memories exist', async () => {
-      vi.mocked(adapter.wipeMemories).mockResolvedValue({ deletedCount: 0 });
-
-      const result = await handleForgetMe(adapter, 'new-actor');
-
-      expect(result.success).toBe(true);
-      expect(result.deletedCount).toBe(0);
-    });
-
-    it('returns error result on failure', async () => {
-      vi.mocked(adapter.wipeMemories).mockRejectedValue(new Error('Service down'));
-
-      const result = await handleForgetMe(adapter, 'actor-123');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Service down');
-    });
-
-    it('requires actorId', async () => {
-      const result = await handleForgetMe(adapter, '');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('actorId');
-    });
+    expect(adapter.listMemories).toHaveBeenCalledWith('friend-1');
+    expect(result).toEqual({ success: true, memories: records });
   });
 
-  describe('handleListMemories (T091/T092)', () => {
-    it('returns all memories for actorId', async () => {
-      vi.mocked(adapter.listMemories).mockResolvedValue([
-        {
-          memoryRecordId: 'mem-001',
-          content: 'Likes sci-fi',
-          namespaces: ['/max-height/actor-123/'],
-        },
-        {
-          memoryRecordId: 'mem-002',
-          content: 'Works as engineer',
-          namespaces: ['/max-height/actor-123/'],
-        },
-      ]);
+  it('returns an internal failure when listing memories fails', async () => {
+    vi.mocked(adapter.listMemories).mockRejectedValue(new Error('AgentCore unavailable'));
 
-      const result = await handleListMemories(adapter, 'actor-123');
+    const result = await handleListMemories(adapter, 'friend-1');
 
-      expect(result.success).toBe(true);
-      expect(result.memories).toHaveLength(2);
-      expect(result.memories![0].memoryRecordId).toBe('mem-001');
-    });
-
-    it('returns empty array when no memories', async () => {
-      const result = await handleListMemories(adapter, 'new-actor');
-
-      expect(result.success).toBe(true);
-      expect(result.memories).toEqual([]);
-    });
-
-    it('handles errors gracefully', async () => {
-      vi.mocked(adapter.listMemories).mockRejectedValue(new Error('Network error'));
-
-      const result = await handleListMemories(adapter, 'actor-123');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Network error');
-    });
+    expect(result).toMatchObject({ success: false, code: 'internal' });
   });
 
-  describe('handleDeleteMemory (T092)', () => {
-    it('deletes a single memory by ID', async () => {
-      const result = await handleDeleteMemory(adapter, 'mem-001');
+  it('passes the verified subject to the ownership-checked delete', async () => {
+    const result = await handleDeleteMemory(adapter, 'friend-1', 'memory-1');
 
-      expect(adapter.deleteMemory).toHaveBeenCalledWith('mem-001');
-      expect(result.success).toBe(true);
-    });
+    expect(adapter.deleteMemory).toHaveBeenCalledWith('friend-1', 'memory-1');
+    expect(result).toEqual({ success: true, deleted: 1 });
+  });
 
-    it('requires memoryRecordId', async () => {
-      const result = await handleDeleteMemory(adapter, '');
+  it('returns not_found for a foreign or missing record ID', async () => {
+    vi.mocked(adapter.deleteMemory).mockRejectedValue(new MemoryRecordNotFoundError());
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('memoryRecordId');
-    });
+    const result = await handleDeleteMemory(adapter, 'friend-1', 'foreign-id');
 
-    it('handles deletion errors', async () => {
-      vi.mocked(adapter.deleteMemory).mockRejectedValue(new Error('Not found'));
+    expect(result).toEqual({ success: false, code: 'not_found' });
+  });
 
-      const result = await handleDeleteMemory(adapter, 'mem-999');
+  it('reports both record and event counts after forgetting all memory', async () => {
+    const result = await handleForgetMe(adapter, 'friend-1');
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Not found');
-    });
+    expect(adapter.wipeMemories).toHaveBeenCalledWith('friend-1');
+    expect(result).toEqual({ success: true, recordsDeleted: 2, eventsDeleted: 3 });
+  });
+
+  it('does not report success when the forget operation is incomplete', async () => {
+    vi.mocked(adapter.wipeMemories).mockRejectedValue(new Error('event delete failed'));
+
+    const result = await handleForgetMe(adapter, 'friend-1');
+
+    expect(result).toMatchObject({ success: false, code: 'internal' });
   });
 });

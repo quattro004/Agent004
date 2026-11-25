@@ -4,12 +4,21 @@ Decision: research Q6. Signals: [data-model.md](../data-model.md) § Spend Signa
 
 There are four layers, from cheapest and earliest to last resort:
 
+**Approved follow-up (2026-11-15):** spec.md's Session 2026-11-15 supersedes
+the read-before/add-after admission design with conservative, atomic
+pre-spend reservations, exactly-once settlement and retained uncertain
+capacity. The new monthly non-chat allowance is $5, with application
+soft-degrade/refusal at $11/$15. P2's required amendment and the reconciled
+cost model are still pending (T165); the earlier tables and pseudocode below
+must be reconciled before implementation of T167 or deployment. No change to
+the existing $10/$16 gross emails or delayed $20 hard stop is authorized here.
+
 | Layer | Reads | Fires at | Acts within | Effect |
 | --- | --- | --- | --- | --- |
-| Alerts | Budgets (gross) | P2: $5 and $8 | Budgets refresh (up to 3 times a day, D7) | Email only |
-| Soft-degrade | `SPEND#<yyyy-mm>` | `BREAKER_DEGRADE_MICRO_USD` = (8 − F) × 10⁶ | The next turn | Voice off; text only (FR-023; spec 001 FR-016) |
-| Breaker | `SPEND#<yyyy-mm>` | `BREAKER_TRIP_MICRO_USD` = (10 − F) × 10⁶ | The next turn | Chat turns refused in character |
-| Hard stop | Budgets (gross) | P2: $10 | Budgets refresh | `CONTROL#HALT`, plus a deny-all-spend policy on the runtime role |
+| Alerts | Budgets (gross) | P2: $10 and $16 | Budgets refresh (up to 3 times a day, D7) | Email only |
+| Soft-degrade | `SPEND#<yyyy-mm>` | `BREAKER_DEGRADE_MICRO_USD` = (16 − F) × 10⁶ | The next turn | Voice off; text only (FR-023; spec 001 FR-016) |
+| Breaker | `SPEND#<yyyy-mm>` | `BREAKER_TRIP_MICRO_USD` = (20 − F) × 10⁶ | The next turn | Chat turns refused in character |
+| Hard stop | Budgets (gross) | P2: $20 | Budgets refresh | `CONTROL#HALT`, plus a deny-all-spend policy on the runtime role |
 
 F is R-cost's projected fixed monthly cost. Every threshold comes from P2 or is derived from it. None is set here.
 
@@ -62,6 +71,7 @@ This is an inline `Deny` of every spend-bearing action the runtime role is allow
 - the Bedrock model-invoke actions
 - `polly:SynthesizeSpeech`
 - the `bedrock-agentcore` memory actions
+- `bedrock-agentcore:InvokeWebSearch`, which bills once the 5,000 free monthly queries run out
 
 DynamoDB, CloudWatch Logs and X-Ray stay allowed, so the container can still read HALT, refuse with `halted` and log the refusal. `bedrock:ListAsyncInvokes` also stays allowed: it bills nothing, and denying it would stop a container that restarts during a hard stop from initializing at all ([runtime-config.md](./runtime-config.md) § Execution role). Explicit deny overrides the role's allows.
 
@@ -89,11 +99,59 @@ after turn (done, error after model start, or cancelled):
 ```
 
 - **The estimate** is `TurnUsage.estimatedMicroUsd` ([data-model.md](../data-model.md)): billed model tokens, Polly characters, Memory events and retrievals, and the per-turn Runtime share, each multiplied by its `PRICE_*` rate. Memory actions add their calls the same way ([memory-api.md](./memory-api.md)).
-- **It is a floor, not a meter.** Fixed costs sit in F, and the Memory extraction cost is unverified (R-cost). Concurrent turns can each pass the check before any of them adds. The hard stop is the backstop.
+- **It is a floor, not a meter.** Fixed costs sit in F, and the Memory extraction cost is unverified (R-cost). Concurrent chat turns can no longer race past the trip threshold, because [admission](#admission-and-settlement-t166t167) reserves before the model runs. The hard stop is the backstop.
 - **The read before a turn fails closed.** If it fails, the turn ends with `internal`, and nothing is spent unmeasured.
 - **The write after a turn fails loud.** The reply has already been delivered, so the turn stands. The failure is logged and counted in the `BreakerWriteFailures` metric, which has an alarm (below).
 - **The month key is UTC**, matching the billing period, so the tally resets when the budget does.
 - **Soft-degrade is announced in character** the first time a session goes voice-off (spec 001 FR-016). Browser speech synthesis is not used (research Q1; P1 cloud-only).
+
+## Admission and settlement (T166/T167)
+
+The reservation ceiling assumes the complete model request can consume
+`MODEL_INPUT_MAX_BYTES`, including system prompt, tool specifications and
+messages. The agent cancels a call that remains above that ceiling instead of
+letting it reach Bedrock. The byte ceiling is therefore the same invariant used
+by reservation and pre-model enforcement; it is not a messages-only bound.
+
+The breaker's check-then-add race is closed by one `TransactWriteItems` at each end of a chat turn (`ControlTable.admitRequest` / `settleRequest`).
+
+```text
+admit:   reservation ← estimateReservationMicroUsd(config)   (worst-case turn at the approved per-turn bounds, priced against BREAKER_TRIP and GLOBAL_MAX_ACTIVE_REQUESTS)
+         one transaction, all conditions or none:
+           SPEND#<month>.microUsd + reservation ≤ BREAKER_TRIP_MICRO_USD   else spend_limit    → breaker_tripped
+           no LEASE#<sub> item                                             else friend_busy    → busy
+           CONTROL#ACTIVE.count < GLOBAL_MAX_ACTIVE_REQUESTS                       else capacity_busy  → busy
+         effects: put LEASE#<sub>{requestId, reserved}; CONTROL#ACTIVE.count += 1; SPEND += reservation
+settle:  one transaction: delete LEASE#<sub> (requestId and reserved must match); CONTROL#ACTIVE.count −= 1; SPEND += actual − reserved
+```
+
+- **Refusals are checked in the order above**, and none of them spends anything. A friend with a request in flight is told `busy`; there is no queue and no replay.
+- **What settles at which amount.** Refusals after admission (session cap, allowlist) settle at 0. A retrieval-only turn settles at its retrievals. A turn that started the model settles at measured usage; with **no** usable usage (model error, cancel, deadline, missing usage) it settles at the **full reservation**. Anything not known to be cheap is charged at the maximum, and spend is never refunded.
+- **Missing usage emits `UnmeteredRequests`.** Retaining the lease instead was rejected: the friend would stay `busy` forever and a capacity slot would leak.
+- **The tally includes in-flight reservations**, so the pre-turn breaker read is conservative, and a degraded turn (tally ≥ degrade) still has room because reservation + degrade < trip.
+- **Settlement never fails or replays a turn.** The work is done and paid for. A failure is logged and counted in `SettlementFailures`, and the lease and reservation stand until reconciled.
+- **The counted session is written only under the lease** (`putSession` creates an absent item or replaces an exact previous snapshot), so a concurrent instance cannot reset another counted session. A post-turn write failure keeps the reply and counts `SessionWriteFailures`.
+- **The fixed-window counter is consumed only after a turn or memory action is admitted and every pre-admission/session refusal has passed.** A breaker, busy, session-cap, allowlist or admission refusal consumes no rate window. A rate refusal settles the admitted lease at 0 µUSD.
+- **Settlement starts at the full admitted reservation.** A measured model or voice result replaces it; missing usage, cancellation or an unresolved memory/voice phase retains the full reservation rather than refunding it.
+- **Search claims are persisted before outbound execution.** `claimWebSearch` conditionally increments `SESSION#<sub>.webSearches` for the exact counted-session ID and snapshot, and rejects at the configured allowance or when the session changed. The callback survives cancellation and failure, is counted at settlement, and is not added to the session a second time in `recordTurn`.
+- **A stale counted-session write is rejected, not silently overwritten.** `putSession` includes `sessionId`, `state`, `openedAt`, `turns`, `conversationalTokens` and `webSearches` in its replacement snapshot condition.
+- **Cost.** Each admitted turn adds roughly 6 write units at admission and 6 at settlement to the existing reads (about $0.00002 a turn at on-demand rates, to be re-confirmed against the Price List before deploy).
+
+- **Ambiguous admission is reconciled before model work.** If `TransactWriteItems`
+  returns no usable response, `ControlTable.admitRequest` performs a strongly
+  consistent read of `LEASE#<sub>`. It admits only when `requestId`,
+  `reservedMicroUsd`, `month`, and the subject key all match the transaction
+  caller attempted. A different active lease is `friend_busy`; no exact lease
+  fails closed with no model call or replay. The DynamoDB transaction is never
+  retried from the SDK caller.
+
+### Reconciliation (manual)
+
+A crash mid-turn leaves LEASE#<sub> and the CONTROL#ACTIVE count with **no TTL**: expiry would silently refund a reservation, which this design forbids, and a stale-lease threshold is a hard number no spec has decided. Symptoms are a friend who is always `busy`, or `GLOBAL_MAX_ACTIVE_REQUESTS` stuck high. After confirming no request for that `sub` is running:
+
+1. `dynamodb get-item` `LEASE#<sub>` and note `reservedMicroUsd`.
+2. `dynamodb delete-item` `LEASE#<sub>`, then decrement `CONTROL#ACTIVE` by 1. The month tally keeps the reservation (conservative); lower it only with a recorded reason.
+3. Investigate the `SettlementFailures` or `UnmeteredRequests` metric that pointed here.
 
 ## Operations alarms (FR-019, FR-022)
 
@@ -104,7 +162,7 @@ All alarms notify the **operations topic** (`OpsAlarmTopic`), which has an email
 | Stack | Deploys | Owns | Props from other stacks |
 | --- | --- | --- | --- |
 | `budget-stack.ts` | First (FR-033) | Budget, the 50/80/100% notifications, the hard-stop topic and its policy | None |
-| `ops-stack.ts` (NEW) | After Data and Agent | The hard-stop Lambda and its subscription to the hard-stop topic, `OpsAlarmTopic`, and the four alarms below | Hard-stop topic (Budget); control table and pruner (Data); runtime and its role (Agent) |
+| `ops-stack.ts` (NEW) | After Data and Agent | The hard-stop Lambda and its subscription to the hard-stop topic, `OpsAlarmTopic`, and the seven alarms below | Hard-stop topic (Budget); control table and pruner (Data); runtime and its role (Agent) |
 
 CDK creates a Lambda subscription in the **function's** stack and makes that stack depend on the topic's stack (`aws-sns-subscriptions/lib/lambda.js`: `subscriberScope: this.fn` and `addStackDependency(topic.stack)`, `aws-cdk-lib` 2.272.0). The cross-stack subscription therefore needs no hand wiring.
 
@@ -115,6 +173,9 @@ Until the ops stack exists, a 100% alert reaches no hard stop. No spend-bearing 
 | Hard stop failed | `hard-stop` Lambda `Errors` | Sum ≥ 1 in a period (the CDK default period) |
 | Pruner failed | `memory-pruner` Lambda `Errors` | Sum ≥ 1 in a period |
 | Breaker write failed | Runtime custom metric `BreakerWriteFailures` | Sum ≥ 1 in a period |
+| Settlement failed | Runtime custom metric `SettlementFailures` | Sum ≥ 1 in a period; reconcile per § Admission and settlement |
+| Unmetered request | Runtime custom metric `UnmeteredRequests` | Sum ≥ 1 in a period; the turn was charged at its full reservation |
+| Session write failed | Runtime custom metric `SessionWriteFailures` | Sum ≥ 1 in a period |
 | Runtime server errors | AgentCore Runtime's 5xx or system-error metric (exact name checked at task time) | Sum ≥ 1 in a period |
 
 Missing data is treated as not breaching. Alarm pricing is human-read in R-cost.
@@ -137,5 +198,5 @@ Quickstart V-12 demonstrates this once, end to end (FR-021).
 | --- | --- |
 | `hard-stop.test.ts` | Throws when any env var is missing. Throws on `NoSuchEntity` from `PutRolePolicy`. Writes HALT before calling IAM. Treats an existing HALT as success. |
 | `budget-stack.test.ts` (CDK assertions) | `includeCredit`, `includeRefund` and `includeDiscount` are `false`. Only the 100% notification lists the hard-stop topic. The template contains no `Fn::ImportValue`, so the stack can deploy first (FR-033). |
-| `ops-stack.test.ts` (CDK assertions) | The hard-stop Lambda is subscribed to the budget stack's hard-stop topic. Its `RUNTIME_ROLE_NAME` is a cross-stack reference to the runtime execution role (`Fn::ImportValue`), never a literal (#61). All four alarms notify `OpsAlarmTopic`. |
+| `ops-stack.test.ts` (CDK assertions) | The hard-stop Lambda is subscribed to the budget stack's hard-stop topic. Its `RUNTIME_ROLE_NAME` is a cross-stack reference to the runtime execution role (`Fn::ImportValue`), never a literal (#61). All seven alarms notify `OpsAlarmTopic`. |
 | `breaker.test.ts` | Trips at exactly `BREAKER_TRIP_MICRO_USD`. Degrades at exactly `BREAKER_DEGRADE_MICRO_USD`. A missing `SPEND#` item reads as 0. A failed read refuses the turn. A cancelled turn still adds. |

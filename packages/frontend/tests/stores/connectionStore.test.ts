@@ -11,7 +11,7 @@ describe('connectionStore', () => {
     expect(state.sessionState).toBe('INITIALIZING');
     expect(state.sessionId).toBeNull();
     expect(state.agentCoreSessionId).toBeNull();
-    expect(state.isWebSocketReady).toBe(false);
+    expect(state.isStreamReady).toBe(false);
   });
 
   it('should transition through all 8 SessionState values', () => {
@@ -40,7 +40,7 @@ describe('connectionStore', () => {
     const state = useConnectionStore.getState();
     expect(state.sessionId).toBe('session-123');
     expect(state.agentCoreSessionId).toBe('agentcore-456');
-    expect(state.isWebSocketReady).toBe(true);
+    expect(state.isStreamReady).toBe(true);
   });
 
   it('should reset all state', () => {
@@ -53,6 +53,6 @@ describe('connectionStore', () => {
     expect(state.sessionState).toBe('INITIALIZING');
     expect(state.sessionId).toBeNull();
     expect(state.agentCoreSessionId).toBeNull();
-    expect(state.isWebSocketReady).toBe(false);
+    expect(state.isStreamReady).toBe(false);
   });
 });

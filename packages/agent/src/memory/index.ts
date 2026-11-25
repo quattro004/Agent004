@@ -1,27 +1,27 @@
 export {
   createMemoryAdapter,
+  MemoryRecordNotFoundError,
   type MemoryAdapter,
-  type MemoryRecord,
-  type MemorySearchResult,
-  type MemoryListItem,
-  type WipeResult,
   type MemoryAdapterConfig,
+  type MemoryKind,
+  type MemoryListItem,
+  type MemorySearchResult,
+  type WipeResult,
 } from './memoryAdapter.js';
-export {
-  extractMemories,
-  type TurnContent,
-  type ExtractedMemory,
-  type ExtractionResult,
-} from './memoryExtractor.js';
 export {
   createAgentCoreMemoryClient,
   type AgentCoreMemoryClient,
+  type AgentCoreMemoryClientOptions,
+  type BatchDeleteResult,
+  type MemoryRecordDeleteInput,
+  type MemoryRecordSummary,
 } from './agentCoreMemoryClient.js';
 export {
+  handleDeleteMemory,
   handleForgetMe,
   handleListMemories,
-  handleDeleteMemory,
+  type DeleteMemoryResult,
   type ForgetMeResult,
   type ListMemoriesResult,
-  type DeleteMemoryResult,
+  type MemoryActionErrorCode,
 } from './memoryHandlers.js';

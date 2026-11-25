@@ -30,17 +30,9 @@ vi.mock('../../src/services/greetingSelector', () => ({
   loadManifest: vi.fn((raw: string) => JSON.parse(raw)),
 }));
 
-// Mock browserTts
-const { mockBrowserIsAvailable, mockBrowserSpeak, mockBrowserStop } = vi.hoisted(() => ({
-  mockBrowserIsAvailable: vi.fn(),
-  mockBrowserSpeak: vi.fn(),
-  mockBrowserStop: vi.fn(),
-}));
-vi.mock('../../src/services/browserTts', () => ({
-  speak: (...args: unknown[]) => mockBrowserSpeak(...args),
-  isAvailable: () => mockBrowserIsAvailable(),
-  stop: mockBrowserStop,
-}));
+// The browser's own speech synthesis must never be reached: it would run a
+// voice model in the page, which P1 forbids (research Q1, P-15).
+const mockSpeechSynthesisSpeak = vi.fn();
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -56,14 +48,15 @@ describe('useGreeting', () => {
     mockSetSpeaking.mockReset();
     mockSetMouthOpen.mockReset();
     mockSetGreeting.mockReset();
-    mockBrowserIsAvailable.mockReset();
-    mockBrowserSpeak.mockReset();
-    mockBrowserStop.mockReset();
+    mockSpeechSynthesisSpeak.mockReset();
+    vi.stubGlobal('speechSynthesis', {
+      speak: mockSpeechSynthesisSpeak,
+      cancel: vi.fn(),
+      getVoices: () => [],
+    });
 
     // Stub globals each test (clearAllMocks doesn't restore stubs)
     vi.stubGlobal('fetch', mockFetch);
-    mockBrowserIsAvailable.mockReturnValue(true);
-    mockBrowserSpeak.mockResolvedValue(undefined);
 
     // Mock AudioContext for decoding (jsdom doesn't have it)
     const mockAudioBuffer = {} as AudioBuffer;
@@ -358,7 +351,7 @@ describe('useGreeting', () => {
     expect(manifestCalls).toHaveLength(1);
   });
 
-  it('should fall back to browser TTS when greeting audio fetch returns 404', async () => {
+  it('shows the greeting as text, never browser speech, when the clip 404s', async () => {
     const { createUseGreeting } = await import('../../src/hooks/useGreeting');
 
     const greetingEntry = {
@@ -393,8 +386,11 @@ describe('useGreeting', () => {
     const greeting = createUseGreeting(mockAudioChain);
     const result = await greeting.playGreeting();
 
+    // Browser speech synthesis would run a voice model in the page, which P1
+    // forbids. A missing clip degrades to text only (research Q1, P-15).
     expect(result).toMatchObject({ id: 'g-004', text: 'G-G-Good evening!' });
-    expect(mockBrowserSpeak).toHaveBeenCalledWith('G-G-Good evening!');
+    expect(mockSpeechSynthesisSpeak).not.toHaveBeenCalled();
+    expect(mockSetSpeaking).not.toHaveBeenCalledWith(true);
   });
 
   it('should reuse a preloaded audio buffer without refetching or decoding again', async () => {
@@ -440,66 +436,6 @@ describe('useGreeting', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('should return a completion promise for browser TTS fallback', async () => {
-    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
-
-    const greetingEntry = {
-      id: 'g-014',
-      archetype: 'TV_PRESENTER_INTRO' as const,
-      text: 'Text should stay up until I finish.',
-      audioPath: 'audio/g-014.mp3',
-      audioDurationMs: 3000,
-      videoPath: 'video/g-014.mp4',
-      weight: 1.0,
-      tags: [],
-    };
-
-    const manifestData = {
-      version: '1.0.0',
-      voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
-      greetings: [greetingEntry],
-    };
-
-    let resolveSpeech!: () => void;
-    const speechCompletion = new Promise<void>((resolve) => {
-      resolveSpeech = resolve;
-    });
-
-    mockFetch
-      .mockResolvedValueOnce({
-        ok: true,
-        text: () => Promise.resolve(JSON.stringify(manifestData)),
-      })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
-
-    mockSelectGreeting.mockReturnValue(greetingEntry);
-    mockBrowserSpeak.mockReturnValueOnce(speechCompletion);
-
-    const greeting = createUseGreeting(mockAudioChain);
-    const result = await greeting.playGreeting();
-
-    expect(result).toMatchObject({
-      id: 'g-014',
-      text: 'Text should stay up until I finish.',
-    });
-    expect(result?.completion).toBeDefined();
-
-    let didComplete = false;
-    void result?.completion?.then(() => {
-      didComplete = true;
-    });
-
-    await Promise.resolve();
-    expect(didComplete).toBe(false);
-
-    resolveSpeech();
-    await result?.completion;
-    expect(didComplete).toBe(true);
   });
 
   it('should preload a text-only fallback when greeting audio fetch fails', async () => {
@@ -588,16 +524,6 @@ describe('useGreeting', () => {
     expect(mockAudioChain.play).toHaveBeenCalled();
   });
 
-  it('stopGreeting should cancel browser TTS fallback', async () => {
-    const { createUseGreeting } = await import('../../src/hooks/useGreeting');
-
-    const greeting = createUseGreeting(mockAudioChain);
-    greeting.stopGreeting();
-
-    expect(mockBrowserStop).toHaveBeenCalled();
-    expect(mockAudioChain.stop).toHaveBeenCalled();
-  });
-
   describe('isGreeting state tracking', () => {
     it('should set isGreeting=true when MP3 greeting starts playing', async () => {
       const { createUseGreeting } = await import('../../src/hooks/useGreeting');
@@ -635,47 +561,6 @@ describe('useGreeting', () => {
       await greeting.playGreeting();
 
       // setGreeting(true) should be called when playing MP3
-      expect(mockSetGreeting).toHaveBeenCalledWith(true);
-    });
-
-    it('should set isGreeting=true when TTS fallback greeting starts playing', async () => {
-      const { createUseGreeting } = await import('../../src/hooks/useGreeting');
-
-      const greetingEntry = {
-        id: 'g-tts-001',
-        archetype: 'TV_PRESENTER_INTRO' as const,
-        text: 'Hello from TTS!',
-        audioPath: 'audio/g-tts-001.mp3',
-        audioDurationMs: 2000,
-        videoPath: 'video/g-tts-001.mp4',
-        weight: 1.0,
-        tags: [],
-      };
-
-      const manifestData = {
-        version: '1.0.0',
-        voiceConfig: { voiceId: 'Matthew', engine: 'neural', ssmlPitch: '+10%', ssmlRate: '105%' },
-        greetings: [greetingEntry],
-      };
-
-      // Mock audio fetch to fail, so it falls back to TTS
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          text: () => Promise.resolve(JSON.stringify(manifestData)),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-        });
-
-      mockSelectGreeting.mockReturnValue(greetingEntry);
-      mockBrowserSpeak.mockResolvedValue(undefined);
-
-      const greeting = createUseGreeting(mockAudioChain);
-      await greeting.playGreeting();
-
-      // setGreeting(true) should be called when playing TTS
       expect(mockSetGreeting).toHaveBeenCalledWith(true);
     });
 

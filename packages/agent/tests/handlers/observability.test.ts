@@ -1,154 +1,126 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  startSpan,
-  endSpan,
-  getActiveSpans,
-  setSpanEmitter,
-  TRACE_SPANS,
-  type TraceSpan,
-} from '../../src/handlers/observability.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { endSpan, startSpan, withRequestTrace } from '../../src/handlers/observability.js';
+import { captureSpans, parentSpanIdOf, type SpanCapture } from '../fixtures/spans.js';
 
-describe('Observability', () => {
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+describe('request spans', () => {
+  let capture: SpanCapture;
+
   beforeEach(() => {
-    // Clear any active spans between tests
-    for (const span of getActiveSpans()) {
-      endSpan(span.name);
+    capture = captureSpans();
+  });
+
+  afterEach(async () => {
+    await capture.stop();
+  });
+
+  it('exports a span with its name, attributes and a non-negative duration', async () => {
+    await withRequestTrace(async () => {
+      startSpan('invocation');
+      startSpan('memory.retrieve');
+      endSpan('memory.retrieve', { count: 3, failed: false });
+      endSpan('invocation', { outcome: 'done', cancelled: false });
+    });
+
+    const retrieve = capture.one('memory.retrieve');
+    expect(retrieve.attributes).toMatchObject({ count: 3, failed: false });
+    const [seconds, nanos] = retrieve.duration;
+    expect(seconds * 1e9 + nanos).toBeGreaterThanOrEqual(0);
+    expect(capture.one('invocation').attributes).toMatchObject({
+      outcome: 'done',
+      cancelled: false,
+    });
+  });
+
+  it('parents every span of a request to that request’s invocation span', async () => {
+    await withRequestTrace(async () => {
+      startSpan('invocation');
+      startSpan('breaker.check');
+      endSpan('breaker.check', { tripped: false });
+      startSpan('first_token');
+      startSpan('reply.complete');
+      endSpan('first_token');
+      endSpan('reply.complete');
+      endSpan('invocation');
+    });
+
+    const root = capture.one('invocation');
+    expect(parentSpanIdOf(root)).toBeUndefined();
+    for (const name of ['breaker.check', 'first_token', 'reply.complete']) {
+      const child = capture.one(name);
+      expect(parentSpanIdOf(child)).toBe(root.spanContext().spanId);
+      expect(child.spanContext().traceId).toBe(root.spanContext().traceId);
     }
-    // Reset emitter to a no-op so other tests don't see stdout noise
-    setSpanEmitter(() => {});
   });
 
-  describe('TRACE_SPANS constants', () => {
-    it('should define reply.first_token span name', () => {
-      expect(TRACE_SPANS.REPLY_FIRST_TOKEN).toBe('reply.first_token');
-    });
+  it('keeps concurrent requests in separate traces, each ending its own spans', async () => {
+    const request = (label: string) =>
+      withRequestTrace(async () => {
+        startSpan('invocation', { label });
+        startSpan('first_token');
+        await tick();
+        endSpan('first_token', { label });
+        await tick();
+        endSpan('invocation', { label });
+      });
 
-    it('should define voice.audio_start span name', () => {
-      expect(TRACE_SPANS.VOICE_AUDIO_START).toBe('voice.audio_start');
-    });
+    await Promise.all([request('a'), request('b')]);
 
-    it('should define greeting.delivery span name', () => {
-      expect(TRACE_SPANS.GREETING_DELIVERY).toBe('greeting.delivery');
-    });
-
-    it('should define session.cold_start span name', () => {
-      expect(TRACE_SPANS.SESSION_COLD_START).toBe('session.cold_start');
-    });
-
-    it('should define crt.frame_rate span name', () => {
-      expect(TRACE_SPANS.CRT_FRAME_RATE).toBe('crt.frame_rate');
-    });
+    const finished = capture.finished();
+    expect(finished).toHaveLength(4);
+    const roots = finished.filter((span) => span.name === 'invocation');
+    expect(new Set(roots.map((span) => span.spanContext().traceId)).size).toBe(2);
+    for (const root of roots) {
+      const first = finished.find(
+        (span) =>
+          span.name === 'first_token' && span.spanContext().traceId === root.spanContext().traceId,
+      );
+      expect(first).toBeDefined();
+      expect(parentSpanIdOf(first!)).toBe(root.spanContext().spanId);
+      expect(first!.attributes.label).toBe(root.attributes.label);
+    }
   });
 
-  describe('startSpan', () => {
-    it('should create a span with the given name', () => {
-      const span = startSpan('reply.first_token');
-
-      expect(span.name).toBe('reply.first_token');
-      expect(span.startTime).toBeGreaterThan(0);
-      expect(span.endTime).toBeNull();
+  it('ignores ending a span that never started', async () => {
+    await withRequestTrace(async () => {
+      startSpan('invocation');
+      endSpan('audio.first_chunk');
+      endSpan('invocation');
     });
 
-    it('should accept optional attributes', () => {
-      const span = startSpan('session.cold_start', {
-        actorId: 'test-actor',
-        sessionId: 'test-session',
-      });
-
-      expect(span.attributes).toEqual({
-        actorId: 'test-actor',
-        sessionId: 'test-session',
-      });
-    });
-
-    it('should add span to active spans list', () => {
-      startSpan('greeting.delivery');
-
-      const active = getActiveSpans();
-      expect(active.some((s) => s.name === 'greeting.delivery')).toBe(true);
-    });
+    expect(capture.finished().map((span) => span.name)).toEqual(['invocation']);
   });
 
-  describe('endSpan', () => {
-    it('should set endTime on the span', () => {
-      startSpan('reply.first_token');
-      const result = endSpan('reply.first_token');
+  it('ends a span left open when the request settles, even when it throws', async () => {
+    await expect(
+      withRequestTrace(async () => {
+        startSpan('invocation');
+        startSpan('session.open');
+        throw new Error('refused');
+      }),
+    ).rejects.toThrow('refused');
 
-      expect(result).not.toBeNull();
-      expect(result!.endTime).toBeGreaterThan(0);
-    });
-
-    it('should calculate duration in milliseconds', () => {
-      startSpan('voice.audio_start');
-      // Small delay to ensure non-zero duration
-      const result = endSpan('voice.audio_start');
-
-      expect(result).not.toBeNull();
-      expect(result!.durationMs).toBeGreaterThanOrEqual(0);
-    });
-
-    it('should remove span from active spans list', () => {
-      startSpan('greeting.delivery');
-      endSpan('greeting.delivery');
-
-      const active = getActiveSpans();
-      expect(active.some((s) => s.name === 'greeting.delivery')).toBe(false);
-    });
-
-    it('should return null if span name not found', () => {
-      const result = endSpan('nonexistent.span');
-      expect(result).toBeNull();
-    });
-
-    it('should allow adding attributes on end', () => {
-      startSpan('reply.first_token');
-      const result = endSpan('reply.first_token', { latencyMs: 1200 });
-
-      expect(result!.attributes).toHaveProperty('latencyMs', 1200);
-    });
-
-    it('should emit the completed span to the configured sink', () => {
-      const emitted: TraceSpan[] = [];
-      setSpanEmitter((span) => emitted.push(span));
-
-      startSpan('reply.first_token', { sessionId: 's1' });
-      endSpan('reply.first_token', { tokenCount: 250 });
-
-      expect(emitted).toHaveLength(1);
-      expect(emitted[0]).toMatchObject({
-        name: 'reply.first_token',
-        attributes: { sessionId: 's1', tokenCount: 250 },
-      });
-      expect(emitted[0].durationMs).toBeGreaterThanOrEqual(0);
-      expect(emitted[0].endTime).not.toBeNull();
-    });
-
-    it('should not throw if the emit sink throws', () => {
-      setSpanEmitter(() => {
-        throw new Error('boom');
-      });
-      startSpan('reply.first_token');
-      expect(() => endSpan('reply.first_token')).not.toThrow();
-    });
-
-    it('should not emit when ending an unknown span', () => {
-      const emit = vi.fn();
-      setSpanEmitter(emit);
-      endSpan('nonexistent.span');
-      expect(emit).not.toHaveBeenCalled();
-    });
+    expect(capture.one('session.open').attributes).toMatchObject({ abandoned: true });
+    expect(capture.one('invocation').attributes).toMatchObject({ abandoned: true });
   });
 
-  describe('getActiveSpans', () => {
-    it('should return empty array when no spans active', () => {
-      expect(getActiveSpans()).toHaveLength(0);
-    });
+  it('still exports a span started outside any request, as its own trace root', () => {
+    startSpan('breaker.check');
+    endSpan('breaker.check', { tripped: false });
 
-    it('should return all currently active spans', () => {
-      startSpan('reply.first_token');
-      startSpan('session.cold_start');
+    const span = capture.one('breaker.check');
+    expect(parentSpanIdOf(span)).toBeUndefined();
+  });
 
-      expect(getActiveSpans()).toHaveLength(2);
-    });
+  it('is a no-op, not a failure, when no tracer provider is installed', async () => {
+    await capture.stop();
+
+    await expect(
+      withRequestTrace(async () => {
+        startSpan('invocation');
+        endSpan('invocation', { outcome: 'done' });
+      }),
+    ).resolves.toBeUndefined();
   });
 });

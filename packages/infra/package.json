@@ -11,16 +11,22 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-apigatewaymanagementapi": "^3.1172.0",
-    "aws-cdk-lib": "^2.277.0",
+    "@aws-sdk/client-bedrock-agentcore": "3.1175.0",
+    "aws-cdk-lib": "2.278.0",
     "constructs": "^10.8.1"
   },
   "devDependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "3.1175.0",
+    "@aws-sdk/client-dynamodb": "3.1175.0",
+    "@aws-sdk/client-iam": "3.1175.0",
+    "@aws-sdk/client-ssm": "3.1175.0",
+    "@jest/globals": "^30.5.2",
     "@types/aws-lambda": "^8.10.164",
     "@types/jest": "^30.0.0",
-    "@types/node": "^26.6.6",
-    "aws-cdk": "^2.1149.0",
+    "@types/node": "24.19.2",
+    "aws-cdk": "2.1149.0",
     "cross-env": "10.1.0",
+    "esbuild": "^0.28.2",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.15",
     "ts-node": "^10.9.2",

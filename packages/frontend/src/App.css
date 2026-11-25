@@ -627,6 +627,18 @@
   display: none;
 }
 
+.broadcast-sources {
+  margin: 0.4em 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8em;
+}
+
+.broadcast-sources a {
+  color: #66ffff;
+  text-decoration: underline;
+}
+
 /* ===== Session State Overlay (non-SIGNAL_LOST) ===== */
 
 .session-state-overlay {

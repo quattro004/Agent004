@@ -1,40 +1,45 @@
 /**
- * useAudio — bridges Polly TTS → AudioWorklet chain → voiceStore mouth animation.
- * Falls back to browser SpeechSynthesis when Polly is unavailable.
- * Respects budget degradation mode: skips Polly when in browser_tts mode.
- * Subscribes to conversationStore for streaming→complete transitions,
- * calls synthesizeTurn(), decodes audio, plays through audioChain,
- * polls mouth state at ~20Hz.
+ * useAudio — plays the voice the runtime synthesized.
+ *
+ * Voice is Polly, server-side, streamed to the browser as SSE `audio`
+ * events (contracts/transport-sse.md; research Q1). Each event is one
+ * independently decodable MP3 segment, so this drains the voice store's
+ * queue in order, decodes each segment and plays it through the DSP chain.
+ *
+ * There is no browser speech-synthesis fallback. Browser TTS was rejected
+ * because it breaches P1, and the soft-degrade is text-only: when the
+ * server sends no audio, Max is simply silent.
  */
 
 import type { AudioChain } from '../audio/audioChain';
-import { useConversationStore } from '../stores/conversationStore';
-import { useVoiceStore } from '../stores/voiceStore';
-import { synthesizeTurn } from '../services/pollyTts';
-import { speak as browserSpeak, isAvailable as browserTtsAvailable } from '../services/browserTts';
-import type { createBudgetDegradation } from '../services/budgetDegradation';
-
-type BudgetDegradationInstance = ReturnType<typeof createBudgetDegradation>;
+import { useVoiceStore, type AudioClip } from '../stores/voiceStore';
 
 const MOUTH_POLL_INTERVAL_MS = 50; // ~20Hz
 
 export interface UseAudioHandle {
+  cancel: () => void;
   dispose: () => void;
 }
 
-export function createUseAudio(
-  audioChain: AudioChain,
-  budget?: BudgetDegradationInstance,
-): UseAudioHandle {
-  let lastProcessedTurnIndex = -1;
+function decodeBase64(data: string): ArrayBuffer {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+export function createUseAudio(audioChain: AudioChain): UseAudioHandle {
   let mouthPollTimer: ReturnType<typeof setInterval> | null = null;
-  let wasStreaming = false;
+  let draining = false;
+  let disposed = false;
+  let cancelGeneration = 0;
+  let lastPlayedTurn = -1;
+  let lastPlayedSeq = -1;
 
   function startMouthPolling() {
-    stopMouthPolling();
+    if (mouthPollTimer !== null) return;
     mouthPollTimer = setInterval(() => {
-      const isOpen = audioChain.getIsMouthOpen();
-      useVoiceStore.getState().setMouthOpen(isOpen);
+      useVoiceStore.getState().setMouthOpen(audioChain.getIsMouthOpen());
     }, MOUTH_POLL_INTERVAL_MS);
   }
 
@@ -46,83 +51,89 @@ export function createUseAudio(
     useVoiceStore.getState().setMouthOpen(false);
   }
 
-  async function handleBrowserTts(text: string) {
-    let spokenText = text;
-    if (budget && budget.isFirstFallback()) {
-      spokenText = `${budget.getFirstFallbackMessage()} ${text}`;
-    }
-    await browserSpeak(spokenText);
+  function wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async function handleTurnComplete(text: string) {
-    const voiceState = useVoiceStore.getState();
-    voiceState.setSpeaking(true);
-
-    // Budget degradation: skip Polly entirely, use browser TTS
-    if (budget && budget.getMode() === 'browser_tts') {
-      try {
-        await handleBrowserTts(text);
-      } catch {
-        // Browser TTS failed — silent fallback
-      }
-      voiceState.setSpeaking(false);
-      return;
+  async function play(clip: AudioClip, generation: number): Promise<boolean> {
+    const context = new AudioContext();
+    try {
+      const buffer = await context.decodeAudioData(decodeBase64(clip.data));
+      if (disposed || generation !== cancelGeneration) return false;
+      const durationMs = audioChain.play(buffer);
+      if (disposed || generation !== cancelGeneration) return false;
+      startMouthPolling();
+      await wait(durationMs);
+      return !disposed && generation === cancelGeneration;
+    } finally {
+      await context.close();
     }
+  }
+
+  async function drain(): Promise<void> {
+    if (draining) return;
+    draining = true;
+    const voice = () => useVoiceStore.getState();
+    voice().setSpeaking(true);
+    const generation = cancelGeneration;
 
     try {
-      const result = await synthesizeTurn(text);
-
-      if (result.textOnly || !result.audioData) {
-        // Polly returned text-only — try browser TTS as fallback
-        if (browserTtsAvailable()) {
-          await browserSpeak(text);
+      for (;;) {
+        if (disposed || generation !== cancelGeneration) return;
+        const clip = voice().shiftAudio();
+        if (!clip) return;
+        if (clip.turn !== lastPlayedTurn) {
+          lastPlayedTurn = clip.turn;
+          lastPlayedSeq = -1;
         }
-        voiceState.setSpeaking(false);
-        return;
-      }
+        if (clip.seq <= lastPlayedSeq) continue;
+        lastPlayedSeq = clip.seq;
 
-      // Decode audio data into an AudioBuffer
-      const audioCtx = new AudioContext();
-      const audioBuffer = await audioCtx.decodeAudioData(
-        result.audioData.buffer instanceof SharedArrayBuffer
-          ? result.audioData.slice().buffer
-          : result.audioData.buffer,
-      );
-      await audioCtx.close();
-
-      audioChain.play(audioBuffer);
-      startMouthPolling();
-    } catch {
-      // Polly failed — fall back to browser TTS
-      if (browserTtsAvailable()) {
         try {
-          await browserSpeak(text);
-        } catch {
-          // Browser TTS also failed — silent fallback
+          const played = await play(clip, generation);
+          if (!played) return;
+        } catch (error) {
+          // A segment that will not decode is lost, but the rest of the
+          // turn still plays. There is no fallback voice to reach for.
+          console.warn('[useAudio] Dropping an undecodable audio segment', error);
         }
       }
-      voiceState.setSpeaking(false);
-      stopMouthPolling();
+    } finally {
+      if (generation === cancelGeneration) draining = false;
+      if (!disposed && generation === cancelGeneration) {
+        voice().setSpeaking(false);
+        stopMouthPolling();
+      }
     }
   }
 
-  const unsubscribe = useConversationStore.subscribe(() => {
-    const { isStreaming, currentResponseText, currentTurnIndex } = useConversationStore.getState();
-
-    // Detect streaming→complete transition
-    if (wasStreaming && !isStreaming && currentResponseText.length > 0) {
-      if (currentTurnIndex !== lastProcessedTurnIndex) {
-        lastProcessedTurnIndex = currentTurnIndex;
-        void handleTurnComplete(currentResponseText);
-      }
+  const unsubscribe = useVoiceStore.subscribe((state) => {
+    if (state.audioQueue.length > 0 && !draining && !disposed) {
+      void drain();
     }
-    wasStreaming = isStreaming;
   });
 
   return {
-    dispose() {
-      unsubscribe();
+    cancel() {
+      if (disposed) return;
+      cancelGeneration += 1;
+      audioChain.stop();
       stopMouthPolling();
+      const voice = useVoiceStore.getState();
+      voice.clearAudio();
+      voice.setSpeaking(false);
+      draining = false;
+    },
+    dispose() {
+      disposed = true;
+      cancelGeneration += 1;
+      draining = false;
+      unsubscribe();
+      audioChain.stop();
+      stopMouthPolling();
+      const voice = useVoiceStore.getState();
+      voice.clearAudio();
+      voice.setSpeaking(false);
     },
   };
 }

@@ -28,6 +28,22 @@ describe('SessionStateOverlay', () => {
     expect(screen.getByTestId('session-state-overlay')).toHaveTextContent('Something went wrong');
   });
 
+  describe('DENIED – the invite-only refusal (FR-043)', () => {
+    it('renders the denial copy', () => {
+      render(<SessionStateOverlay state="DENIED" />);
+      expect(screen.getByTestId('session-state-overlay')).toHaveTextContent(
+        "This channel's invite-only, friend.",
+      );
+    });
+
+    it('reveals neither whether an email is listed nor who is', () => {
+      render(<SessionStateOverlay state="DENIED" />);
+      const text = screen.getByTestId('session-state-overlay').textContent ?? '';
+      expect(text).not.toMatch(/@/);
+      expect(text).not.toMatch(/allowlist|allow list|not on the list|removed/i);
+    });
+  });
+
   describe('SIGNAL_LOST – retro TV off-air experience', () => {
     it('renders animated static noise SVG with feTurbulence', () => {
       const { container } = render(<SessionStateOverlay state="SIGNAL_LOST" />);

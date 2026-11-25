@@ -1,230 +1,176 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  MemoryAdapter,
-  createMemoryAdapter,
-  type MemoryRecord,
-  type MemorySearchResult,
-} from '../../src/memory/memoryAdapter.js';
+import { createMemoryAdapter } from '../../src/memory/memoryAdapter.js';
+import type {
+  AgentCoreMemoryClient,
+  MemoryRecordSummary,
+} from '../../src/memory/agentCoreMemoryClient.js';
 
-// Mock AgentCore Memory client
-const mockCreateEvent = vi.fn();
-const mockListRecords = vi.fn();
-const mockRetrieveRecords = vi.fn();
-const mockBatchDeleteRecords = vi.fn();
-const mockBatchCreateRecords = vi.fn();
+const MEMORY_ID = 'test-memory-resource';
+const SUB = 'friend-1';
+const NAMESPACE = `/max-height/${SUB}/`;
+const NOW = new Date('2026-11-16T12:00:00.000Z');
 
-vi.mock('../../src/memory/agentCoreMemoryClient.js', () => ({
-  createAgentCoreMemoryClient: () => ({
-    createEvent: mockCreateEvent,
-    listRecords: mockListRecords,
-    retrieveRecords: mockRetrieveRecords,
-    batchDeleteRecords: mockBatchDeleteRecords,
-    batchCreateRecords: mockBatchCreateRecords,
-  }),
-}));
+function record(
+  memoryRecordId: string,
+  overrides: Partial<MemoryRecordSummary> = {},
+): MemoryRecordSummary {
+  return {
+    memoryRecordId,
+    content: { text: `${memoryRecordId} text` },
+    namespaces: [`${NAMESPACE}facts/`],
+    createdAt: NOW,
+    ...overrides,
+  };
+}
+
+function createClient(): AgentCoreMemoryClient {
+  return {
+    createEvent: vi.fn().mockResolvedValue(undefined),
+    listRecords: vi.fn().mockResolvedValue([]),
+    retrieveRecords: vi.fn().mockResolvedValue([]),
+    getRecord: vi.fn().mockResolvedValue(undefined),
+    deleteRecord: vi.fn().mockResolvedValue(undefined),
+    batchDeleteRecords: vi.fn().mockResolvedValue({ successfulRecords: [], failedRecords: [] }),
+    listSessions: vi.fn().mockResolvedValue([]),
+    listEvents: vi.fn().mockResolvedValue([]),
+    deleteEvent: vi.fn().mockResolvedValue(undefined),
+  };
+}
 
 describe('MemoryAdapter', () => {
-  let adapter: MemoryAdapter;
-  const actorId = 'test-actor-123';
-  const memoryId = 'test-memory-resource-id';
+  let client: AgentCoreMemoryClient;
+  let adapter: ReturnType<typeof createMemoryAdapter>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    adapter = createMemoryAdapter({ memoryId });
+    client = createClient();
+    adapter = createMemoryAdapter({ memoryId: MEMORY_ID, client });
   });
 
-  describe('namespace creation', () => {
-    it('creates namespace as /max-height/{actorId}/', () => {
-      const namespace = adapter.getNamespace(actorId);
-      expect(namespace).toBe(`/max-height/${actorId}/`);
-    });
+  it('uses the verified subject namespace for hierarchical retrieval and maps memory kinds', async () => {
+    vi.mocked(client.retrieveRecords).mockResolvedValue([
+      record('fact-1'),
+      record('pref-1', { namespaces: [`${NAMESPACE}preferences/`] }),
+      record('summary-1', { namespaces: [`${NAMESPACE}summaries/session-1/`] }),
+    ]);
 
-    it('handles actorId with special characters', () => {
-      const ns = adapter.getNamespace('abc-def-123');
-      expect(ns).toBe('/max-height/abc-def-123/');
+    const memories = await adapter.retrieveMemories(SUB, 'the show', 10);
+
+    expect(client.retrieveRecords).toHaveBeenCalledWith({
+      memoryId: MEMORY_ID,
+      namespace: NAMESPACE,
+      searchQuery: 'the show',
+      topK: 10,
     });
+    expect(memories.map(({ type }) => type)).toEqual(['FACT', 'PREFERENCE', 'SUMMARY']);
   });
 
-  describe('retrieve', () => {
-    it('retrieves memories within 30-day window via semantic search', async () => {
-      const mockMemories: MemorySearchResult[] = [
-        {
-          memoryRecordId: 'mem-001',
-          content: 'Visitor likes sci-fi movies',
-          score: 0.95,
-          namespace: `/max-height/${actorId}/`,
-        },
-        {
-          memoryRecordId: 'mem-002',
-          content: 'Discussed the 80s at length',
-          score: 0.85,
-          namespace: `/max-height/${actorId}/`,
-        },
-      ];
-      mockRetrieveRecords.mockResolvedValue(mockMemories);
+  it('propagates retrieval failures so the runtime can report the failed span', async () => {
+    vi.mocked(client.retrieveRecords).mockRejectedValue(new Error('AgentCore unavailable'));
 
-      const result = await adapter.retrieveMemories(actorId, 'conversation context');
-
-      expect(mockRetrieveRecords).toHaveBeenCalledWith({
-        memoryId,
-        namespace: `/max-height/${actorId}/`,
-        searchQuery: 'conversation context',
-        topK: 10,
-      });
-      expect(result).toHaveLength(2);
-      expect(result[0].content).toBe('Visitor likes sci-fi movies');
-    });
-
-    it('returns empty array when no memories found', async () => {
-      mockRetrieveRecords.mockResolvedValue([]);
-
-      const result = await adapter.retrieveMemories(actorId, 'anything');
-      expect(result).toEqual([]);
-    });
-
-    it('handles retrieval errors gracefully', async () => {
-      mockRetrieveRecords.mockRejectedValue(new Error('Service unavailable'));
-
-      const result = await adapter.retrieveMemories(actorId, 'test');
-      expect(result).toEqual([]);
-    });
+    await expect(adapter.retrieveMemories(SUB, 'query', 10)).rejects.toThrow(
+      'AgentCore unavailable',
+    );
   });
 
-  describe('store', () => {
-    it('stores a memory record with correct namespace and metadata', async () => {
-      const record: MemoryRecord = {
-        content: 'Visitor enjoys Depeche Mode',
-        type: 'PREFERENCE',
-        sourceSessionId: 'session-abc',
-      };
+  it('lists owned records in the friend-facing response shape', async () => {
+    vi.mocked(client.listRecords).mockResolvedValue([
+      record('fact-1'),
+      record('pref-1', { namespaces: [`${NAMESPACE}preferences/`] }),
+    ]);
 
-      mockBatchCreateRecords.mockResolvedValue({ successful: 1, failed: 0 });
+    const records = await adapter.listMemories(SUB);
 
-      await adapter.storeMemory(actorId, record);
+    expect(client.listRecords).toHaveBeenCalledWith({ memoryId: MEMORY_ID, namespace: NAMESPACE });
+    expect(records).toEqual([
+      { id: 'fact-1', text: 'fact-1 text', kind: 'fact', createdAt: NOW.toISOString() },
+      { id: 'pref-1', text: 'pref-1 text', kind: 'preference', createdAt: NOW.toISOString() },
+    ]);
+  });
 
-      expect(mockBatchCreateRecords).toHaveBeenCalledWith({
-        memoryId,
-        records: [
-          expect.objectContaining({
-            content: { text: 'Visitor enjoys Depeche Mode' },
-            namespaces: [`/max-height/${actorId}/`],
-          }),
-        ],
-      });
+  it('does not expose a record whose namespaces include another subject', async () => {
+    vi.mocked(client.listRecords).mockResolvedValue([
+      record('shared', { namespaces: [`${NAMESPACE}facts/`, '/max-height/friend-2/facts/'] }),
+    ]);
+
+    await expect(adapter.listMemories(SUB)).rejects.toThrow('outside the caller namespace');
+  });
+
+  it('checks ownership before deleting a record and hides foreign IDs as not found', async () => {
+    vi.mocked(client.getRecord).mockResolvedValue(
+      record('foreign', { namespaces: ['/max-height/friend-2/facts/'] }),
+    );
+
+    await expect(adapter.deleteMemory(SUB, 'foreign')).rejects.toMatchObject({
+      name: 'MemoryRecordNotFoundError',
     });
+    expect(client.deleteRecord).not.toHaveBeenCalled();
+  });
 
-    it('stores multiple memories in batch', async () => {
-      const records: MemoryRecord[] = [
-        { content: 'Likes sci-fi', type: 'PREFERENCE', sourceSessionId: 'session-1' },
-        { content: 'Works as engineer', type: 'FACT', sourceSessionId: 'session-1' },
-      ];
+  it('deletes an owned record only after resolving its namespace', async () => {
+    vi.mocked(client.getRecord).mockResolvedValue(record('owned'));
 
-      mockBatchCreateRecords.mockResolvedValue({ successful: 2, failed: 0 });
+    await adapter.deleteMemory(SUB, 'owned');
 
-      await adapter.storeMemories(actorId, records);
-
-      expect(mockBatchCreateRecords).toHaveBeenCalledWith({
-        memoryId,
-        records: expect.arrayContaining([
-          expect.objectContaining({
-            content: { text: 'Likes sci-fi' },
-          }),
-          expect.objectContaining({
-            content: { text: 'Works as engineer' },
-          }),
-        ]),
-      });
+    expect(client.getRecord).toHaveBeenCalledWith({
+      memoryId: MEMORY_ID,
+      memoryRecordId: 'owned',
+    });
+    expect(client.deleteRecord).toHaveBeenCalledWith({
+      memoryId: MEMORY_ID,
+      memoryRecordId: 'owned',
+      namespace: `${NAMESPACE}facts/`,
     });
   });
 
-  describe('wipe', () => {
-    it('clears all memory entries for an actorId namespace', async () => {
-      const existingRecords = [
-        { memoryRecordId: 'mem-001' },
-        { memoryRecordId: 'mem-002' },
-        { memoryRecordId: 'mem-003' },
-      ];
-      mockListRecords.mockResolvedValue(existingRecords);
-      mockBatchDeleteRecords.mockResolvedValue({ successful: 3, failed: 0 });
-
-      const result = await adapter.wipeMemories(actorId);
-
-      expect(mockListRecords).toHaveBeenCalledWith({
-        memoryId,
-        namespace: `/max-height/${actorId}/`,
-      });
-      expect(mockBatchDeleteRecords).toHaveBeenCalledWith({
-        memoryId,
-        records: [
-          { memoryRecordId: 'mem-001' },
-          { memoryRecordId: 'mem-002' },
-          { memoryRecordId: 'mem-003' },
-        ],
-      });
-      expect(result.deletedCount).toBe(3);
+  it('forgets every owned record and every event in every session', async () => {
+    vi.mocked(client.listRecords).mockResolvedValue([record('fact-1')]);
+    vi.mocked(client.batchDeleteRecords).mockResolvedValue({
+      successfulRecords: [{ memoryRecordId: 'fact-1' }],
+      failedRecords: [],
     });
+    vi.mocked(client.listSessions).mockResolvedValue([
+      { sessionId: 'session-1' },
+      { sessionId: 'session-2' },
+    ]);
+    vi.mocked(client.listEvents)
+      .mockResolvedValueOnce([{ eventId: 'event-1' }])
+      .mockResolvedValueOnce([{ eventId: 'event-2' }, { eventId: 'event-3' }]);
 
-    it('handles empty namespace (no memories to wipe)', async () => {
-      mockListRecords.mockResolvedValue([]);
+    const result = await adapter.wipeMemories(SUB);
 
-      const result = await adapter.wipeMemories(actorId);
-      expect(result.deletedCount).toBe(0);
-      expect(mockBatchDeleteRecords).not.toHaveBeenCalled();
+    expect(client.listRecords).toHaveBeenCalledWith({ memoryId: MEMORY_ID, namespace: NAMESPACE });
+    expect(client.batchDeleteRecords).toHaveBeenCalledWith({
+      memoryId: MEMORY_ID,
+      records: [{ memoryRecordId: 'fact-1', namespace: `${NAMESPACE}facts/` }],
     });
+    expect(client.listSessions).toHaveBeenCalledWith({ memoryId: MEMORY_ID, actorId: SUB });
+    expect(client.deleteEvent).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({ recordsDeleted: 1, eventsDeleted: 3 });
   });
 
-  describe('delete single memory', () => {
-    it('deletes a single memory by ID', async () => {
-      mockBatchDeleteRecords.mockResolvedValue({ successful: 1, failed: 0 });
-
-      await adapter.deleteMemory('mem-001');
-
-      expect(mockBatchDeleteRecords).toHaveBeenCalledWith({
-        memoryId,
-        records: [{ memoryRecordId: 'mem-001' }],
-      });
+  it('fails the forget operation when a batch deletion is partial', async () => {
+    vi.mocked(client.listRecords).mockResolvedValue([record('fact-1'), record('fact-2')]);
+    vi.mocked(client.batchDeleteRecords).mockResolvedValue({
+      successfulRecords: [{ memoryRecordId: 'fact-1' }],
+      failedRecords: [{ memoryRecordId: 'fact-2', errorMessage: 'denied' }],
     });
+
+    await expect(adapter.wipeMemories(SUB)).rejects.toThrow('left 1 record');
+    expect(client.listSessions).not.toHaveBeenCalled();
   });
 
-  describe('list memories', () => {
-    it('lists all memories for an actorId', async () => {
-      const records = [
-        {
-          memoryRecordId: 'mem-001',
-          content: { text: 'Likes sci-fi' },
-          namespaces: [`/max-height/${actorId}/`],
-        },
-        {
-          memoryRecordId: 'mem-002',
-          content: { text: 'Works as engineer' },
-          namespaces: [`/max-height/${actorId}/`],
-        },
-      ];
-      mockListRecords.mockResolvedValue(records);
+  it('writes one event containing both sides of the delivered turn', async () => {
+    await adapter.createEvent(SUB, 'counted-session', 'hello Max', 'Hello, friend.', NOW);
 
-      const result = await adapter.listMemories(actorId);
-
-      expect(result).toHaveLength(2);
-      expect(result[0].memoryRecordId).toBe('mem-001');
-    });
-  });
-
-  describe('30-day expiry calculation', () => {
-    it('calculates expiry as 30 days from lastSeenAt', () => {
-      const lastSeenAt = new Date('2026-04-01T00:00:00Z');
-      const expiry = adapter.calculateExpiry(lastSeenAt);
-      const expected = new Date('2026-05-01T00:00:00Z');
-      expect(expiry.getTime()).toBe(expected.getTime());
-    });
-
-    it('uses current date when lastSeenAt not provided', () => {
-      const before = Date.now();
-      const expiry = adapter.calculateExpiry();
-      const after = Date.now();
-
-      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-      expect(expiry.getTime()).toBeGreaterThanOrEqual(before + thirtyDaysMs);
-      expect(expiry.getTime()).toBeLessThanOrEqual(after + thirtyDaysMs);
+    expect(client.createEvent).toHaveBeenCalledWith({
+      memoryId: MEMORY_ID,
+      actorId: SUB,
+      sessionId: 'counted-session',
+      eventTimestamp: NOW,
+      messages: [
+        { role: 'USER', text: 'hello Max' },
+        { role: 'ASSISTANT', text: 'Hello, friend.' },
+      ],
     });
   });
 });

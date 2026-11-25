@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { newsToolSchema, fetchNews } from '../../src/tools/newsTool.js';
 import { weatherToolSchema, fetchWeather } from '../../src/tools/weatherTool.js';
-import { fetchWebSearch } from '../../src/tools/webSearchTool.js';
 
 describe('newsTool', () => {
   describe('schema validation', () => {
@@ -22,13 +21,6 @@ describe('newsTool', () => {
   });
 
   describe('fetchNews', () => {
-    beforeEach(() => {
-      process.env.NEWS_API_KEY = 'test-key';
-    });
-    afterEach(() => {
-      delete process.env.NEWS_API_KEY;
-    });
-
     it('should return structured news data on success', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -45,7 +37,10 @@ describe('newsTool', () => {
           }),
       });
 
-      const result = await fetchNews({ topic: 'technology' }, mockFetch);
+      const result = await fetchNews(
+        { topic: 'technology' },
+        { apiKey: 'test-key', fetch: mockFetch },
+      );
       expect(result.success).toBe(true);
       expect(result.headlines).toBeDefined();
       expect(result.headlines!.length).toBeGreaterThan(0);
@@ -61,7 +56,7 @@ describe('newsTool', () => {
         statusText: 'Internal Server Error',
       });
 
-      const result = await fetchNews({ topic: 'tech' }, mockFetch);
+      const result = await fetchNews({ topic: 'tech' }, { apiKey: 'test-key', fetch: mockFetch });
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
       expect(result.headlines).toBeUndefined();
@@ -70,14 +65,13 @@ describe('newsTool', () => {
     it('should return structured error on network failure', async () => {
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
-      const result = await fetchNews({ topic: 'tech' }, mockFetch);
+      const result = await fetchNews({ topic: 'tech' }, { apiKey: 'test-key', fetch: mockFetch });
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
     });
 
-    it('should return error when NEWS_API_KEY is not configured', async () => {
-      delete process.env.NEWS_API_KEY;
-      const result = await fetchNews({ topic: 'tech' });
+    it('should return error when the news API key is not configured', async () => {
+      const result = await fetchNews({ topic: 'tech' }, { apiKey: '' });
       expect(result.success).toBe(false);
       expect(result.error).toContain('NEWS_API_KEY');
     });
@@ -98,13 +92,6 @@ describe('weatherTool', () => {
   });
 
   describe('fetchWeather', () => {
-    beforeEach(() => {
-      process.env.WEATHER_API_KEY = 'test-key';
-    });
-    afterEach(() => {
-      delete process.env.WEATHER_API_KEY;
-    });
-
     it('should return structured weather data on success', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -116,7 +103,10 @@ describe('weatherTool', () => {
           }),
       });
 
-      const result = await fetchWeather({ location: 'Seattle' }, mockFetch);
+      const result = await fetchWeather(
+        { location: 'Seattle' },
+        { apiKey: 'test-key', fetch: mockFetch },
+      );
       expect(result.success).toBe(true);
       expect(result.temperature).toBeDefined();
       expect(result.conditions).toBeDefined();
@@ -130,7 +120,10 @@ describe('weatherTool', () => {
         statusText: 'Not Found',
       });
 
-      const result = await fetchWeather({ location: 'Nonexistent' }, mockFetch);
+      const result = await fetchWeather(
+        { location: 'Nonexistent' },
+        { apiKey: 'test-key', fetch: mockFetch },
+      );
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
     });
@@ -138,14 +131,16 @@ describe('weatherTool', () => {
     it('should return structured error on network failure', async () => {
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network timeout'));
 
-      const result = await fetchWeather({ location: 'Seattle' }, mockFetch);
+      const result = await fetchWeather(
+        { location: 'Seattle' },
+        { apiKey: 'test-key', fetch: mockFetch },
+      );
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
     });
 
-    it('should return error when WEATHER_API_KEY is not configured', async () => {
-      delete process.env.WEATHER_API_KEY;
-      const result = await fetchWeather({ location: 'Seattle' });
+    it('should return error when the weather API key is not configured', async () => {
+      const result = await fetchWeather({ location: 'Seattle' }, { apiKey: '' });
       expect(result.success).toBe(false);
       expect(result.error).toContain('WEATHER_API_KEY');
     });
@@ -157,37 +152,57 @@ describe('cancellation signal forwarding', () => {
   // in flight — the guest has gone but the upstream call still completes.
   const okResponse = { ok: true, json: () => Promise.resolve({}) };
 
-  beforeEach(() => {
-    process.env.NEWS_API_KEY = 'test-key';
-    process.env.WEATHER_API_KEY = 'test-key';
-    process.env.SEARCH_API_KEY = 'test-key';
-    process.env.SEARCH_ENGINE_ID = 'test-engine';
-  });
-  afterEach(() => {
-    delete process.env.NEWS_API_KEY;
-    delete process.env.WEATHER_API_KEY;
-    delete process.env.SEARCH_API_KEY;
-    delete process.env.SEARCH_ENGINE_ID;
-  });
-
   it('fetchNews forwards the signal to fetch', async () => {
     const controller = new AbortController();
     const mockFetch = vi.fn().mockResolvedValue(okResponse);
-    await fetchNews({ topic: 'tech' }, mockFetch, controller.signal);
+    await fetchNews(
+      { topic: 'tech' },
+      { apiKey: 'k', fetch: mockFetch, signal: controller.signal },
+    );
     expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
   });
 
   it('fetchWeather forwards the signal to fetch', async () => {
     const controller = new AbortController();
     const mockFetch = vi.fn().mockResolvedValue(okResponse);
-    await fetchWeather({ location: 'Seattle' }, mockFetch, controller.signal);
+    await fetchWeather(
+      { location: 'Seattle' },
+      { apiKey: 'k', fetch: mockFetch, signal: controller.signal },
+    );
     expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
   });
+});
 
-  it('fetchWebSearch forwards the signal to fetch', async () => {
-    const controller = new AbortController();
-    const mockFetch = vi.fn().mockResolvedValue(okResponse);
-    await fetchWebSearch({ query: 'max height' }, mockFetch, controller.signal);
-    expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({ signal: controller.signal });
+describe('tool credentials come from arguments, not the environment', () => {
+  // T038: the container reads its secrets from SSM at startup
+  // (contracts/runtime-config.md). A tool that reaches for process.env would
+  // silently use whatever the process happened to inherit — including nothing
+  // at all, which looks like an outage rather than a misconfiguration.
+  const okJson = (body: unknown) => vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+
+  beforeEach(() => {
+    process.env.NEWS_API_KEY = 'stale-env-key';
+    process.env.WEATHER_API_KEY = 'stale-env-key';
+  });
+
+  afterEach(() => {
+    delete process.env.NEWS_API_KEY;
+    delete process.env.WEATHER_API_KEY;
+  });
+
+  it('fetchNews calls the API with the key it was given', async () => {
+    const mockFetch = okJson({ articles: [] });
+    await fetchNews({ topic: 'tech' }, { apiKey: 'configured-key', fetch: mockFetch });
+
+    expect(String(mockFetch.mock.calls[0]![0])).toContain('apiKey=configured-key');
+    expect(String(mockFetch.mock.calls[0]![0])).not.toContain('stale-env-key');
+  });
+
+  it('fetchWeather calls the API with the key it was given', async () => {
+    const mockFetch = okJson({ main: { temp: 1 }, weather: [{ description: 'x' }], name: 'S' });
+    await fetchWeather({ location: 'Seattle' }, { apiKey: 'configured-key', fetch: mockFetch });
+
+    expect(String(mockFetch.mock.calls[0]![0])).toContain('appid=configured-key');
+    expect(String(mockFetch.mock.calls[0]![0])).not.toContain('stale-env-key');
   });
 });

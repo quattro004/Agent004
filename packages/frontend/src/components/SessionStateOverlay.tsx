@@ -1,8 +1,9 @@
 import React from 'react';
 import { StaticNoise } from './StaticNoise';
+import { DENIED_MESSAGE } from '../config/copy';
 
 export type OverlayState =
-  'ENDED' | 'BUDGET_CAPPED' | 'RATE_LIMITED' | 'SIGNAL_LOST' | 'ERROR' | null;
+  'ENDED' | 'BUDGET_CAPPED' | 'RATE_LIMITED' | 'SIGNAL_LOST' | 'DENIED' | 'ERROR' | null;
 
 export interface SessionStateOverlayProps {
   state: OverlayState;
@@ -12,6 +13,8 @@ const MESSAGES: Record<Exclude<OverlayState, null | 'SIGNAL_LOST'>, string> = {
   ENDED: "That's a wrap, folks. Max Height, signing off.",
   BUDGET_CAPPED: 'Max is taking a break — even digital stars need downtime.',
   RATE_LIMITED: "Slow d-down, speed demon! Even I can't talk that fast.",
+  // One constant line for every denial, so it never reveals who is invited (FR-043).
+  DENIED: DENIED_MESSAGE,
   ERROR: 'Something went wrong behind the scenes. Try again shortly.',
 };
 
