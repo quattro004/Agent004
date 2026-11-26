@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsc -b",
     "cdk": "cdk",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
+    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage --runInBand",
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {

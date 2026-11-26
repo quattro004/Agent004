@@ -419,6 +419,18 @@ should cite where it lives. When something reaches the wiki, follow the ingest
 workflow — update `Index`, append to `Log`, run `pnpm run wiki:lint` — and get
 approval before pushing, because wiki pushes are live and public.
 
+## Windows CDK test serialization
+
+Keep workspace tests serialized through `pnpm run validate` and
+`pnpm run test`, and keep the infra Jest suite in band:
+`pnpm -r --workspace-concurrency=1 --if-present test` plus
+`jest --runInBand`. CDK asset staging has reproduced Windows
+`EPERM` temp-directory rename races when Jest or workspace packages
+run test asset synthesis concurrently. The package scripts and
+`publishSite` context test avoid that shared environment failure;
+do not re-enable parallel CDK/infra test staging without an
+equivalent Windows race check.
+
 ## Root scripts are invisible to the toolchain
 
 `eslint.config.mjs` ignores both `scripts/` and `*.mjs`, and

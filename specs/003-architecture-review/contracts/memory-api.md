@@ -74,17 +74,18 @@ Ownership is enforced by deriving every namespace and `actorId` from the token's
 
 `handlers/memory-pruner.ts` runs once a day on an EventBridge schedule (cost human-read, R-cost).
 
-### T172 verification record (dated 2026-11-17; pending as of 2026-11-16)
+### T172 verification record (verified 2026-11-25)
 
-The source checks below are recorded as complete on a date that has not yet
-arrived. Treat their conclusions as unverified until T172 rechecks the pinned
-SDK and AWS documentation on or after 2026-11-17 (tasks.md, C36).
+The source checks below were verified against pinned SDK version
+`@aws-sdk/client-bedrock-agentcore` 3.1175.0 and the AWS AgentCore TTL
+documentation. They supersede the earlier future-dated verification record
+and close tasks.md C35/C36.
 
 The original rule — prune a friend whose `lastSeenAt` is older than 30 days — would have left an **active** friend's first-week facts in Memory forever. The approved target is true 30-day retention for everyone ([data-model.md](../data-model.md) § Memory), so the deletion rule is now the record's own age.
 
 | Question | Answer | Source |
 | --- | --- | --- |
-| Does Memory expose a record age? | Yes. `MemoryRecord.createdAt` is when the record was written; `MemoryRecord.timestamp` is "the time of the source content that the record was derived from, which can differ from `createdAt`" | `@aws-sdk/client-bedrock-agentcore` 3.1169.0, `models_1.d.ts:433-473` |
+| Does Memory expose a record age? | Yes. `MemoryRecord.createdAt` is when the record was written; `MemoryRecord.timestamp` is "the time of the source content that the record was derived from, which can differ from `createdAt`" | `@aws-sdk/client-bedrock-agentcore` 3.1175.0, `models_1.d.ts:2019-2059` and `2730-2746` |
 | Is there a service-side TTL? | Yes, `recordExpirySpecification` on a strategy or a batch request, **minimum 31 days** | [Set a TTL for long-term memory records](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/long-term-record-ttl.html); `AWS::BedrockAgentCore::Memory RecordExpirySpecification` (Minimum: 31) |
 | Does an expired record stop being readable at once? | **No.** "Deletion … can typically take a few days", and during that window `RetrieveMemoryRecords`, `GetMemoryRecord` and `ListMemoryRecords` still return it | Same page, § When records are deleted |
 | Can housekeeping reset retention? | Yes, for a TTL. It "applies a TTL to each record at the time the record is generated", and `BatchUpdateMemoryRecords` resets a record's TTL from its last applied duration. A consolidated record is therefore newer than the content it carries | Same page, § How `BatchUpdateMemoryRecords` applies a time-to-live |

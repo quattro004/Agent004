@@ -17,7 +17,7 @@ Plan 1 findings, cited below as F1–F7 (verified 2026-10-01 against `budget-sta
 - **F3** (fixed by #62): the topic had no policy granting `budgets.amazonaws.com` `SNS:Publish`, so no notification, including the hard stop, could arrive. F3 hid F1, so they had to change together.
 - **F4**: Budgets SNS message bodies are undocumented and probably plain text, so threshold filtering (SNS filter policy or parsing in the Lambda) was rejected.
 - **F5**: each budget notification allows one SNS subscriber and up to ten email subscribers.
-- **F6** (open, FR-023): the soft-degrade ($8 under constitution v1.5.0; $16 − F once amendment A5 merges) has a frontend consumer and no producer.
+- **F6** (closed by T166/T167, FR-023): the soft-degrade signal was missing a producer. The application layer now soft-degrades at $11 of measured application spend and refuses new spend-bearing work at $15 (constitution v1.9.0, amendment A7).
 - **F7** (handled by spec 001 deviation C8): T111 would have sent ops alarms to the hard-stop topic.
 
 The $5, $8 and $10 figures in F1 and F2 are the constitution v1.5.0 tiers as verified on 2026-10-01. They are historical findings and are left as written; the 2026-11-02 ceiling decision (Clarifications) changes the targets, not those findings.
@@ -334,7 +334,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-013**: Forget-me (spec 001 FR-017) and Export (spec 001 FR-018) MUST operate only on the requester's own data.
 - **FR-014**: **Long-term memory ships in the first deployment** (builder, 2026-10-11: "seems like long term memory is within budget and I wanted it initially anyway"; P-03). It was deferred on 2026-10-03 (Clarifications), and the builder reversed that once Q8 had costed it. Q8 chose AgentCore Memory ([contracts/memory-api.md](./contracts/memory-api.md); research.md § Q8):
   - FR-010, FR-012 and FR-013 govern it. The namespace derives from the verified `sub`, and only the runtime calls Memory.
-  - Long-term records follow the constitution's 30-day rolling window. They have no built-in expiry, so a pruner enforces it (N5).
+  - Long-term records follow the constitution's 30-day rolling window. A daily pruner ages records by source `timestamp` with `createdAt` as fallback, so active friends are not kept forever; a 31-day strategy TTL is only a backstop because service deletion can lag and consolidation can refresh a TTL (T172, N5).
   - A retrieval failure degrades to "no memories" (P8), loudly, never silently.
 
   Its cost is in the FR-024 projection and the month of operation (SC-019, P-10). Forget-me and Export (spec 001 FR-017 and FR-018) act on the requester's memory namespace as well as on browser storage (`packages/frontend/src/services/dataManager.ts:13,31`), and FR-053 extends deletion to the sign-in record.
@@ -346,7 +346,7 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
 - **FR-017**: Spend measurement for alerts and the hard stop MUST reflect gross usage before credits, so the $20 ceiling experiment is measurable while promotional credits last (O10).
 - **FR-018**: The hard stop MUST block every path that can incur model, voice, runtime or tool spend (O2). Its targets are the runtime execution role, which gets a deny-all-spend policy, and the halt flag, which the runtime and pre token generation check before any spend-bearing step (P-12; research.md § Q6). There is no authenticated role to target: the Identity Pool is removed, because voice is server-side (Q1) and the browser calls the runtime with its access token (Q4). Today it touches only the unauthenticated guest role (`budget-stack.ts:68-69,78`, `cognito-stack.ts:71`), which FR-041 removes, so the existing hook is no longer enough.
 - **FR-019**: The hard stop MUST fail loudly and alert the builder when its target cannot be found or modified. A missing target MUST NOT count as success (#61).
-- **FR-020**: An in-path circuit breaker MUST bound spend between Budgets refreshes (O11). Its limit and the signal it reads are decided in Q6 and derived from P2: the breaker trips at $20 − F, where F is R-cost's projected fixed monthly cost (clarified 2026-11-02; the figures themselves are deploy-time configuration, not set in this spec).
+- **FR-020**: An in-path circuit breaker MUST bound spend between Budgets refreshes (O11). Amendment A7 sets the application soft-degrade limit at $11 of measured application spend and the application refusal/trip limit at $15; the gross hard stop remains at $20. The earlier $16 − F and $20 − F formulas are superseded.
 - **FR-021**: The hard stop MUST have a defined recovery procedure (automatic at the start of the budget period, or manual, decided in Q6). The procedure MUST be documented and demonstrated once.
 - **FR-022**: Observability MUST fit the budget while meeting P9:
   - every log destination has an explicit 14-day retention period, never the never-expire default (builder, 2026-10-11; P-07)
@@ -354,8 +354,9 @@ A friend sees Max's reply begin to appear while it is still being generated, rat
   - billed tracing features (such as Transaction Search) are enabled only by recorded decision
   - model-invocation logging is enabled only if a recorded decision accepts the privacy trade-off for friends' messages
   - operational alarms (infra-plan T111) use their own notification target, separate from budget alerts (Plan 1 F7, deviation C8) (O13)
-- **FR-023**: A producer MUST emit the soft-degrade signal, so the frontend's existing consumer acts on it (Plan 1 F6). The threshold is $16 − F (80% of the $20 ceiling less F; clarified 2026-11-02, amendment A5). _Superseded by A7: $11 (deviation C43)._ Spec 001 FR-016's $8 is superseded (FR-056).
-- **FR-024**: Projected monthly spend at spec 001's usage assumptions, using re-verified prices, gross of credits, and including infrastructure, storage, observability, container-registry, long-term memory (FR-014; P-10) and sign-in costs (user-pool and federation MAUs, FR-051; secret storage, FR-052), MUST be at or below the constitution's cost gate (gate 1: $16, 80% of the $20 ceiling, once A5 merges; $8 until then). A projection above the gate MUST carry a documented mitigation. The fee-free provider rule (FR-045) keeps sign-in from adding non-AWS costs. The existing domain's renewal is covered under Assumptions.
+  - the ADOT/provider/exporter path is a P9 release gate and must be verified against live AgentCore traces during T174, because local span structure alone does not prove export
+- **FR-023**: A producer MUST emit the soft-degrade signal, so the frontend's existing consumer acts on it (Plan 1 F6). Amendment A7 sets the threshold at $11 of measured application spend (deviation C43). Spec 001 FR-016's $8 and the earlier $16 − F formula are superseded (FR-056).
+- **FR-024**: Projected monthly spend at spec 001's usage assumptions, using re-verified prices, gross of credits, and including infrastructure, storage, observability, container-registry, long-term memory (FR-014; P-10) and sign-in costs (user-pool and federation MAUs, FR-051; secret storage, FR-052), MUST be at or below the constitution's cost gate (gate 1: $16, 80% of the $20 ceiling). A projection above the gate MUST carry a documented mitigation. T101 re-projects measured usage after the first deployment and does not change the $11/$15 application thresholds. The fee-free provider rule (FR-045) keeps sign-in from adding non-AWS costs. The existing domain's renewal is covered under Assumptions.
 
 #### Model, voice and inference path
 

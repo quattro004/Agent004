@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as cdk from 'aws-cdk-lib';
 import { IConstruct } from 'constructs';
-import { buildMaxHeightApp } from '../lib/max-height-app.js';
+import { buildMaxHeightApp, publishSiteContext } from '../lib/max-height-app.js';
 import { DEPLOY_CONTEXT, PUBLISH_CONTEXT } from './deploy-context.js';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,7 +72,9 @@ describe.each([
   let stacks: cdk.Stack[];
 
   beforeAll(() => {
-    app = new cdk.App({ context });
+    app = new cdk.App({
+      context: { ...context, 'aws:cdk:disable-asset-staging': true },
+    });
     buildMaxHeightApp(app);
     app.synth();
     stacks = app.node.children.filter((c): c is cdk.Stack => cdk.Stack.isStack(c));
@@ -172,24 +174,18 @@ describe.each([
 });
 
 describe('publishSite context', () => {
-  const synth = (publishSite: unknown) => {
-    const app = new cdk.App({ context: { ...PUBLISH_CONTEXT, publishSite } });
-    buildMaxHeightApp(app);
-    return app.synth();
-  };
-
   test('accepts the string the CLI passes for -c publishSite=true', () => {
-    expect(() => synth('true')).not.toThrow();
+    const app = new cdk.App({ context: { publishSite: 'true' } });
+    expect(publishSiteContext(app)).toBe(true);
   });
 
   test('treats the string false as not publishing, even with no built site', () => {
-    const app = new cdk.App({
-      context: { ...DEPLOY_CONTEXT, publishSite: 'false' },
-    });
-    expect(() => buildMaxHeightApp(app)).not.toThrow();
+    const app = new cdk.App({ context: { publishSite: 'false' } });
+    expect(publishSiteContext(app)).toBe(false);
   });
 
   test('rejects a value it does not recognise instead of silently not publishing', () => {
-    expect(() => synth('yes')).toThrow(/publishSite/);
+    const app = new cdk.App({ context: { publishSite: 'yes' } });
+    expect(() => publishSiteContext(app)).toThrow(/publishSite/);
   });
 });

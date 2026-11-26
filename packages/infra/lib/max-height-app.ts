@@ -15,7 +15,7 @@ const env = { region: 'us-west-2' };
 export { SITE_DOMAIN };
 
 /** `-c publishSite=true` arrives as a string; anything unrecognised is an error, not "off". */
-function publishSiteContext(app: cdk.App): boolean {
+export function publishSiteContext(app: cdk.App): boolean {
   const value: unknown = app.node.tryGetContext('publishSite');
   if (value === undefined || value === false || value === 'false') return false;
   if (value === true || value === 'true') return true;

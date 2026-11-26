@@ -6,7 +6,7 @@
 
 ## Summary
 
-This feature reviews the architecture against the constitution (v1.5.0) and current AWS guidance, records a decision for each of Q0–Q9, and takes Max Height to its first real deployment on the AWS Free plan in `us-west-2`. Invited friends sign in on `max.recipieces.com`.
+This feature reviews the architecture against the constitution (v1.9.0) and current AWS guidance, records a decision for each of Q0–Q9, and takes Max Height to its first real deployment on the AWS Free plan in `us-west-2`. Invited friends sign in on `max.recipieces.com`.
 
 The review's decisions ([research.md](./research.md)) set the technical approach:
 
@@ -15,7 +15,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 - **Voice (Q1).** Polly Standard, voice Matthew (amendment A6, 2026-11-13), runs server-side in the runtime, and its audio streams alongside the reply text. The browser holds no AWS credentials, so the Identity Pool is removed. Speech marks are dropped.
 - **Spend (Q6, Q7).** Three layers protect the budget:
   - Budgets measures gross spend, with credits excluded.
-  - An in-path circuit breaker tallies real per-request model usage from `result.invocationContext.usage`. `readModelUsage` now uses this request boundary; enforcement wiring remains unfinished. Lifetime Agent metrics are not per-turn charges.
+  - An in-path circuit breaker reserves conservative spend before work, tallies verified per-request usage, soft-degrades at $11 and refuses new spend-bearing work at $15. Gross hard stop remains at $20. Lifetime Agent metrics are not per-turn charges.
   - A redesigned hard stop fails loudly if its target is missing, and a person recovers it manually.
 
   Soft-degrade turns voice off at $11 (A7; formerly $16 − F, superseded, C43), leaving text only.
@@ -31,9 +31,9 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 
 **Primary Dependencies**:
 
-- **Agent**: `@strands-agents/sdk` 1.20.0 (exact) and `@aws-sdk/client-bedrock-runtime`.
+- **Agent**: `@strands-agents/sdk` 1.26.0 (exact) and `@aws-sdk/client-bedrock-runtime` 3.1175.0.
   - **New (gate 3 review required)**: `@aws-sdk/client-bedrock-agentcore` (Memory data plane), `@aws-sdk/client-polly` (server-side voice), `@aws-sdk/client-dynamodb` (control table) and `@aws-sdk/client-ssm` (tool API keys read from SecureString at startup, so no secret enters the runtime's environment or the template; [contracts/runtime-config.md](./contracts/runtime-config.md)).
-- **Infra**: `aws-cdk-lib` 2.272.0, using the L1 `CfnRuntime` and `CfnMemory` from `aws-bedrockagentcore`.
+- **Infra**: `aws-cdk-lib` 2.278.0, using the L1 `CfnRuntime` and `CfnMemory` from `aws-bedrockagentcore`.
 - **Frontend**: React 19, Vite 8 and Zustand 5.
   - Sign-in uses the OAuth 2.0 authorization-code flow with PKCE, built on `fetch` and WebCrypto, with no new auth library.
   - `@aws-sdk/client-polly` is removed from the browser.
@@ -41,7 +41,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 **Storage**:
 
 - **DynamoDB control table**: on-demand billing, as research § R-cost's F line prices it (deviation C14). It holds the allowlist, the counted sessions, the rate-limit windows, the breaker tally, the halt flag, and each friend's `lastSeenAt` ([data-model.md](./data-model.md)).
-- **AgentCore Memory**: built-in long-term strategies. Short-term events expire after 7 days; long-term records are pruned 30 days after `lastSeenAt` (constitution `:236`).
+- **AgentCore Memory**: built-in long-term strategies. Short-term events expire after 7 days; a daily pruner deletes long-term records 30 days after their source `timestamp` (`createdAt` fallback), even for active friends (constitution `:236`; T172).
 - **Cognito User Pool**: Lite feature plan.
 - **S3**: the static site and greeting audio, as today.
 - **CloudWatch Logs**: 14-day retention on every log group.
@@ -59,7 +59,7 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 
 **Constraints**:
 
-- P2 caps spend at $20 a month, with email alerts at $10 and $16. The cost gate is $16 projected (constitution 1.6.0, amendment A5).
+- P2 caps gross spend at $20 a month, with email alerts at $10 and $16. The application layer soft-degrades at $11 and refuses new spend-bearing work at $15 (constitution 1.9.0, amendments A5/A7). The cost gate is $16 projected until the post-deployment S2 re-projection.
 - Free plan: inference only through routes S0 proves (in-Region or cross-Region, clarified 2026-10-30), Always Free offers only, and no AWS Organization (FR-028).
 - Spec 001's per-session caps: 20,000 conversational tokens, 50 turns, 30 minutes.
 - Messages are limited to 2,000 characters on the client, the server and in the contract (spec patch P-08).
@@ -72,23 +72,23 @@ The review's decisions ([research.md](./research.md)) set the technical approach
 
 _GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
-Checked against constitution v1.5.0 (`.specify/memory/constitution.md`).
+Checked against constitution v1.9.0 (`.specify/memory/constitution.md`).
 
 | Principle / gate | Pre-research status | Post-design status (Phase 1) | Evidence / action |
 | --- | --- | --- | --- |
 | **P1** Cloud-only (`:47-56`) | Pass | Pass | Polly runs in the runtime; there is no browser inference or browser TTS on the deployed path. Spec 001 FR-016's browser-TTS SHOULD is recorded as unmet rather than amended, because browser TTS would itself break P1 (research Q1). |
-| **P2** Budget ceiling (`:58-71`) | Pass, with conditions | Pass, pending S0 and a human price read | Alerts at $10 and $16 go by email (Plan 1, #62). The $20 hard stop is redesigned (Q6). The session cap is enforced server-side on the verified `sub`. The cost model is research R-cost, and its pass depends on the model chosen after S0 and on human-read prices (FR-007). |
+| **P2** Budget ceiling (`:58-71`) | Pass, with conditions | Pass, with deployment live gates remaining | Gross alerts are at $10 and $16 and the hard stop is at $20. The application layer soft-degrades at $11 and refuses new spend-bearing work at $15. Reservations, exactly-once settlement and the hard-stop recovery path remain live-verification items under T174. |
 | **P3** Personality first (`:73-82`) | Pass | Pass, pending S1 | No visual or audio polish is in scope. If Q2 adopts any model other than Haiku 4.5, the S1 golden set must pass for it before it serves friends. |
 | **P4** IP and legal (`:84-94`) | Pass | Pass | The product is named Max Height everywhere, the fan framing stays in the footer and About, and the privacy page is new (FR-053). |
 | **P5** No LLM-as-judge (`:96-104`) | Pass | Pass | Built-in Memory extraction runs asynchronously and never scores live outputs. |
 | **P6** Supply chain (`:106-116`) | Pass, with conditions | Pass, pending gate 3 | Four AWS SDK v3 clients are added to the agent, from the same publisher as the existing `client-bedrock-runtime`; no auth library is added. Each is reviewed before it is added. |
 | **P7** Invited friends only (`:118-134`) | Pass | Pass | Google-first invite-only sign-in, an allowlist on provider-verified email, the pre token generation re-check, no signed-out path, and a privacy page covering sign-in data and memory (contracts `auth-and-allowlist.md`, `memory-api.md`). |
 | **P8** Graceful degradation (`:136-149`) | Pass | Pass | The 2D avatar, text input, signal-lost flow and in-character sign-in failures are all covered. Voice-off soft-degrade uses an in-character state (contract `transport-sse.md`). |
-| **P9** Observability first (`:151-164`) | Pass, with conditions | Pass, pending the R-obs cost read | AgentCore Observability has spans for `first_token`, the full reply, the first audio chunk and the memory retrieve. Log retention is 14 days. Transaction Search is on by recorded decision, with its cost read by a human. Model-invocation logging is off. |
+| **P9** Observability first (`:151-164`) | Pass, with conditions | Pass, pending live AgentCore trace export verification | AgentCore Observability has spans for `first_token`, the full reply, the first audio chunk and the memory retrieve. ADOT is wired and 14-day log retention is required. T174 must confirm that spans reach X-Ray and that runtime-injected OTEL variables preserve content capture `false`. |
 | **P10** Unit tests (`:166-177`) | Pass | Pass | Every implementation task follows TDD, and the design names the RED test for each behavior (quickstart). |
 | **P11** Credentials (`:179-224`) | Pass | Pass; the builder accepted the bootstrap policy on 2026-11-13 (T005) | The deploy identity uses CloudShell session export (P11 preference 1) and may only assume the CDK bootstrap roles (research R-deploy). CDK bootstrap's default `AdministratorAccess` execution role is recorded as a P11 note. Runtime roles are least-privilege and scoped by Region. Polly supports no voice/engine IAM condition keys; Neural and Matthew are application settings, not permission restrictions (runtime-config.md, checked 2026-11-07). The browser holds no AWS credentials. Secrets live in SSM SecureString. |
 | Tech table (`:226-246`) | Conflicts recorded | Amendments A1–A3 | **A1**: the IaC row becomes CDK-only (builder decision). **A2**: the LLM row is amended only if Q2 leaves the Haiku class. **A3**: P11's claim that an Organization expires credits is corrected to the verified fact (D10). The Memory row (`:236`) now conforms. |
-| Gate 1 Cost model | Pending | Pending S0 and the human price read | R-cost projection, gross of credits and including Memory. Above $16, a mitigation is required (FR-024). |
+| Gate 1 Cost model | Pending | Pre-deploy estimate reconciled; post-deploy S2 re-projection remains | R-cost projection is gross of credits and includes Memory. Above $16, a mitigation is required (FR-024); T101's measured re-projection runs after T121. |
 | Gate 2 Personality | Pass | Pending S1 | S1 runs for every S0-eligible candidate against the 65-case set ([contracts/s1-golden-set.md](./contracts/s1-golden-set.md)); every eligible candidate is a model change. Amendment A4 corrects the gate's "50 cases" to 65. |
 | Gate 3 Dependency | Pending | Pending | Review of the four SDK clients, recorded in their PR. |
 | Gate 4 Degradation | Pass | Pass | Quickstart scenarios V-08 to V-10. |
